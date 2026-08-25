@@ -78,6 +78,10 @@ SUMMARY_CHUNK_CHARS = 80_000
 # An LLM may return a transient empty completion (no text, no tool calls);
 # retry once with a nudge before failing the run on a second consecutive one.
 MAX_CONSECUTIVE_EMPTY_RESPONSE_SKIPS = 1
+# A model may answer with a prose failure explanation immediately after a
+# failed tool observation. Keep the ReAct turn alive for a bounded number of
+# recovery attempts instead of treating that prose as a terminal answer.
+MAX_TOOL_RECOVERY_TURNS = 3
 
 
 def set_runtime_dirs(runs_dir: Path, sessions_dir: Path) -> tuple[contextvars.Token, contextvars.Token]:
@@ -685,6 +689,18 @@ def _is_tool_success(result: str) -> bool:
     return True
 
 
+def _tool_result_needs_recovery(result: str) -> bool:
+    """Return whether a nominally valid result is incomplete evidence."""
+    try:
+        data = json.loads(result)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    unresolved = data.get("_unresolved")
+    return isinstance(unresolved, (list, tuple, set)) and bool(unresolved)
+
+
 # Provider tool-call markup that a model can emit as plain text on the
 # forced-text final iteration, where tool definitions are withheld. Releasing
 # it verbatim hands the user mojibake instead of an answer. Both DSML bar
@@ -957,6 +973,9 @@ class AgentLoop:
         # 5-9x each (2026-08-20 INTC run) because it could no longer see its
         # own verification records.
         self._called_identical: dict[tuple[str, str], str] = {}
+        self._tool_failures_this_turn: list[dict[str, str]] = []
+        self._tool_recovery_pending = False
+        self._tool_recovery_turns = 0
 
     def cancel(self) -> None:
         """Cancel the current loop.
@@ -1051,6 +1070,9 @@ class AgentLoop:
         self._last_activity_wall = _time.time()
         self._run_done = threading.Event()
         self._called_identical = {}
+        self._tool_failures_this_turn = []
+        self._tool_recovery_pending = False
+        self._tool_recovery_turns = 0
         run_started_wall = _time.time()
 
         state_store = RunStateStore()
@@ -1144,6 +1166,7 @@ class AgentLoop:
                 iteration += 1
                 self._run_iteration += 1
                 current_iter = self._run_iteration
+                self._tool_failures_this_turn = []
 
                 # Inject background task notifications
                 bg = get_background_manager()
@@ -1443,6 +1466,52 @@ class AgentLoop:
                         continue
                     # A real response resets the consecutive-empty counter.
                     consecutive_empty_responses = 0
+
+                    # Do not let the model terminate immediately after a
+                    # failed tool observation with a generic "try another
+                    # interval" paragraph. Vibe's ReAct behavior keeps the
+                    # failed observation in context and asks for another
+                    # tool-call turn; only the bounded recovery budget may
+                    # release a prose limitation.
+                    if (
+                        final_content
+                        and self._tool_recovery_pending
+                        and self._tool_recovery_turns < MAX_TOOL_RECOVERY_TURNS
+                        and iteration < self.max_iterations
+                    ):
+                        self._tool_recovery_turns += 1
+                        messages.append({"role": "assistant", "content": final_content})
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": (
+                                    "[SYSTEM] Do not finalize yet. Your previous "
+                                    "tool call failed or returned incomplete data, "
+                                    "and the paragraph you just wrote is not a "
+                                    "result. Continue the ReAct loop now: call "
+                                    "another tool or retry with a corrected "
+                                    "symbol, interval, or data source. Only "
+                                    "provide a final limitation after the "
+                                    "available recovery attempts are exhausted."
+                                ),
+                            }
+                        )
+                        trace.write(
+                            {
+                                "type": "tool_recovery_rejected_answer",
+                                "iter": current_iter,
+                                "turn": self._tool_recovery_turns,
+                            }
+                        )
+                        react_trace.append(
+                            {
+                                "type": "tool_recovery_rejected_answer",
+                                "iter": current_iter,
+                                "turn": self._tool_recovery_turns,
+                            }
+                        )
+                        continue
+
                     # A model can answer the forced-text final iteration with its
                     # native tool-call DSL as prose (see _looks_like_tool_call_syntax).
                     # That is not an answer: retry once with a plain-text instruction,
@@ -1656,6 +1725,44 @@ class AgentLoop:
                 compact_requested, focus_topic = self._process_tool_calls(
                     response.tool_calls, context, messages, trace, react_trace, current_iter,
                 )
+
+                # Preserve the failed observation and force a recovery turn.
+                # This gives the model a chance to change interval/source,
+                # resolve the symbol again, or choose another registered tool
+                # instead of turning the first failed call into a final answer.
+                if self._tool_failures_this_turn and iteration < self.max_iterations:
+                    failure_lines = "\n".join(
+                        f"- {item['tool']}: {item['reason']}"
+                        for item in self._tool_failures_this_turn
+                    )
+                    recovery_prompt = (
+                        "[SYSTEM] The previous tool observation reported an "
+                        "incomplete or failed operation:\n"
+                        f"{failure_lines}\n\n"
+                        "Continue the ReAct loop before answering. Treat the "
+                        "observation as evidence that this attempt did not "
+                        "satisfy the request. Retry with a corrected argument, "
+                        "a supported interval/source, a resolved symbol, or a "
+                        "different registered tool. Do not give the user a "
+                        "terminal failure message while a recovery attempt "
+                        "remains possible. If no recovery is possible after "
+                        "using the remaining tool-call iterations, explain "
+                        "the limitation explicitly."
+                    )
+                    messages.append({"role": "system", "content": recovery_prompt})
+                    trace.write(
+                        {
+                            "type": "tool_recovery_requested",
+                            "iter": current_iter,
+                            "tools": [item["tool"] for item in self._tool_failures_this_turn],
+                        }
+                    )
+                    react_trace.append(
+                        {
+                            "type": "tool_recovery_requested",
+                            "tools": [item["tool"] for item in self._tool_failures_this_turn],
+                        }
+                    )
 
                 # Layer 3: compress after all tools have executed
                 if compact_requested:
@@ -2521,7 +2628,7 @@ class AgentLoop:
         # A tool completed - real progress for the stall watchdog.
         self._last_activity_wall = _time.time()
 
-        success = _is_tool_success(result)
+        success = _is_tool_success(result) and not _tool_result_needs_recovery(result)
         if success:
             self._called_ok.add(tc.name)
             if tc.name == "backtest":
@@ -2566,6 +2673,17 @@ class AgentLoop:
         status = "ok" if success else "error"
         truncated = truncate_tool_result(result)
         messages.append(context.format_tool_result(tc.id, tc.name, truncated))
+        if not success:
+            self._tool_recovery_pending = True
+            self._tool_failures_this_turn.append(
+                {
+                    "tool": tc.name,
+                    "reason": truncate_tool_result(result)[:500],
+                }
+            )
+        else:
+            self._tool_recovery_pending = False
+            self._tool_recovery_turns = 0
 
         # One redaction feeds every subscriber below: the persisted trace
         # record, the react trace, and the SSE preview.

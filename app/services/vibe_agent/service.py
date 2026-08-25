@@ -112,7 +112,23 @@ class VibeAgentService:
             {"user_id": user_id, "archived": archived},
             {"_id": 0},
         ).sort("updated_at", DESCENDING).limit(min(limit, 100))
-        return await cursor.to_list(length=min(limit, 100))
+        sessions = await cursor.to_list(length=min(limit, 100))
+        # Keep the session rail useful without duplicating prompt text into
+        # the session document. The first user message is the stable preview
+        # shown below the user-defined session title.
+        messages = get_mongo_db()[self.message_collection]
+        for session in sessions:
+            first_message = await messages.find_one(
+                {
+                    "user_id": user_id,
+                    "session_id": session["session_id"],
+                    "role": "user",
+                },
+                {"_id": 0, "content": 1},
+                sort=[("created_at", ASCENDING)],
+            )
+            session["first_prompt"] = str((first_message or {}).get("content") or "")
+        return sessions
 
     async def get_session(self, user_id: str, session_id: str) -> Dict[str, Any]:
         session = await get_mongo_db()[self.session_collection].find_one(

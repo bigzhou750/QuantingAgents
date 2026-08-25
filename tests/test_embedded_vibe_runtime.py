@@ -63,3 +63,16 @@ def test_high_risk_tools_are_disabled_by_default():
     assert "trading_place_order" in disabled
     assert "write_file" in disabled
     assert "save_skill" in disabled
+
+
+def test_unresolved_market_data_is_a_react_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "app.services.vibe_agent.paths.settings.VIBE_AGENT_RUNTIME_ROOT",
+        str(tmp_path),
+    )
+    embedded_agent_runtime._bootstrap()
+    from src.agent.loop import _is_tool_success, _tool_result_needs_recovery
+
+    assert _is_tool_success('{"_unresolved":["000651.SH"]}') is True
+    assert _tool_result_needs_recovery('{"_unresolved":["000651.SH"]}') is True
+    assert _is_tool_success('{"_provenance":{"source":"yahoo"},"000651.SH":[]}') is True

@@ -5,6 +5,7 @@ export type { StreamVibeEventOptions, StreamVibeEvent } from './vibeAgentStream'
 export interface VibeSession {
   session_id: string
   title: string
+  first_prompt?: string
   status: string
   archived: boolean
   created_at: string
@@ -55,6 +56,9 @@ export const vibeAgentApi = {
   },
   createSession(payload: { title?: string; metadata?: Record<string, any> }): Promise<ApiResponse<VibeSession>> {
     return request.post('/api/vibe-agent/sessions', payload)
+  },
+  deleteSession(sessionId: string): Promise<ApiResponse<{ session_id: string }>> {
+    return request.delete(`/api/vibe-agent/sessions/${sessionId}`)
   },
   listMessages(sessionId: string): Promise<ApiResponse<VibeMessage[]>> {
     return request.get(`/api/vibe-agent/sessions/${sessionId}/messages`)

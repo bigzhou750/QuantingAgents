@@ -9,7 +9,7 @@
             <span v-if="capabilities.error" class="rail-note">{{ capabilities.error }}</span>
           </p>
         </div>
-        <el-button :icon="Plus" circle type="primary" @click="createSession" />
+          <el-button :icon="Plus" circle type="primary" @click="createSession" />
       </div>
 
       <div class="capability-strip">
@@ -19,21 +19,35 @@
       </div>
 
       <el-scrollbar class="session-scroll">
-        <button
+        <div
           v-for="session in sessions"
           :key="session.session_id"
           :class="['session-row', session.session_id === activeSessionId ? 'active' : '']"
+          role="button"
+          tabindex="0"
           @click="selectSession(session.session_id)"
+          @keydown.enter="selectSession(session.session_id)"
+          @keydown.space.prevent="selectSession(session.session_id)"
         >
           <div class="session-row-top">
             <span class="session-title">{{ session.title }}</span>
-            <span class="session-time">{{ formatTime(session.updated_at) }}</span>
+            <div class="session-row-actions">
+              <span class="session-time">{{ formatTime(session.updated_at) }}</span>
+              <el-button
+                class="session-delete"
+                :icon="Delete"
+                circle
+                text
+                size="small"
+                title="删除会话"
+                aria-label="删除会话"
+                :disabled="Boolean(tasksBySession[session.session_id])"
+                @click.stop="deleteSession(session)"
+              />
+            </div>
           </div>
-          <div class="session-row-bottom">
-            <span>{{ session.status }}</span>
-            <span>{{ session.session_id }}</span>
-          </div>
-        </button>
+          <div v-if="session.first_prompt" class="session-preview">{{ session.first_prompt }}</div>
+        </div>
       </el-scrollbar>
     </aside>
 
@@ -121,7 +135,7 @@
               </div>
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
-                <div class="message-content">{{ message.content }}</div>
+                <div class="message-content markdown-body" v-html="renderMarkdown(message.content)"></div>
               </div>
             </div>
 
@@ -151,7 +165,7 @@
                 </div>
               </div>
               <div v-if="streamTextFor(activeTask.task_id)" class="streaming-response">
-                {{ streamTextFor(activeTask.task_id) }}
+                <div class="markdown-body" v-html="renderMarkdown(streamTextFor(activeTask.task_id))"></div>
               </div>
             </div>
           </el-scrollbar>
@@ -186,8 +200,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Close, List, Plus, Promotion, Refresh } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Close, Delete, List, Plus, Promotion, Refresh } from '@element-plus/icons-vue'
+import { marked } from 'marked'
 import { vibeAgentApi,
   type VibeEvent,
   type VibeMessage,
@@ -224,6 +239,23 @@ let controller: AbortController | null = null
 let reconnectTimer: number | null = null
 let sessionLoadVersion = 0
 let streamGeneration = 0
+
+marked.setOptions({ breaks: true, gfm: true })
+
+const sanitizeMarkdownHtml = (html: string) => html
+  .replace(/<\s*(script|style|iframe|object|embed|form|meta|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+  .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  .replace(/\s+(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, ' $1="#"')
+
+const renderMarkdown = (content: string) => {
+  try {
+    return sanitizeMarkdownHtml(String(marked.parse(content || '')))
+  } catch {
+    return String(content || '').replace(/[&<>"]/g, char => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char] || char
+    ))
+  }
+}
 
 const activeSession = computed(() => sessions.value.find(item => item.session_id === activeSessionId.value))
 const runningTask = computed(() => (
@@ -322,10 +354,63 @@ const loadRunningTasks = async () => {
 }
 
 const createSession = async () => {
-  const res = await vibeAgentApi.createSession({ title: '新的研究会话' })
-  const session = (res as any).data as VibeSession
-  sessions.value.unshift(session)
-  await selectSession(session.session_id)
+  try {
+    const { value } = await ElMessageBox.prompt('请输入会话名称', '新建研究会话', {
+      confirmButtonText: '创建',
+      cancelButtonText: '取消',
+      inputValue: '研究会话',
+      inputPlaceholder: '例如：格力电器分钟线回测',
+      inputValidator: (input: string) => input.trim() ? true : '会话名称不能为空'
+    })
+    const res = await vibeAgentApi.createSession({ title: value.trim() })
+    const session = (res as any).data as VibeSession
+    sessions.value.unshift(session)
+    await selectSession(session.session_id)
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error?.message || '创建会话失败')
+    }
+  }
+}
+
+const deleteSession = async (session: VibeSession) => {
+  if (tasksBySession.value[session.session_id]) {
+    ElMessage.warning('会话有任务正在执行，完成或取消后才能删除')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${session.title}”吗？会话及其历史记录将从列表中隐藏。`,
+      '删除会话',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await vibeAgentApi.deleteSession(session.session_id)
+    const index = sessions.value.findIndex(item => item.session_id === session.session_id)
+    sessions.value = sessions.value.filter(item => item.session_id !== session.session_id)
+    if (session.session_id === activeSessionId.value) {
+      activeSessionId.value = ''
+      activeTask.value = null
+      messages.value = []
+      events.value = []
+      controller?.abort()
+      controller = null
+      const nextSession = sessions.value[index] || sessions.value[0]
+      if (nextSession) {
+        await selectSession(nextSession.session_id)
+      } else {
+        await createSession()
+      }
+    }
+    ElMessage.success('会话已删除')
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error?.message || '删除会话失败')
+    }
+  }
 }
 
 const loadSessionState = async (sessionId: string) => {
@@ -672,18 +757,47 @@ onUnmounted(() => {
 }
 
 .session-title {
+  min-width: 0;
+  overflow: hidden;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
 }
 
 .session-time {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+  white-space: nowrap;
 }
 
-.session-row-bottom {
+.session-delete {
+  opacity: 0;
+  color: var(--el-color-danger);
+}
+
+.session-row:hover .session-delete,
+.session-row:focus-visible .session-delete,
+.session-row.active .session-delete {
+  opacity: 1;
+}
+
+.session-preview {
   margin-top: 6px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .workbench {
@@ -952,8 +1066,110 @@ onUnmounted(() => {
 }
 
 .message-content {
-  white-space: pre-wrap;
   line-height: 1.65;
+}
+
+.markdown-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body :deep(:first-child) {
+  margin-top: 0;
+}
+
+.markdown-body :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(p) {
+  margin: 0 0 10px;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4) {
+  margin: 16px 0 8px;
+  color: var(--el-text-color-primary);
+  line-height: 1.35;
+}
+
+.markdown-body :deep(h1) { font-size: 20px; }
+.markdown-body :deep(h2) { font-size: 18px; }
+.markdown-body :deep(h3) { font-size: 16px; }
+.markdown-body :deep(h4) { font-size: 14px; }
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.markdown-body :deep(li) {
+  margin: 4px 0;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 10px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--el-color-primary-light-3);
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-lighter);
+}
+
+.markdown-body :deep(code) {
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--el-color-danger);
+  background: var(--el-fill-color-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.markdown-body :deep(pre) {
+  max-width: 100%;
+  margin: 10px 0;
+  padding: 12px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #f3f4f6;
+}
+
+.markdown-body :deep(pre code) {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  white-space: pre;
+}
+
+.markdown-body :deep(table) {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0 14px;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  min-width: 90px;
+  padding: 7px 10px;
+  border: 1px solid var(--el-border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body :deep(th) {
+  background: var(--el-fill-color-light);
+  font-weight: 600;
+}
+
+.markdown-body :deep(a) {
+  color: var(--el-color-primary);
+  word-break: break-all;
 }
 
 .composer {
