@@ -200,6 +200,25 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  {
+    path: '/research-agent',
+    name: 'ResearchAgent',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '自然语言研究',
+      icon: 'ChatDotRound',
+      requiresAuth: true,
+      transition: 'fade'
+    },
+    children: [
+      {
+        path: '',
+        name: 'ResearchAgentHome',
+        component: () => import('@/views/VibeAgent/index.vue'),
+        meta: { title: '自然语言研究', requiresAuth: true }
+      }
+    ]
+  },
   { path: '/queue', redirect: '/tasks' },
   { path: '/analysis/history', redirect: '/tasks?tab=completed' },
   {

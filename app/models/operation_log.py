@@ -110,6 +110,7 @@ class ActionType:
     DATABASE_OPERATION = "database_operation"
     SCREENING = "screening"
     REPORT_GENERATION = "report_generation"
+    AGENT_RESEARCH = "agent_research"
 
 
 # 操作类型映射
@@ -126,6 +127,7 @@ ACTION_TYPE_NAMES = {
     ActionType.DATABASE_OPERATION: "数据库操作",
     ActionType.SCREENING: "股票筛选",
     ActionType.REPORT_GENERATION: "报告生成",
+    ActionType.AGENT_RESEARCH: "自然语言研究",
 }
 
 

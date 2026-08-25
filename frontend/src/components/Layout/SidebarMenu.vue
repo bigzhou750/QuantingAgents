@@ -32,6 +32,11 @@
       <template #title>任务中心</template>
     </el-menu-item>
 
+    <el-menu-item index="/research-agent">
+      <el-icon><ChatDotRound /></el-icon>
+      <template #title>自然语言研究</template>
+    </el-menu-item>
+
     <el-menu-item index="/screening">
       <el-icon><Search /></el-icon>
       <template #title>股票筛选</template>
@@ -109,6 +114,7 @@ import {
   Search,
   Star,
   List,
+  ChatDotRound,
   /* Document 移除：不再使用顶级分析报告菜单图标 */
   Setting,
   InfoFilled,

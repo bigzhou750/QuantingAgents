@@ -109,8 +109,10 @@
             <el-button v-if="row.status==='completed'" type="text" size="small" @click="openReport(row)">报告详情</el-button>
             <el-button v-if="row.status==='failed'" type="text" size="small" @click="showErrorDetail(row)">查看错误</el-button>
             <el-button v-if="row.status==='failed'" type="text" size="small" @click="retryTask(row)">重试</el-button>
-            <el-button v-if="row.status==='processing' || row.status==='running' || row.status==='pending'" type="text" size="small" @click="markAsFailed(row)">标记失败</el-button>
-            <el-button type="text" size="small" @click="deleteTask(row)" style="color: #f56c6c;">删除</el-button>
+            <el-button v-if="row.status==='processing' || row.status==='running' || row.status==='pending' || row.status==='queued'" type="text" size="small" @click="markAsFailed(row)">
+              {{ row.task_type === 'vibe_agent' ? '取消' : '标记失败' }}
+            </el-button>
+            <el-button v-if="row.task_type !== 'vibe_agent'" type="text" size="small" @click="deleteTask(row)" style="color: #f56c6c;">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -149,6 +151,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { List, Refresh, Download } from '@element-plus/icons-vue'
 import { analysisApi } from '@/api/analysis'
+import { vibeAgentApi } from '@/api/vibeAgent'
 import TaskResultDialog from '@/components/Global/TaskResultDialog.vue'
 import TaskReportDialog from '@/components/Global/TaskReportDialog.vue'
 
@@ -287,11 +290,33 @@ const loadList = async () => {
       total.value = body.total ?? tasks.length
     }
 
+    if (noExtraFilters) {
+      try {
+        const vibeRes = await vibeAgentApi.listTasks({
+          page: currentPage.value,
+          page_size: pageSize.value
+        })
+        const vibeBody = (vibeRes as any)?.data || {}
+        const vibeTasks = (vibeBody.tasks || []).filter((task: any) => {
+          const desired = filters.value.status || statusParam.value
+          if (!desired) return true
+          if (desired === 'processing') return ['queued', 'processing', 'pending', 'running'].includes(task.status)
+          return task.status === desired
+        })
+        tasks = [...tasks, ...vibeTasks].sort((a: any, b: any) => {
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        })
+        total.value = (total.value || 0) + vibeTasks.length
+      } catch (error) {
+        console.warn('加载自然语言研究任务失败', error)
+      }
+    }
+
     list.value = tasks
 
     // 为运行中的任务连接 WebSocket
     tasks.forEach((task: any) => {
-      if (task.status === 'processing' || task.status === 'running' || task.status === 'pending') {
+      if (task.task_type !== 'vibe_agent' && (task.status === 'processing' || task.status === 'running' || task.status === 'pending')) {
         connectTaskWebSocket(task.task_id)
       }
     })
@@ -299,7 +324,7 @@ const loadList = async () => {
     // 统计
     const completed = tasks.filter((x:any) => x.status === 'completed').length
     const failed = tasks.filter((x:any) => x.status === 'failed').length
-    const uniqueStocks = new Set(tasks.map((x:any) => x.stock_code || x.stock_symbol)).size
+    const uniqueStocks = new Set(tasks.map((x:any) => x.stock_code || x.stock_symbol).filter(Boolean)).size
     stats.value = { total: tasks.length, completed, failed, uniqueStocks }
   } catch (e:any) {
     ElMessage.error(e?.message || '加载失败')
@@ -345,6 +370,10 @@ const currentRow = ref<any>(null)
 
 const openResult = async (row:any) => {
   currentRow.value = row
+  if (row.task_type === 'vibe_agent') {
+    void router.push('/research-agent')
+    return
+  }
   try {
     const res = await analysisApi.getTaskResult(row.task_id)
     const body = (res as any)?.data?.data || {}
@@ -356,6 +385,10 @@ const openResult = async (row:any) => {
 }
 
 const openReport = (row:any): void => {
+  if (row?.task_type === 'vibe_agent') {
+    void router.push('/research-agent')
+    return
+  }
   const id = row?.task_id || row?.analysis_id || row?.id
   if (!id) {
     ElMessage.warning('未找到报告ID')
@@ -423,8 +456,13 @@ const markAsFailed = async (row: any) => {
     }
 
     loading.value = true
-    await analysisApi.markTaskAsFailed(taskId)
-    ElMessage.success('任务已标记为失败')
+    if (row.task_type === 'vibe_agent') {
+      await vibeAgentApi.cancelTask(taskId)
+      ElMessage.success('任务已取消')
+    } else {
+      await analysisApi.markTaskAsFailed(taskId)
+      ElMessage.success('任务已标记为失败')
+    }
     await loadList()
   } catch (e: any) {
     if (e !== 'cancel') {
@@ -455,7 +493,11 @@ const deleteTask = async (row: any) => {
     }
 
     loading.value = true
-    await analysisApi.deleteTask(taskId)
+    if (row.task_type === 'vibe_agent') {
+      await vibeAgentApi.cancelTask(taskId)
+    } else {
+      await analysisApi.deleteTask(taskId)
+    }
     ElMessage.success('任务已删除')
     await loadList()
   } catch (e: any) {
@@ -514,13 +556,13 @@ onUnmounted(() => {
 
 const getStatusType = (status:string): 'success' | 'info' | 'warning' | 'danger' => {
   const map: Record<string,'success'|'info'|'warning'|'danger'> = {
-    pending: 'info', processing: 'warning', completed: 'success', failed: 'danger', cancelled: 'info'
+    pending: 'info', queued: 'info', processing: 'warning', completed: 'success', failed: 'danger', cancelled: 'info'
   }
   return map[status] || 'info'
 }
 import { formatDateTime } from '@/utils/datetime'
 
-const getStatusText = (status:string) => ({ pending:'等待中', processing:'处理中', completed:'已完成', failed:'失败', cancelled:'已取消' } as any)[status] || status
+const getStatusText = (status:string) => ({ pending:'等待中', queued:'等待中', processing:'处理中', completed:'已完成', failed:'失败', cancelled:'已取消' } as any)[status] || status
 const formatTime = (t:string) => t ? formatDateTime(t) : '-'
 </script>
 
@@ -534,4 +576,3 @@ const formatTime = (t:string) => t ? formatDateTime(t) : '-'
   .pagination-wrapper { display:flex; justify-content:center; margin-top: 16px; }
 }
 </style>
-

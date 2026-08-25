@@ -77,5 +77,8 @@ export default defineConfig({
         additionalData: `@use "@/styles/variables.scss" as *;`
       }
     }
+  },
+  test: {
+    environment: 'node'
   }
 })

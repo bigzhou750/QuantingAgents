@@ -52,6 +52,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             "/api/auth/logout": ActionType.USER_LOGOUT,
             "/api/auth/change-password": ActionType.USER_MANAGEMENT,  # 🔧 添加修改密码操作类型
             "/api/reports/": ActionType.REPORT_GENERATION,
+            "/api/vibe-agent/": ActionType.AGENT_RESEARCH,
         }
 
     async def dispatch(self, request: Request, call_next):
@@ -223,6 +224,13 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 return "修改密码"
             else:
                 return f"{action_verb}认证操作"
+
+        elif "/vibe-agent/" in path:
+            if "/messages" in path:
+                return f"{action_verb}自然语言研究任务"
+            if "/cancel" in path:
+                return "取消自然语言研究任务"
+            return f"{action_verb}自然语言研究操作"
 
         else:
             return f"{action_verb} {path}"

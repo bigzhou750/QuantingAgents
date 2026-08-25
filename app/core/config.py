@@ -185,6 +185,13 @@ class Settings(BaseSettings):
     SSE_BATCH_POLL_INTERVAL_SECONDS: float = Field(default=2.0)
     SSE_BATCH_MAX_IDLE_SECONDS: int = Field(default=600)
 
+    # Embedded Vibe Agent runtime. This is data, never source code.
+    VIBE_AGENT_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/vibe-agent")
+    VIBE_AGENT_WORKER_ENABLED: bool = Field(default=True)
+    VIBE_AGENT_WORKER_ID: str = Field(default="quanting-vibe-worker")
+    VIBE_AGENT_WORKER_CONCURRENCY: int = Field(default=2, ge=1, le=8)
+    VIBE_AGENT_TASK_TIMEOUT_SECONDS: int = Field(default=900, ge=30, le=7200)
+
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)

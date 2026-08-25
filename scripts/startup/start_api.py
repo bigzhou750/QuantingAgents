@@ -246,7 +246,7 @@ def main():
         print("❌ Worker进程启动失败")
         manager.stop_all_services()
         sys.exit(1)
-    
+
     print("\n🎉 所有服务启动成功!")
     print("📍 服务地址:")
     print("  - API服务: http://localhost:8000")
