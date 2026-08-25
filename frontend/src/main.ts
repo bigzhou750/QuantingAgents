@@ -126,20 +126,15 @@ const initApp = async () => {
     }
   } catch (error) {
     const err = error as { code?: string; message?: string }
-    console.warn('⚠️ 应用初始化失败，但应用将继续启动:', err)
-    // 如果是网络错误，不影响应用启动
-    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-      console.log('📱 离线模式：应用将在没有后端连接的情况下启动')
-    }
-  } finally {
-    // 无论认证状态如何，都挂载应用
-    app.mount('#app')
-    console.log('🚀 应用已挂载')
+    console.warn('⚠️ 应用初始化失败，页面保持可用:', err)
   }
 }
 
-// 启动应用
-initApp()
+// 先挂载页面，再在后台检查 API 和认证状态。
+// 认证服务异常时用户仍然可以进入登录页、清理本地状态并重新登录。
+app.mount('#app')
+console.log('🚀 应用已挂载')
+void initApp()
 
 // 开发环境下的调试信息
 if (import.meta.env.DEV) {

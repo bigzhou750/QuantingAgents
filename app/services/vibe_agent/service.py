@@ -46,6 +46,7 @@ class VibeAgentService:
 
     def __init__(self) -> None:
         self._background_tasks: set[asyncio.Task] = set()
+        self._message_submit_lock = asyncio.Lock()
 
     async def ensure_indexes(self) -> None:
         db = get_mongo_db()
@@ -54,6 +55,39 @@ class VibeAgentService:
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True)
         await db[self.event_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("sequence", ASCENDING)], unique=True)
+        await self.recover_orphaned_tasks()
+
+    async def recover_orphaned_tasks(self) -> None:
+        """Release tasks left active when the API process was restarted."""
+        cursor = get_mongo_db()[self.task_collection].find(
+            {
+                "status": {
+                    "$in": [
+                        VibeTaskStatus.queued.value,
+                        VibeTaskStatus.processing.value,
+                    ]
+                }
+            },
+            {"_id": 0, "user_id": 1, "session_id": 1, "task_id": 1},
+        )
+        orphaned = await cursor.to_list(length=1000)
+        for task in orphaned:
+            message = "服务重启时任务尚未完成，已停止本次执行，请重新发起研究。"
+            await self.update_task_status(
+                str(task["user_id"]),
+                str(task["task_id"]),
+                VibeTaskStatus.failed,
+                message,
+            )
+            await self.append_event(
+                str(task["user_id"]),
+                str(task["session_id"]),
+                VibeEventType.task_status,
+                {"task_id": task["task_id"], "status": "failed", "error": message},
+                str(task["task_id"]),
+            )
+        if orphaned:
+            logger.warning("Recovered %d orphaned Vibe tasks after API restart", len(orphaned))
 
     async def create_session(self, user: Dict[str, Any], payload: VibeSessionCreate) -> VibeSession:
         session_id = new_id("vibesess")
@@ -206,61 +240,91 @@ class VibeAgentService:
         if existing:
             return existing
 
-        message_id = new_id("msg")
-        task_id = new_id("vibetask")
-        root = ensure_session_tree(user["id"], session_id)
-        message = VibeMessage(
-            message_id=message_id,
-            session_id=session_id,
-            user_id=user["id"],
-            role="user",
-            content=payload.content,
-            task_id=task_id,
-            created_at=now,
-            metadata=payload.metadata,
-        )
-        task = VibeTask(
-            task_id=task_id,
-            session_id=session_id,
-            user_id=user["id"],
-            username=user["username"],
-            status=VibeTaskStatus.queued,
-            prompt=payload.content,
-            idempotency_key=idempotency_key,
-            runtime_root=str(root),
-            created_at=now,
-            updated_at=now,
-        )
-        command = VibeCommand(
-            command_id=new_id("cmd"),
-            command_type="run_research",
-            user_id=user["id"],
-            username=user["username"],
-            session_id=session_id,
-            task_id=task_id,
-            idempotency_key=idempotency_key,
-            runtime_root=str(root),
-            payload={
-                "prompt": payload.content,
-                "metadata": payload.metadata,
-                "audit_context": self.audit_context(user, session_id, task_id),
-            },
-            created_at=now,
-        )
+        async with self._message_submit_lock:
+            existing = await get_mongo_db()[self.task_collection].find_one(
+                {"user_id": user["id"], "session_id": session_id, "idempotency_key": idempotency_key},
+                {"_id": 0},
+            )
+            if existing:
+                return existing
+            active = await get_mongo_db()[self.task_collection].find_one(
+                {
+                    "user_id": user["id"],
+                    "status": {
+                        "$in": [
+                            VibeTaskStatus.queued.value,
+                            VibeTaskStatus.processing.value,
+                        ]
+                    },
+                },
+                {"_id": 0},
+                sort=[("updated_at", DESCENDING)],
+            )
+            if active:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "已有研究任务正在执行，请等待完成或先取消当前任务",
+                        "task_id": active.get("task_id"),
+                        "session_id": active.get("session_id"),
+                    },
+                )
 
-        db = get_mongo_db()
-        await db[self.message_collection].insert_one(message.model_dump())
-        await db[self.task_collection].insert_one(task.model_dump())
-        await db[self.session_collection].update_one(
-            {"user_id": user["id"], "session_id": session_id},
-            {"$set": {"status": "queued", "updated_at": now}},
-        )
-        await self.append_event(user["id"], session_id, VibeEventType.message_created, {"message": message.model_dump()}, task_id)
-        await self.append_event(user["id"], session_id, VibeEventType.task_queued, {"task": task.model_dump()}, task_id)
-        task_handle = asyncio.create_task(self._run_internal_task(command))
-        self._background_tasks.add(task_handle)
-        task_handle.add_done_callback(self._background_tasks.discard)
-        return {**task.model_dump(), "session_title": session.get("title")}
+            message_id = new_id("msg")
+            task_id = new_id("vibetask")
+            root = ensure_session_tree(user["id"], session_id)
+            message = VibeMessage(
+                message_id=message_id,
+                session_id=session_id,
+                user_id=user["id"],
+                role="user",
+                content=payload.content,
+                task_id=task_id,
+                created_at=now,
+                metadata=payload.metadata,
+            )
+            task = VibeTask(
+                task_id=task_id,
+                session_id=session_id,
+                user_id=user["id"],
+                username=user["username"],
+                status=VibeTaskStatus.queued,
+                prompt=payload.content,
+                idempotency_key=idempotency_key,
+                runtime_root=str(root),
+                created_at=now,
+                updated_at=now,
+            )
+            command = VibeCommand(
+                command_id=new_id("cmd"),
+                command_type="run_research",
+                user_id=user["id"],
+                username=user["username"],
+                session_id=session_id,
+                task_id=task_id,
+                idempotency_key=idempotency_key,
+                runtime_root=str(root),
+                payload={
+                    "prompt": payload.content,
+                    "metadata": payload.metadata,
+                    "audit_context": self.audit_context(user, session_id, task_id),
+                },
+                created_at=now,
+            )
+
+            db = get_mongo_db()
+            await db[self.message_collection].insert_one(message.model_dump())
+            await db[self.task_collection].insert_one(task.model_dump())
+            await db[self.session_collection].update_one(
+                {"user_id": user["id"], "session_id": session_id},
+                {"$set": {"status": "queued", "updated_at": now}},
+            )
+            await self.append_event(user["id"], session_id, VibeEventType.message_created, {"message": message.model_dump()}, task_id)
+            await self.append_event(user["id"], session_id, VibeEventType.task_queued, {"task": task.model_dump()}, task_id)
+            task_handle = asyncio.create_task(self._run_internal_task(command))
+            self._background_tasks.add(task_handle)
+            task_handle.add_done_callback(self._background_tasks.discard)
+            return {**task.model_dump(), "session_title": session.get("title")}
 
     async def _run_internal_task(self, command: VibeCommand) -> None:
         await self.update_task_status(command.user_id, command.task_id, VibeTaskStatus.processing)
@@ -423,10 +487,29 @@ class VibeAgentService:
             patch["finished_at"] = utc_now()
         if error_message:
             patch["error_message"] = error_message
-        await get_mongo_db()[self.task_collection].update_one(
+        db = get_mongo_db()
+        await db[self.task_collection].update_one(
             {"user_id": user_id, "task_id": task_id},
             {"$set": patch},
         )
+        task = await db[self.task_collection].find_one(
+            {"user_id": user_id, "task_id": task_id},
+            {"_id": 0, "session_id": 1},
+        )
+        if task:
+            session_status = (
+                "idle"
+                if status in {
+                    VibeTaskStatus.completed,
+                    VibeTaskStatus.failed,
+                    VibeTaskStatus.cancelled,
+                }
+                else status.value
+            )
+            await db[self.session_collection].update_one(
+                {"user_id": user_id, "session_id": task["session_id"]},
+                {"$set": {"status": session_status, "updated_at": utc_now()}},
+            )
 
     async def get_task(self, user_id: str, task_id: str) -> Dict[str, Any]:
         task = await get_mongo_db()[self.task_collection].find_one({"user_id": user_id, "task_id": task_id}, {"_id": 0})
@@ -434,10 +517,19 @@ class VibeAgentService:
             raise HTTPException(status_code=404, detail="研究任务不存在")
         return self.task_center_row(task)
 
-    async def list_tasks(self, user_id: str, status: Optional[str], page: int, page_size: int) -> Dict[str, Any]:
+    async def list_tasks(
+        self,
+        user_id: str,
+        status: Optional[str],
+        page: int,
+        page_size: int,
+        session_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         query: Dict[str, Any] = {"user_id": user_id}
         if status:
             query["status"] = status
+        if session_id:
+            query["session_id"] = session_id
         skip = max(page - 1, 0) * page_size
         db = get_mongo_db()
         total = await db[self.task_collection].count_documents(query)

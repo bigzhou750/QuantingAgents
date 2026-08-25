@@ -11,7 +11,10 @@
         appear
       >
         <keep-alive :include="keepAliveComponents">
-          <component :is="Component" :key="route?.fullPath || 'default'" />
+      <component
+        :is="Component"
+        :key="route?.path === '/research-agent' ? route.path : (route?.fullPath || 'default')"
+      />
         </keep-alive>
       </transition>
     </router-view>

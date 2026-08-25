@@ -9,10 +9,13 @@ is accepted here.
 from __future__ import annotations
 
 import asyncio
+import copy
 import importlib
 import logging
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -36,10 +39,15 @@ class EmbeddedAgentRuntime:
     def __init__(self) -> None:
         self._bootstrapped = False
         self._active: dict[str, tuple[str, Any, Any, EventSink]] = {}
-        # Vibe's AgentLoop retains a few module-level path variables. The
-        # lock prevents concurrent executions from changing those variables
-        # while another user's run is writing artifacts.
-        self._run_lock = asyncio.Lock()
+        # Track tasks before registry construction so cancellation also works
+        # while a run is waiting on imports or capability discovery.
+        self._pending: dict[str, asyncio.Task[Any]] = {}
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._bootstrap_lock = threading.Lock()
+        self._capabilities_lock = threading.Lock()
+        self._capabilities_scan_lock = threading.Lock()
+        self._capabilities_cache: tuple[float, str, dict[str, Any]] | None = None
+        self._capabilities_cache_ttl = 30.0
 
     @property
     def vendor_root(self) -> Path:
@@ -213,22 +221,22 @@ class EmbeddedAgentRuntime:
             logger.debug("embedded Vibe runtime env cache reset skipped", exc_info=True)
 
     def _bootstrap(self) -> None:
-        vendor_root = self.vendor_root.resolve()
-        if not vendor_root.is_dir():
-            raise RuntimeError(f"embedded Vibe runtime is missing: {vendor_root}")
-        if not self._bootstrapped and str(vendor_root) not in sys.path:
-            sys.path.insert(0, str(vendor_root))
-        runtime_root = vibe_runtime_base() / "embedded"
-        runtime_root.mkdir(parents=True, exist_ok=True)
-        os.environ["VIBE_TRADING_HOME"] = str(runtime_root)
-        os.environ["QUANTINGAGENTS_DISABLED_VIBE_TOOLS"] = ",".join(
-            sorted(disabled_tool_names())
-        )
-        self._sync_runtime_llm_env()
-        self._bootstrapped = True
+        with self._bootstrap_lock:
+            vendor_root = self.vendor_root.resolve()
+            if not vendor_root.is_dir():
+                raise RuntimeError(f"embedded Vibe runtime is missing: {vendor_root}")
+            if not self._bootstrapped and str(vendor_root) not in sys.path:
+                sys.path.insert(0, str(vendor_root))
+            runtime_root = (vibe_runtime_base() / "embedded").resolve()
+            runtime_root.mkdir(parents=True, exist_ok=True)
+            os.environ["VIBE_TRADING_HOME"] = str(runtime_root)
+            os.environ["QUANTINGAGENTS_DISABLED_VIBE_TOOLS"] = ",".join(
+                sorted(disabled_tool_names())
+            )
+            self._sync_runtime_llm_env()
+            self._bootstrapped = True
 
     def _load_modules(self) -> tuple[Any, Any, Any, Any, Any]:
-        self._bootstrap()
         events = importlib.import_module("src.session.events")
         models = importlib.import_module("src.session.models")
         store_module = importlib.import_module("src.session.store")
@@ -303,74 +311,119 @@ class EmbeddedAgentRuntime:
         username: str,
         sink: EventSink,
     ) -> dict[str, Any]:
-        async with self._run_lock:
-            events, models, store_module, service_module, loop_module = self._load_modules()
-            event_bus = events.EventBus()
-            event_bus.set_loop(asyncio.get_running_loop())
-            user_root = user_runtime_root(user_id)
-            session_root = session_runtime_root(user_id, session_id)
-            for child in ("messages", "attempts", "runs", "swarm", "trace", "uploads", "artifacts"):
-                (session_root / child).mkdir(parents=True, exist_ok=True)
-            service = service_module.SessionService(
-                store=store_module.SessionStore(user_root / "sessions"),
-                event_bus=event_bus,
-                runs_dir=session_root / "runs",
-            )
-            event_bus.add_listener(lambda event: self._on_event(event, task_id, sink))
-            await self.ensure_session(service, models, session_id, title, user_id, username)
-            # AgentLoop resolves these directories at module scope. They are
-            # set only while the serialized run lock is held.
-            loop_module.RUNS_DIR = session_root / "runs"
-            loop_module.SESSIONS_DIR = user_root / "sessions"
-            self._active[session_id] = (task_id, service, event_bus, sink)
-            try:
-                result = await service.send_message(
-                    session_id,
-                    prompt,
-                    role="user",
-                    include_shell_tools=False,
+        current_task = asyncio.current_task()
+        if current_task is None:
+            raise RuntimeError("embedded Agent runtime requires an asyncio task")
+        self._pending[session_id] = current_task
+        session_lock = self._session_locks.setdefault(session_id, asyncio.Lock())
+        try:
+            async with session_lock:
+                # Provider/database discovery is synchronous; never run it on
+                # the FastAPI event loop.
+                await asyncio.to_thread(self._bootstrap)
+                events, models, store_module, service_module, loop_module = self._load_modules()
+                event_bus = events.EventBus()
+                event_bus.set_loop(asyncio.get_running_loop())
+                user_root = user_runtime_root(user_id)
+                session_root = session_runtime_root(user_id, session_id)
+                for child in ("messages", "attempts", "runs", "swarm", "trace", "uploads", "artifacts"):
+                    (session_root / child).mkdir(parents=True, exist_ok=True)
+                service = service_module.SessionService(
+                    store=store_module.SessionStore(user_root / "sessions"),
+                    event_bus=event_bus,
+                    runs_dir=session_root / "runs",
                 )
-                task = service._active_tasks.get(session_id)
-                if task is not None:
-                    await task
-                attempt_id = str(result.get("attempt_id") or "")
-                attempt = (
-                    service.store.get_attempt(session_id, attempt_id)
-                    if attempt_id
-                    else None
-                )
-                reply = (
-                    service.store.get_message_for_attempt(session_id, attempt_id)
-                    if attempt_id
-                    else None
-                )
-                # send_message() returns the enqueue envelope. The completed
-                # assistant reply is persisted by SessionService._run_attempt,
-                # so hydrate it before crossing back into the QuantingAgents
-                # Mongo/SSE adapter.
-                return {
-                    **result,
-                    "status": attempt.status.value if attempt else "failed",
-                    "content": reply.content if reply else "",
-                    "run_dir": attempt.run_dir if attempt else None,
-                    "reason": attempt.error if attempt else None,
-                    "metrics": attempt.metrics if attempt else None,
-                    "tool_trail": reply.tool_trail if reply else [],
-                    "elapsed_ms": (
-                        reply.metadata.get("elapsed_ms")
-                        if reply and isinstance(reply.metadata, dict)
+                event_bus.add_listener(lambda event: self._on_event(event, task_id, sink))
+                await self.ensure_session(service, models, session_id, title, user_id, username)
+                self._active[session_id] = (task_id, service, event_bus, sink)
+                try:
+                    result = await service.send_message(
+                        session_id,
+                        prompt,
+                        role="user",
+                        include_shell_tools=False,
+                    )
+                    task = service._active_tasks.get(session_id)
+                    if task is not None:
+                        await task
+                    attempt_id = str(result.get("attempt_id") or "")
+                    attempt = (
+                        service.store.get_attempt(session_id, attempt_id)
+                        if attempt_id
                         else None
-                    ),
-                }
-            finally:
-                self._active.pop(session_id, None)
+                    )
+                    reply = (
+                        service.store.get_message_for_attempt(session_id, attempt_id)
+                        if attempt_id
+                        else None
+                    )
+                    # send_message() returns the enqueue envelope. The completed
+                    # assistant reply is persisted by SessionService._run_attempt,
+                    # so hydrate it before crossing back into the QuantingAgents
+                    # Mongo/SSE adapter.
+                    return {
+                        **result,
+                        "status": attempt.status.value if attempt else "failed",
+                        "content": reply.content if reply else "",
+                        "run_dir": attempt.run_dir if attempt else None,
+                        "reason": attempt.error if attempt else None,
+                        "metrics": attempt.metrics if attempt else None,
+                        "tool_trail": reply.tool_trail if reply else [],
+                        "elapsed_ms": (
+                            reply.metadata.get("elapsed_ms")
+                            if reply and isinstance(reply.metadata, dict)
+                            else None
+                        ),
+                    }
+                finally:
+                    self._active.pop(session_id, None)
+        finally:
+            self._pending.pop(session_id, None)
 
     async def cancel(self, session_id: str) -> bool:
         active = self._active.get(session_id)
-        return bool(active and active[1].cancel_current(session_id))
+        if active and active[1].cancel_current(session_id):
+            return True
+        pending = self._pending.get(session_id)
+        if pending is not None and not pending.done():
+            pending.cancel()
+            return True
+        return False
 
-    def capabilities(self) -> dict[str, Any]:
+    def capabilities(self, *, force: bool = False) -> dict[str, Any]:
         """Return tools, skills and Swarm preset diagnostics."""
+        cache_key = str((vibe_runtime_base() / "embedded").resolve())
+        now = time.monotonic()
+        with self._capabilities_lock:
+            cached = self._capabilities_cache
+            if (
+                not force
+                and cached is not None
+                and cached[1] == cache_key
+                and now - cached[0] < self._capabilities_cache_ttl
+            ):
+                return copy.deepcopy(cached[2])
+        with self._capabilities_scan_lock:
+            with self._capabilities_lock:
+                cached = self._capabilities_cache
+                if (
+                    not force
+                    and cached is not None
+                    and cached[1] == cache_key
+                    and time.monotonic() - cached[0] < self._capabilities_cache_ttl
+                ):
+                    return copy.deepcopy(cached[2])
+            result = self._scan_capabilities()
+            with self._capabilities_lock:
+                self._capabilities_cache = (
+                    time.monotonic(),
+                    cache_key,
+                    copy.deepcopy(result),
+                )
+            return result
+
+    def _scan_capabilities(self) -> dict[str, Any]:
+        """Build the capability inventory once for the cache window."""
         try:
             self._bootstrap()
             skills = importlib.import_module("src.agent.skills")

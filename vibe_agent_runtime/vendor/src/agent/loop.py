@@ -14,6 +14,7 @@ Tool execution:
 from __future__ import annotations
 
 import concurrent.futures
+import contextvars
 import copy
 import json
 import logging
@@ -55,6 +56,14 @@ from src.tools.redaction import redact_payload, redact_tool_result
 
 RUNS_DIR = get_runs_dir()
 SESSIONS_DIR = get_sessions_dir()
+_RUNS_DIR_CONTEXT: contextvars.ContextVar[Path | None] = contextvars.ContextVar(
+    "vibe_agent_runs_dir",
+    default=None,
+)
+_SESSIONS_DIR_CONTEXT: contextvars.ContextVar[Path | None] = contextvars.ContextVar(
+    "vibe_agent_sessions_dir",
+    default=None,
+)
 KEEP_RECENT = 3
 LLM_USAGE_ARTIFACT = "llm_usage.json"
 
@@ -69,6 +78,29 @@ SUMMARY_CHUNK_CHARS = 80_000
 # An LLM may return a transient empty completion (no text, no tool calls);
 # retry once with a nudge before failing the run on a second consecutive one.
 MAX_CONSECUTIVE_EMPTY_RESPONSE_SKIPS = 1
+
+
+def set_runtime_dirs(runs_dir: Path, sessions_dir: Path) -> tuple[contextvars.Token, contextvars.Token]:
+    """Bind per-attempt artifact roots to the current worker context."""
+    return (
+        _RUNS_DIR_CONTEXT.set(Path(runs_dir)),
+        _SESSIONS_DIR_CONTEXT.set(Path(sessions_dir)),
+    )
+
+
+def reset_runtime_dirs(tokens: tuple[contextvars.Token, contextvars.Token]) -> None:
+    """Restore the previous per-worker artifact roots."""
+    runs_token, sessions_token = tokens
+    _RUNS_DIR_CONTEXT.reset(runs_token)
+    _SESSIONS_DIR_CONTEXT.reset(sessions_token)
+
+
+def get_runtime_runs_dir() -> Path:
+    return _RUNS_DIR_CONTEXT.get() or RUNS_DIR
+
+
+def get_runtime_sessions_dir() -> Path:
+    return _SESSIONS_DIR_CONTEXT.get() or SESSIONS_DIR
 
 
 def _override(name: str):
@@ -1022,12 +1054,14 @@ class AgentLoop:
         run_started_wall = _time.time()
 
         state_store = RunStateStore()
-        RUNS_DIR.mkdir(parents=True, exist_ok=True)
+        runs_dir = get_runtime_runs_dir()
+        sessions_dir = get_runtime_sessions_dir()
+        runs_dir.mkdir(parents=True, exist_ok=True)
 
         if self.memory.run_dir and Path(self.memory.run_dir).exists():
             run_dir = Path(self.memory.run_dir)
         else:
-            run_dir = state_store.create_run_dir(RUNS_DIR)
+            run_dir = state_store.create_run_dir(runs_dir)
             self.memory.run_dir = str(run_dir)
 
         state_store.save_request(run_dir, user_message, {"session_id": session_id})
@@ -1051,7 +1085,7 @@ class AgentLoop:
         messages = context.build_messages(llm_user_message, history)
         react_trace: List[Dict[str, Any]] = []
 
-        trace_dir = SESSIONS_DIR / session_id if session_id else run_dir
+        trace_dir = sessions_dir / session_id if session_id else run_dir
         trace = TraceWriter(trace_dir)
         self._write_run_manifest(trace_dir, messages)
         if self._run_iteration == 0 and trace.path.exists():

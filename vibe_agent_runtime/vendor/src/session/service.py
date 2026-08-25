@@ -29,8 +29,6 @@ from src.session.store import SessionStore
 if TYPE_CHECKING:
     from src.agent.loop import AgentLoop
 
-# Dedicated thread pool limited to four concurrent agents to avoid exhausting the default executor.
-_AGENT_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="agent")
 logger = logging.getLogger(__name__)
 
 
@@ -506,41 +504,67 @@ class SessionService:
             """Forward MCP server-name collision warnings to the operator event channel."""
             self.event_bus.emit(session_id, "mcp.warning", {"attempt_id": attempt_id, "message": msg})
 
-        registry = await loop.run_in_executor(
-            _AGENT_EXECUTOR,
-            lambda: build_registry(
-                persistent_memory=pm,
-                include_shell_tools=include_shell_tools,
-                agent_config=agent_config,
-                session_id=session_id,
-                event_callback=event_callback,
-                warn_callback=_mcp_collision_warn,
-            ),
+        # Do not use one process-wide executor here. A third-party HTTP client
+        # or a write tool can block a Python thread indefinitely; if all
+        # shared workers are occupied, unrelated users appear to have a dead
+        # API even though the event loop is still alive. One executor per
+        # attempt isolates that failure. ``wait=False`` is intentional during
+        # cancellation/timeout: Python cannot safely kill a running thread.
+        agent_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix=f"agent-{session_id[:12]}",
         )
-
-        agent = AgentLoop(
-            registry=registry,
-            llm=llm,
-            event_callback=event_callback,
-            max_iterations=50,
-            persistent_memory=pm,
-        )
-        self._active_loops[session_id] = agent
-
-        # Build the message history context.
-        history = self._convert_messages_to_history(messages) if messages else None
-
         try:
-            result = await loop.run_in_executor(
-                _AGENT_EXECUTOR,
-                lambda: agent.run(
-                    user_message=attempt.prompt,
-                    history=history,
+            registry = await loop.run_in_executor(
+                agent_executor,
+                lambda: build_registry(
+                    persistent_memory=pm,
+                    include_shell_tools=include_shell_tools,
+                    agent_config=agent_config,
                     session_id=session_id,
+                    event_callback=event_callback,
+                    warn_callback=_mcp_collision_warn,
                 ),
             )
+
+            agent = AgentLoop(
+                registry=registry,
+                llm=llm,
+                event_callback=event_callback,
+                max_iterations=50,
+                persistent_memory=pm,
+            )
+            self._active_loops[session_id] = agent
+
+            # Build the message history context.
+            history = self._convert_messages_to_history(messages) if messages else None
+
+            def run_agent() -> Dict[str, Any]:
+                # AgentLoop historically read module-level artifact roots.
+                # Bind them inside the executor thread so concurrent users
+                # cannot overwrite one another's trace directories.
+                from src.agent import loop as loop_module
+
+                tokens = loop_module.set_runtime_dirs(
+                    self.runs_dir,
+                    self.store.base_dir,
+                )
+                try:
+                    return agent.run(
+                        user_message=attempt.prompt,
+                        history=history,
+                        session_id=session_id,
+                    )
+                finally:
+                    loop_module.reset_runtime_dirs(tokens)
+
+            result = await loop.run_in_executor(agent_executor, run_agent)
         finally:
             self._active_loops.pop(session_id, None)
+            # Never wait for a possibly wedged third-party call here. Any
+            # still-running thread is isolated to this attempt and its
+            # process will be restarted by the supervisor if necessary.
+            agent_executor.shutdown(wait=False, cancel_futures=True)
             try:
                 checkpoint.flush()
             except OSError as exc:

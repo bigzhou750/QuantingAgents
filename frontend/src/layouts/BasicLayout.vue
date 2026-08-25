@@ -62,7 +62,10 @@
               appear
             >
               <keep-alive :include="keepAliveComponents">
-                <component :is="Component" :key="route.fullPath" />
+                <component
+                  :is="Component"
+                  :key="route.path === '/research-agent' ? route.path : route.fullPath"
+                />
               </keep-alive>
             </transition>
           </router-view>

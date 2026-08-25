@@ -150,6 +150,9 @@
                   <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
                 </div>
               </div>
+              <div v-if="streamTextFor(activeTask.task_id)" class="streaming-response">
+                {{ streamTextFor(activeTask.task_id) }}
+              </div>
             </div>
           </el-scrollbar>
 
@@ -167,10 +170,13 @@
               :icon="Promotion"
               native-type="submit"
               :loading="sending"
-              :disabled="!prompt.trim() || !activeSessionId"
+              :disabled="!prompt.trim() || !activeSessionId || hasRunningTask"
             >
               发送
             </el-button>
+            <div v-if="hasRunningTask" class="composer-lock">
+              当前有研究任务执行中，请等待完成或先取消任务
+            </div>
           </form>
         </section>
     </main>
@@ -188,7 +194,7 @@ import { vibeAgentApi,
   type VibeSession,
   type VibeTask
 } from '@/api/vibeAgent'
-import { streamVibeEvents } from '@/api/vibeAgentStream'
+import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStream'
 import { formatDateTime } from '@/utils/datetime'
 import {
   buildWorkbenchActivity,
@@ -206,16 +212,24 @@ const events = ref<VibeEvent[]>([])
 const prompt = ref('')
 const sending = ref(false)
 const activeTask = ref<VibeTask | null>(null)
+const tasksBySession = ref<Record<string, VibeTask>>({})
 const health = ref({ available: false, status: 'unknown', diagnostics: {} as Record<string, any> })
 const capabilities = ref({ tool_count: 0, skill_count: 0, swarm_count: 0, error: '' })
 const streamState = ref<'idle' | 'connected' | 'disconnected' | 'reconnecting'>('idle')
 const streamError = ref('')
+const authRequired = ref(false)
 const chatScroll = ref()
 const activityOpen = ref<Record<string, boolean>>({})
 let controller: AbortController | null = null
 let reconnectTimer: number | null = null
+let sessionLoadVersion = 0
+let streamGeneration = 0
 
 const activeSession = computed(() => sessions.value.find(item => item.session_id === activeSessionId.value))
+const runningTask = computed(() => (
+  Object.values(tasksBySession.value).find(task => canCancel(task.status)) || null
+))
+const hasRunningTask = computed(() => Boolean(runningTask.value))
 const healthText = computed(() => health.value.available ? 'Agent 就绪' : 'Agent 不可用')
 const streamStateLabel = computed(() => {
   if (streamState.value === 'connected') return '已连接'
@@ -250,6 +264,11 @@ const activitySummary = (activity: ReturnType<typeof buildWorkbenchActivity>) =>
   return ['完成', `${count} 个步骤`, elapsed].filter(Boolean).join(' · ')
 }
 
+const streamTextFor = (taskId: string) => events.value
+  .filter(event => event.task_id === taskId && event.event_type === 'token')
+  .map(event => String(event.payload?.text || event.payload?.delta || ''))
+  .join('')
+
 const loadHealth = async () => {
   try {
     const res = await vibeAgentApi.health()
@@ -261,23 +280,45 @@ const loadHealth = async () => {
       swarm_count: Array.isArray(diagnostics.swarm_presets) ? diagnostics.swarm_presets.length : 0,
       error: diagnostics.error || diagnostics.tools_error || ''
     }
-  } catch {
+    return true
+  } catch (error: any) {
     health.value = { available: false, status: 'unavailable', diagnostics: {} }
-    capabilities.value.error = '能力诊断不可用'
+    if (isAuthError(error)) {
+      authRequired.value = true
+      capabilities.value.error = '登录已过期，请重新登录'
+    } else {
+      capabilities.value.error = '能力诊断不可用'
+    }
+    return false
   }
 }
 
 const loadSessions = async () => {
-  const res = await vibeAgentApi.listSessions()
-  sessions.value = ((res as any).data || []) as VibeSession[]
-  const routeSessionId = typeof route.query.session_id === 'string' ? route.query.session_id : ''
-  if (!activeSessionId.value && routeSessionId) {
-    await selectSession(routeSessionId)
-    return
+  try {
+    const res = await vibeAgentApi.listSessions()
+    sessions.value = ((res as any).data || []) as VibeSession[]
+    await loadRunningTasks()
+    const routeSessionId = typeof route.query.session_id === 'string' ? route.query.session_id : ''
+    if (!activeSessionId.value && routeSessionId) {
+      await selectSession(routeSessionId)
+      return
+    }
+    if (!activeSessionId.value && sessions.value.length > 0) {
+      await selectSession(sessions.value[0].session_id)
+    }
+  } catch (error: any) {
+    if (isAuthError(error)) authRequired.value = true
+    throw error
   }
-  if (!activeSessionId.value && sessions.value.length > 0) {
-    await selectSession(sessions.value[0].session_id)
+}
+
+const loadRunningTasks = async () => {
+  const res = await vibeAgentApi.listTasks({ page: 1, page_size: 100 })
+  const next: Record<string, VibeTask> = {}
+  for (const task of (((res as any).data?.tasks || []) as VibeTask[])) {
+    if (canCancel(task.status)) next[task.session_id] = task
   }
+  tasksBySession.value = next
 }
 
 const createSession = async () => {
@@ -288,20 +329,28 @@ const createSession = async () => {
 }
 
 const loadSessionState = async (sessionId: string) => {
-  const [messagesRes, eventsRes] = await Promise.all([
+  const loadVersion = ++sessionLoadVersion
+  const [messagesRes, eventsRes, tasksRes] = await Promise.all([
     vibeAgentApi.listMessages(sessionId),
-    vibeAgentApi.replayEvents(sessionId, 0)
+    vibeAgentApi.replayEvents(sessionId, 0),
+    vibeAgentApi.listTasks({ session_id: sessionId, page: 1, page_size: 20 })
   ])
+  if (loadVersion !== sessionLoadVersion || sessionId !== activeSessionId.value) return
   messages.value = ((messagesRes as any).data || []) as VibeMessage[]
   events.value = ((eventsRes as any).data || []) as VibeEvent[]
   activityOpen.value = {}
-  activeTask.value = null
+  const sessionTasks = (((tasksRes as any).data?.tasks || []) as VibeTask[])
+  const currentTask = sessionTasks.find(task => canCancel(task.status)) || null
+  activeTask.value = currentTask
+  if (currentTask) tasksBySession.value[currentTask.session_id] = currentTask
+  else delete tasksBySession.value[sessionId]
   await nextTick(scrollToBottom)
 }
 
 const selectSession = async (sessionId: string) => {
   if (!sessionId || sessionId === activeSessionId.value) return
   activeSessionId.value = sessionId
+  activeTask.value = null
   await router.replace({ path: '/research-agent', query: { ...route.query, session_id: sessionId } })
   await loadSessionState(sessionId)
   reconnectStream()
@@ -309,6 +358,7 @@ const selectSession = async (sessionId: string) => {
 
 const reconnectStream = () => {
   if (!activeSessionId.value) return
+  const generation = ++streamGeneration
   controller?.abort()
   controller = new AbortController()
   streamState.value = 'reconnecting'
@@ -321,32 +371,50 @@ const reconnectStream = () => {
     {
       onEvent: handleEvent,
       onConnected: () => {
+        if (generation !== streamGeneration) return
         streamState.value = 'connected'
       },
       onError: (error) => {
+        if (generation !== streamGeneration) return
         streamState.value = 'disconnected'
         streamError.value = error.message
-        scheduleReconnect()
+        scheduleReconnect(generation)
       },
       onClosed: () => {
+        if (generation !== streamGeneration) return
         if (streamState.value === 'connected') streamState.value = 'disconnected'
-        scheduleReconnect()
+        scheduleReconnect(generation)
       }
     },
     controller.signal
   ).catch((error) => {
     if (error.name !== 'AbortError') {
+      if (generation !== streamGeneration) return
+      if (error instanceof VibeAgentUnauthorizedError || error?.status === 401) {
+        authRequired.value = true
+        streamState.value = 'disconnected'
+        streamError.value = '登录已过期，请重新登录'
+        return
+      }
       streamState.value = 'disconnected'
       streamError.value = error.message || '事件流已断开'
       ElMessage.warning(streamError.value)
-      scheduleReconnect()
+      scheduleReconnect(generation)
     }
   })
 }
 
-const scheduleReconnect = () => {
+const isAuthError = (error: any) => (
+  error?.response?.status === 401 ||
+  error?.status === 401 ||
+  /登录已过期|认证失败|token无效|token 失效|invalid crypto padding/i.test(String(error?.message || ''))
+)
+
+const scheduleReconnect = (generation = streamGeneration) => {
+  if (generation !== streamGeneration) return
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
   reconnectTimer = window.setTimeout(() => {
+    if (generation !== streamGeneration) return
     if (activeTask.value && ['queued', 'processing', 'pending', 'running'].includes(activeTask.value.status)) {
       reconnectStream()
     }
@@ -354,6 +422,7 @@ const scheduleReconnect = () => {
 }
 
 const handleEvent = (event: VibeEvent) => {
+  if (event.session_id && event.session_id !== activeSessionId.value) return
   if (event.sequence && events.value.some(item => item.sequence === event.sequence)) return
   events.value.push(event)
   if (event.event_type === 'message_created' && event.payload?.message?.role === 'assistant') {
@@ -363,7 +432,25 @@ const handleEvent = (event: VibeEvent) => {
     }
   }
   if (event.event_type === 'task_status' && event.payload?.status) {
-    activeTask.value = { ...(activeTask.value || {} as VibeTask), status: event.payload.status }
+    const taskId = String(event.task_id || event.payload.task_id || activeTask.value?.task_id || '')
+    const status = String(event.payload.status)
+    if (taskId) {
+      const task = {
+        ...(tasksBySession.value[event.session_id || activeSessionId.value] || activeTask.value || {}),
+        task_id: taskId,
+        session_id: event.session_id || activeSessionId.value,
+        status
+      } as VibeTask
+      if (canCancel(status)) {
+        tasksBySession.value[task.session_id] = task
+        if (task.session_id === activeSessionId.value) activeTask.value = task
+      } else {
+        delete tasksBySession.value[task.session_id]
+        if (task.session_id === activeSessionId.value && activeTask.value?.task_id === taskId) {
+          activeTask.value = null
+        }
+      }
+    }
     if (event.payload.status === 'failed') {
       streamState.value = 'disconnected'
       streamError.value = event.payload.error || '任务失败'
@@ -371,13 +458,13 @@ const handleEvent = (event: VibeEvent) => {
   }
   if (event.event_type === 'error' && event.payload?.error) {
     streamError.value = event.payload.error
-    scheduleReconnect()
+    scheduleReconnect(streamGeneration)
   }
   nextTick(scrollToBottom)
 }
 
 const sendMessage = async () => {
-  if (!prompt.value.trim() || !activeSessionId.value) return
+  if (!prompt.value.trim() || !activeSessionId.value || hasRunningTask.value) return
   sending.value = true
   try {
     const content = prompt.value.trim()
@@ -393,6 +480,7 @@ const sendMessage = async () => {
       idempotency_key: `web_${Date.now()}_${Math.random().toString(36).slice(2)}`
     })
     activeTask.value = (res as any).data as VibeTask
+    tasksBySession.value[activeTask.value.session_id] = activeTask.value
     streamState.value = 'reconnecting'
     await loadSessions()
     await nextTick(scrollToBottom)
@@ -408,6 +496,7 @@ const cancelTask = async () => {
   if (!activeTask.value) return
   await vibeAgentApi.cancelTask(activeTask.value.task_id)
   activeTask.value.status = 'cancelled'
+  delete tasksBySession.value[activeTask.value.session_id]
   streamState.value = 'disconnected'
   ElMessage.success('已发送取消请求')
 }
@@ -444,8 +533,14 @@ watch(
 )
 
 onMounted(async () => {
-  await loadHealth()
-  await loadSessions()
+  if (!await loadHealth() || authRequired.value) return
+  try {
+    await loadSessions()
+  } catch {
+    if (authRequired.value) return
+    ElMessage.error('会话列表加载失败')
+    return
+  }
   await openSessionFromRoute()
   if (!activeSessionId.value && sessions.value.length === 0) {
     await createSession()
@@ -456,6 +551,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  streamGeneration += 1
   controller?.abort()
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
 })
@@ -778,6 +874,8 @@ onUnmounted(() => {
 .activity-steps {
   display: flex;
   flex-direction: column;
+  max-height: min(240px, 30vh);
+  overflow-y: auto;
   gap: 7px;
   padding: 8px 12px 10px 34px;
   border-top: 1px solid var(--el-border-color-lighter);
@@ -791,6 +889,18 @@ onUnmounted(() => {
   color: var(--el-text-color-regular);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.streaming-response {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0 12px 10px 34px;
+  padding: 9px 10px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .step-dot {
@@ -847,12 +957,20 @@ onUnmounted(() => {
 }
 
 .composer {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   padding: 12px;
   border-top: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);
+}
+
+.composer-lock {
+  grid-column: 1 / -1;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  text-align: center;
 }
 
 .compact-section {

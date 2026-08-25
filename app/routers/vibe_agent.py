@@ -81,11 +81,12 @@ async def replay_events(session_id: str, after: int = Query(default=0, ge=0), us
 @router.get("/tasks")
 async def list_tasks(
     status: Optional[str] = None,
+    session_id: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     user: dict = Depends(get_current_user),
 ):
-    return api_response(await vibe_agent_service.list_tasks(user["id"], status, page, page_size))
+    return api_response(await vibe_agent_service.list_tasks(user["id"], status, page, page_size, session_id))
 
 
 @router.get("/tasks/{task_id}")

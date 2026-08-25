@@ -19,6 +19,9 @@ export interface VibeTask {
   progress: number
   error_message?: string
   created_at: string
+  updated_at?: string
+  started_at?: string
+  finished_at?: string
 }
 
 export interface VibeMessage {
@@ -33,6 +36,7 @@ export interface VibeEvent {
   event_id?: string
   sequence?: number
   event_type?: string
+  session_id?: string
   task_id?: string
   payload?: Record<string, any>
   created_at?: string
@@ -58,7 +62,7 @@ export const vibeAgentApi = {
   sendMessage(sessionId: string, payload: { content: string; idempotency_key?: string; metadata?: Record<string, any> }): Promise<ApiResponse<VibeTask>> {
     return request.post(`/api/vibe-agent/sessions/${sessionId}/messages`, payload)
   },
-  listTasks(params?: { status?: string; page?: number; page_size?: number }): Promise<ApiResponse<{ tasks: VibeTask[]; total: number }>> {
+  listTasks(params?: { status?: string; session_id?: string; page?: number; page_size?: number }): Promise<ApiResponse<{ tasks: VibeTask[]; total: number }>> {
     return request.get('/api/vibe-agent/tasks', { params })
   },
   cancelTask(taskId: string): Promise<ApiResponse<VibeTask>> {
