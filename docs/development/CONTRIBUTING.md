@@ -118,6 +118,12 @@ Level 4：团队成员（Team Member）
 
 ## 📋 开发规范
 
+### 规范驱动开发（OpenSpec）
+
+新功能、跨模块修复、API/配置/数据库契约变更，先按
+[OpenSpec 开发流程](./OPENSPEC_WORKFLOW.md) 创建并评审 change，再进入实现。
+实现完成后，PR 描述中应注明对应的 change 名称、验证结果和遗留风险。
+
 ### 代码风格
 - Python：遵循 PEP 8 规范
 - Vue/TypeScript：遵循项目 ESLint 配置

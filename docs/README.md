@@ -76,6 +76,7 @@
 - [代码结构](./development/code-structure.md) - 代码组织结构
 - [扩展开发](./development/extending.md) - 如何扩展框架
 - [测试指南](./development/testing.md) - 测试策略和方法
+- [OpenSpec 规范驱动开发](./development/OPENSPEC_WORKFLOW.md) - SDD 变更、评审、实现和归档流程
 - [上游同步策略](./maintenance/upstream-sync.md) - 人工选择性同步上游的流程与原则
 
 ### 📋 版本发布 (v0.1.7更新)

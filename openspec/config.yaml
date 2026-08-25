@@ -1,0 +1,41 @@
+schema: spec-driven
+
+context: |
+  Project: TradingAgents-CN, a Chinese multi-agent stock research platform.
+  Backend: Python 3.10+, FastAPI/Uvicorn, MongoDB, Redis.
+  Frontend: Vue 3, TypeScript, Vite, Element Plus.
+  Main code areas: app/ (backend application), tradingagents/ (core library),
+  frontend/ (web application), tests/ (automated tests), docs/ (documentation).
+  Architecture boundary: keep reusable analysis/dataflow logic in tradingagents/
+  and application/API orchestration in app/.
+  Repository constraints: respect the mixed licensing boundary documented in
+  COPYRIGHT.md; do not expose secrets; preserve existing provider compatibility.
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+rules:
+  proposal:
+    - 明确说明目标、范围、非目标、影响范围和验收标准。
+    - 涉及 app/ 或 frontend/ 时，说明是否影响现有 API、权限、配置或用户界面。
+  specs:
+    - 使用可验证的 SHALL/MUST 需求，并覆盖正常路径、边界条件和失败处理。
+    - 复用现有能力时，标明兼容性要求，不重复定义已有稳定契约。
+  design:
+    - 优先复用仓库已有模块、服务、适配器和测试模式。
+    - 说明数据流、模块边界、迁移/回滚策略以及测试策略。
+  tasks:
+    - 任务按可独立验证的粒度拆分，并标注涉及的文件或目录。
+    - 每项任务都必须能追溯到 proposal、spec 或 design 中的要求。
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
