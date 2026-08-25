@@ -333,7 +333,35 @@ class EmbeddedAgentRuntime:
                 task = service._active_tasks.get(session_id)
                 if task is not None:
                     await task
-                return result
+                attempt_id = str(result.get("attempt_id") or "")
+                attempt = (
+                    service.store.get_attempt(session_id, attempt_id)
+                    if attempt_id
+                    else None
+                )
+                reply = (
+                    service.store.get_message_for_attempt(session_id, attempt_id)
+                    if attempt_id
+                    else None
+                )
+                # send_message() returns the enqueue envelope. The completed
+                # assistant reply is persisted by SessionService._run_attempt,
+                # so hydrate it before crossing back into the QuantingAgents
+                # Mongo/SSE adapter.
+                return {
+                    **result,
+                    "status": attempt.status.value if attempt else "failed",
+                    "content": reply.content if reply else "",
+                    "run_dir": attempt.run_dir if attempt else None,
+                    "reason": attempt.error if attempt else None,
+                    "metrics": attempt.metrics if attempt else None,
+                    "tool_trail": reply.tool_trail if reply else [],
+                    "elapsed_ms": (
+                        reply.metadata.get("elapsed_ms")
+                        if reply and isinstance(reply.metadata, dict)
+                        else None
+                    ),
+                }
             finally:
                 self._active.pop(session_id, None)
 

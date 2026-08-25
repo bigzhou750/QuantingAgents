@@ -3,38 +3,30 @@ import { streamVibeEvents } from '@/api/vibeAgentStream'
 import {
   eventLabel,
   eventStatusText,
+  buildWorkbenchActivity,
   buildWorkbenchSteps,
-  groupWorkbenchEvents,
+  formatActivityElapsed,
   summarizeEventPayload
 } from '../workbench'
 
 describe('VibeAgent workbench helpers', () => {
-  it('groups trace events into the expected workbench panels', () => {
-    const groups = groupWorkbenchEvents([
+  it('only exposes tool calls and filters internal runtime events', () => {
+    const steps = buildWorkbenchSteps([
       { sequence: 1, event_type: 'token', payload: { text: 'hello' } },
-      { sequence: 2, event_type: 'tool_call', payload: { name: 'screen_market' } },
-      { sequence: 3, event_type: 'evidence', payload: { title: 'evidence' } },
-      { sequence: 4, event_type: 'swarm_status', payload: { agent: 'researcher' } },
-      { sequence: 5, event_type: 'task_status', payload: { status: 'failed', error: 'boom' } }
+      { sequence: 2, event_type: 'worker_status', payload: { status: 'processing' } },
+      { sequence: 3, event_type: 'tool_call', payload: { name: 'screen_market', arguments: { market: 'us' } } },
+      { sequence: 4, event_type: 'evidence', payload: { title: 'evidence' } }
     ])
 
-    expect(groups.map(group => group.label)).toEqual([
-      '运行轨迹',
-      '工具调用',
-      '证据与 ReAct',
-      'Swarm'
-    ])
-    expect(groups[0].events.map(event => event.event_type)).toEqual(['token', 'task_status'])
-    expect(groups[1].events[0].payload?.name).toBe('screen_market')
-    expect(groups[2].events[0].event_type).toBe('evidence')
-    expect(groups[3].events[0].payload?.agent).toBe('researcher')
+    expect(steps).toHaveLength(1)
+    expect(steps[0].title).toBe('筛选市场')
+    expect(steps[0].action).toBe('us')
   })
 
   it('renders compact labels and status text for failures and tool calls', () => {
-    expect(eventLabel({ event_type: 'tool_call' })).toBe('工具轨迹')
-    expect(eventLabel({ event_type: 'react_summary' })).toBe('ReAct 摘要')
-    expect(eventStatusText({ event_type: 'tool_call', payload: {} })).toBe('调用中')
-    expect(eventStatusText({ event_type: 'task_status', payload: { status: 'failed', error: 'boom' } })).toBe('失败')
+    expect(eventLabel({ event_type: 'tool_call', payload: { name: 'search_symbol' } })).toBe('搜索标的')
+    expect(eventStatusText({ event_type: 'tool_call', payload: {} })).toBe('执行中')
+    expect(eventStatusText({ event_type: 'tool_call', payload: { phase: 'tool_result', status: 'ok' } })).toBe('完成')
   })
 
   it('merges tool call and tool result into one compact step', () => {
@@ -59,10 +51,25 @@ describe('VibeAgent workbench helpers', () => {
     ])
 
     expect(steps).toHaveLength(1)
-    expect(steps[0].title).toBe('screen_market')
+    expect(steps[0].title).toBe('筛选市场')
     expect(steps[0].status).toBe('ok')
     expect(steps[0].action).toBe('获取完成')
     expect(steps[0].elapsedMs).toBe(842)
+  })
+
+  it('coalesces consecutive calls and keeps one activity per task', () => {
+    const activity = buildWorkbenchActivity('task-1', [
+      { sequence: 1, task_id: 'task-1', created_at: '2026-08-25T00:00:00.000Z', event_type: 'tool_call', payload: { name: 'search_symbol', tool_call_id: 'a', arguments: { query: '伊利股份' } } },
+      { sequence: 2, task_id: 'task-1', created_at: '2026-08-25T00:00:00.100Z', event_type: 'tool_call', payload: { phase: 'tool_result', name: 'search_symbol', tool_call_id: 'a', status: 'ok', elapsed_ms: 80 } },
+      { sequence: 3, task_id: 'task-1', created_at: '2026-08-25T00:00:00.200Z', event_type: 'tool_call', payload: { name: 'search_symbol', tool_call_id: 'b', arguments: { query: '格力电器' } } },
+      { sequence: 4, task_id: 'task-1', created_at: '2026-08-25T00:00:00.300Z', event_type: 'tool_call', payload: { phase: 'tool_result', name: 'search_symbol', tool_call_id: 'b', status: 'ok', elapsed_ms: 90 } },
+      { sequence: 5, task_id: 'task-1', created_at: '2026-08-25T00:00:01.000Z', event_type: 'task_status', payload: { status: 'completed' } }
+    ], 'completed')
+
+    expect(activity.state).toBe('done')
+    expect(activity.steps).toHaveLength(1)
+    expect(activity.steps[0].count).toBe(2)
+    expect(formatActivityElapsed(activity.startedAt, activity.endedAt)).toBe('1s')
   })
 
   it('summarizes payloads without dumping the whole trace blob', () => {

@@ -83,8 +83,7 @@
         </div>
       </section>
 
-      <section class="workbench-grid">
-        <section class="transcript-pane">
+      <section class="transcript-pane">
           <el-scrollbar ref="chatScroll" class="transcript-scroll">
             <div v-if="messages.length === 0 && events.length === 0" class="empty-state">
               <h2>输入研究问题</h2>
@@ -92,12 +91,66 @@
             </div>
 
             <div v-for="message in messages" :key="message.message_id" :class="['message-row', message.role]">
+              <div
+                v-if="message.role === 'assistant' && message.task_id && activityFor(message.task_id).steps.length > 0"
+                class="activity-line"
+                :class="{ 'activity-running': activityFor(message.task_id).state === 'running' }"
+              >
+                <button
+                  type="button"
+                  class="activity-summary"
+                  :aria-expanded="isActivityOpen(activityFor(message.task_id))"
+                  @click="toggleActivity(activityFor(message.task_id).taskId)"
+                >
+                  <span class="activity-status-icon" :class="`status-${activityFor(message.task_id).state}`">
+                    {{ activityFor(message.task_id).state === 'running' ? '·' : activityFor(message.task_id).state === 'failed' ? '!' : '✓' }}
+                  </span>
+                  <span class="activity-summary-text">
+                    {{ activitySummary(activityFor(message.task_id)) }}
+                  </span>
+                  <span class="activity-chevron">{{ isActivityOpen(activityFor(message.task_id)) ? '⌄' : '›' }}</span>
+                </button>
+                <div v-if="isActivityOpen(activityFor(message.task_id))" class="activity-steps">
+                  <div v-for="step in activityFor(message.task_id).steps" :key="step.key" class="activity-step">
+                    <span class="step-dot" :class="`step-${step.status}`"></span>
+                    <span class="step-title">{{ step.title }}<template v-if="step.count && step.count > 1"> ×{{ step.count }}</template></span>
+                    <span v-if="step.action" class="step-action">{{ step.action }}</span>
+                    <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
+                  </div>
+                </div>
+              </div>
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
                 <div class="message-content">{{ message.content }}</div>
               </div>
             </div>
 
+            <div
+              v-if="activeTask && !messages.some(message => message.role === 'assistant' && message.task_id === activeTask?.task_id)"
+              class="activity-line activity-current"
+              :class="{ 'activity-running': activityFor(activeTask.task_id).state === 'running' }"
+            >
+              <button
+                type="button"
+                class="activity-summary"
+                :aria-expanded="isActivityOpen(activityFor(activeTask.task_id))"
+                @click="toggleActivity(activeTask.task_id)"
+              >
+                <span class="activity-status-icon" :class="`status-${activityFor(activeTask.task_id).state}`">
+                  {{ activityFor(activeTask.task_id).state === 'running' ? '·' : activityFor(activeTask.task_id).state === 'failed' ? '!' : '✓' }}
+                </span>
+                <span class="activity-summary-text">{{ activitySummary(activityFor(activeTask.task_id)) }}</span>
+                <span class="activity-chevron">{{ isActivityOpen(activityFor(activeTask.task_id)) ? '⌄' : '›' }}</span>
+              </button>
+              <div v-if="isActivityOpen(activityFor(activeTask.task_id))" class="activity-steps">
+                <div v-for="step in activityFor(activeTask.task_id).steps" :key="step.key" class="activity-step">
+                  <span class="step-dot" :class="`step-${step.status}`"></span>
+                  <span class="step-title">{{ step.title }}<template v-if="step.count && step.count > 1"> ×{{ step.count }}</template></span>
+                  <span v-if="step.action" class="step-action">{{ step.action }}</span>
+                  <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
+                </div>
+              </div>
+            </div>
           </el-scrollbar>
 
           <form class="composer" @submit.prevent="sendMessage">
@@ -120,41 +173,6 @@
             </el-button>
           </form>
         </section>
-
-        <aside class="trace-pane">
-          <div class="trace-head">
-            <h3>运行轨迹</h3>
-            <p>工具调用、证据、ReAct、Swarm 和失败原因会按顺序保留。</p>
-          </div>
-
-          <div class="trace-sections">
-            <section class="trace-section">
-              <div class="trace-section-head">
-                <strong>运行轨迹</strong>
-                <span>{{ workbenchSteps.length }}</span>
-              </div>
-              <div v-if="workbenchSteps.length === 0" class="trace-empty">暂无内容</div>
-              <div v-else class="trace-items">
-                <article
-                  v-for="step in workbenchSteps"
-                  :key="step.key"
-                  :class="['trace-item', `step-${step.status}`]"
-                >
-                  <div class="trace-item-head">
-                    <span class="trace-step-title"><i aria-hidden="true"></i>{{ step.title }}</span>
-                    <span>{{ step.statusText }}</span>
-                  </div>
-                  <div class="trace-item-meta">
-                    <span class="trace-action">{{ step.action }}</span>
-                    <span v-if="stepElapsedText(step)">{{ stepElapsedText(step) }}</span>
-                    <span v-if="step.sequence">#{{ step.sequence }}</span>
-                  </div>
-                </article>
-              </div>
-            </section>
-          </div>
-        </aside>
-      </section>
     </main>
   </div>
 </template>
@@ -173,7 +191,8 @@ import { vibeAgentApi,
 import { streamVibeEvents } from '@/api/vibeAgentStream'
 import { formatDateTime } from '@/utils/datetime'
 import {
-  buildWorkbenchSteps,
+  buildWorkbenchActivity,
+  formatActivityElapsed,
   stepElapsedText
 } from './workbench'
 
@@ -192,6 +211,7 @@ const capabilities = ref({ tool_count: 0, skill_count: 0, swarm_count: 0, error:
 const streamState = ref<'idle' | 'connected' | 'disconnected' | 'reconnecting'>('idle')
 const streamError = ref('')
 const chatScroll = ref()
+const activityOpen = ref<Record<string, boolean>>({})
 let controller: AbortController | null = null
 let reconnectTimer: number | null = null
 
@@ -204,7 +224,31 @@ const streamStateLabel = computed(() => {
   return '未连接'
 })
 const lastSequence = computed(() => Math.max(0, ...events.value.map(event => Number(event.sequence || 0))))
-const workbenchSteps = computed(() => buildWorkbenchSteps(events.value))
+
+const activityFor = (taskId: string) => buildWorkbenchActivity(
+  taskId,
+  events.value,
+  activeTask.value?.task_id === taskId ? activeTask.value.status : undefined
+)
+
+const isActivityOpen = (activity: ReturnType<typeof buildWorkbenchActivity>) => (
+  activity.state === 'running' || activityOpen.value[activity.taskId] === true
+)
+
+const toggleActivity = (taskId: string) => {
+  activityOpen.value[taskId] = !isActivityOpen(activityFor(taskId))
+}
+
+const activitySummary = (activity: ReturnType<typeof buildWorkbenchActivity>) => {
+  const count = activity.steps.reduce((total, step) => total + (step.count || 1), 0)
+  const elapsed = formatActivityElapsed(activity.startedAt, activity.endedAt)
+  if (activity.state === 'running') {
+    return ['执行中', count ? `${count} 个步骤` : '准备中', elapsed].filter(Boolean).join(' · ')
+  }
+  if (activity.state === 'failed') return ['失败', `${count} 个步骤`, elapsed].filter(Boolean).join(' · ')
+  if (activity.state === 'cancelled') return ['已取消', `${count} 个步骤`, elapsed].filter(Boolean).join(' · ')
+  return ['完成', `${count} 个步骤`, elapsed].filter(Boolean).join(' · ')
+}
 
 const loadHealth = async () => {
   try {
@@ -250,6 +294,7 @@ const loadSessionState = async (sessionId: string) => {
   ])
   messages.value = ((messagesRes as any).data || []) as VibeMessage[]
   events.value = ((eventsRes as any).data || []) as VibeEvent[]
+  activityOpen.value = {}
   activeTask.value = null
   await nextTick(scrollToBottom)
 }
@@ -599,32 +644,21 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-.workbench-grid {
+.transcript-pane {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 16px;
-  padding-top: 16px;
-  overflow: hidden;
-}
-
-.transcript-pane,
-.trace-pane {
   min-height: 0;
   min-width: 0;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
   background: var(--el-bg-color);
-}
-
-.transcript-pane {
-  display: flex;
-  flex-direction: column;
+  margin-top: 16px;
+  overflow: hidden;
 }
 
 .transcript-scroll {
+  display: block;
   flex: 1;
   min-height: 0;
   padding: 16px;
@@ -644,11 +678,13 @@ onUnmounted(() => {
 
 .message-row {
   display: flex;
+  flex-direction: column;
   margin-bottom: 12px;
 }
 
 .message-row.user {
   justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .message-bubble {
@@ -661,6 +697,142 @@ onUnmounted(() => {
 .message-row.user .message-bubble {
   background: var(--el-color-primary);
   color: #fff;
+}
+
+.activity-line {
+  width: min(760px, 82%);
+  margin: 0 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-extra-light);
+}
+
+.activity-current {
+  margin: 0 0 14px;
+}
+
+.activity-running {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.activity-summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-regular);
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-summary:hover {
+  background: var(--el-fill-color-light);
+}
+
+.activity-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 50%;
+  color: var(--el-color-success);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.status-running {
+  color: var(--el-color-primary);
+  animation: activity-pulse 1s ease-in-out infinite;
+}
+
+.status-failed {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.activity-summary-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-chevron {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.activity-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 12px 10px 34px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.activity-step {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 7px;
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.step-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  margin-left: -18px;
+  border-radius: 50%;
+  background: var(--el-color-info);
+}
+
+.step-ok {
+  background: var(--el-color-success);
+}
+
+.step-error {
+  background: var(--el-color-danger);
+}
+
+.step-running {
+  background: var(--el-color-primary);
+}
+
+.step-title {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+
+.step-action {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-elapsed {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .message-role {
@@ -683,141 +855,13 @@ onUnmounted(() => {
   background: var(--el-bg-color);
 }
 
-.trace-pane {
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  overflow: hidden;
-}
-
-.trace-head h3 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.trace-head p {
-  margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.trace-sections {
-  flex: 1;
-  min-height: 0;
-  max-height: 100%;
-  margin-top: 12px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.trace-section {
-  margin-bottom: 14px;
-  padding-top: 4px;
-}
-
-.trace-section-head {
-  margin-bottom: 10px;
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-}
-
-.trace-section-head span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.trace-empty {
-  padding: 12px;
-  border: 1px dashed var(--el-border-color-lighter);
-  border-radius: 8px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.trace-item {
-  margin-bottom: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  background: var(--el-bg-color);
-}
-
-.trace-item.step-error,
-.trace-item.error {
-  border-color: var(--el-color-danger-light-7);
-  background: var(--el-color-danger-light-9);
-}
-
-.trace-item.step-ok {
-  border-color: var(--el-color-success-light-7);
-}
-
-.trace-item.step-running {
-  border-color: var(--el-color-primary-light-5);
-}
-
-.trace-item.evidence {
-  border-color: var(--el-color-success-light-7);
-  background: var(--el-color-success-light-9);
-}
-
-.trace-item-head {
-  margin-bottom: 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.trace-step-title {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: 7px;
-}
-
-.trace-step-title i {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: var(--el-color-info);
-}
-
-.step-ok .trace-step-title i {
-  background: var(--el-color-success);
-}
-
-.step-error .trace-step-title i {
-  background: var(--el-color-danger);
-}
-
-.step-running .trace-step-title i {
-  background: var(--el-color-primary);
-}
-
-.trace-item-meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.trace-action {
-  min-width: 0;
-  flex: 1 1 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .compact-section {
   margin-top: 18px;
 }
 
-@media (max-width: 1200px) {
-  .workbench-grid {
-    grid-template-columns: 1fr;
-  }
+@keyframes activity-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 
 @media (max-width: 960px) {
@@ -833,6 +877,10 @@ onUnmounted(() => {
 
   .session-scroll {
     height: 220px;
+  }
+
+  .activity-line {
+    width: 100%;
   }
 }
 </style>

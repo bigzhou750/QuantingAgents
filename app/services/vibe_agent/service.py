@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -110,11 +111,88 @@ class VibeAgentService:
 
     async def list_messages(self, user_id: str, session_id: str) -> List[Dict[str, Any]]:
         await self.get_session(user_id, session_id)
+        await self._hydrate_runtime_messages(user_id, session_id)
         cursor = get_mongo_db()[self.message_collection].find(
             {"user_id": user_id, "session_id": session_id},
             {"_id": 0},
         ).sort("created_at", ASCENDING)
         return await cursor.to_list(length=500)
+
+    async def _hydrate_runtime_messages(self, user_id: str, session_id: str) -> None:
+        """Import assistant replies written by the embedded SessionStore.
+
+        Older runs completed inside the vendored runtime before the adapter
+        hydrated the final attempt result. Their replies are durable in the
+        scoped JSONL store but absent from Mongo, so repair that boundary on
+        session load without duplicating messages.
+        """
+        path = session_runtime_root(user_id, session_id) / "messages.jsonl"
+        if not path.exists():
+            return
+
+        db = get_mongo_db()
+        existing = await db[self.message_collection].find(
+            {"user_id": user_id, "session_id": session_id, "role": "assistant"},
+            {"_id": 0, "content": 1, "task_id": 1, "metadata.runtime_attempt_id": 1},
+        ).to_list(length=500)
+        existing_attempts = {
+            str(item.get("metadata", {}).get("runtime_attempt_id"))
+            for item in existing
+            if item.get("metadata", {}).get("runtime_attempt_id")
+        }
+        existing_pairs = {
+            (str(item.get("task_id") or ""), str(item.get("content") or ""))
+            for item in existing
+        }
+
+        event_cursor = db[self.event_collection].find(
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "task_id": {"$exists": True, "$ne": None},
+            },
+            {"_id": 0, "task_id": 1, "payload.attempt_id": 1},
+        )
+        attempt_to_task: Dict[str, str] = {}
+        async for event in event_cursor:
+            attempt_id = str(event.get("payload", {}).get("attempt_id") or "")
+            task_id = str(event.get("task_id") or "")
+            if attempt_id and task_id:
+                attempt_to_task[attempt_id] = task_id
+
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if message.get("role") != "assistant" or not str(message.get("content") or "").strip():
+                continue
+            attempt_id = str(message.get("linked_attempt_id") or "")
+            task_id = attempt_to_task.get(attempt_id, "")
+            content = str(message.get("content") or "")
+            if attempt_id in existing_attempts or (task_id, content) in existing_pairs:
+                continue
+            if not task_id:
+                logger.warning(
+                    "Skipping runtime assistant message without task mapping: %s",
+                    attempt_id,
+                )
+                continue
+            metadata = dict(message.get("metadata") or {})
+            metadata["runtime_attempt_id"] = attempt_id
+            hydrated = VibeMessage(
+                message_id=str(message.get("message_id") or new_id("msg")),
+                session_id=session_id,
+                user_id=user_id,
+                role="assistant",
+                content=content,
+                task_id=task_id,
+                created_at=message.get("created_at") or utc_now(),
+                metadata=metadata,
+            )
+            await db[self.message_collection].insert_one(hydrated.model_dump())
+            existing_attempts.add(attempt_id)
+            existing_pairs.add((task_id, content))
 
     async def create_message_task(self, user: Dict[str, Any], session_id: str, payload: VibeMessageCreate) -> Dict[str, Any]:
         session = await self.get_session(user["id"], session_id)
