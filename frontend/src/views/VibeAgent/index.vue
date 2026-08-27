@@ -171,6 +171,28 @@
           </el-scrollbar>
 
           <form class="composer" @submit.prevent="sendMessage">
+            <!-- 上下文注入选项 -->
+            <div class="context-options" v-if="investmentContextEnabled">
+              <el-checkbox v-model="useProfileContext">
+                <el-icon><UserFilled /></el-icon>
+                带入投资画像
+              </el-checkbox>
+              <el-select
+                v-model="selectedStrategyId"
+                placeholder="选择策略（可选）"
+                clearable
+                size="small"
+                style="width: 180px; margin-left: 12px;"
+              >
+                <el-option
+                  v-for="strategy in availableStrategies"
+                  :key="strategy.strategy_id"
+                  :label="strategy.name"
+                  :value="strategy.strategy_id"
+                />
+              </el-select>
+            </div>
+
             <el-input
               v-model="prompt"
               type="textarea"
@@ -201,7 +223,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Delete, List, Plus, Promotion, Refresh } from '@element-plus/icons-vue'
+import { Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { vibeAgentApi,
   type VibeEvent,
@@ -225,6 +247,12 @@ const activeSessionId = ref('')
 const messages = ref<VibeMessage[]>([])
 const events = ref<VibeEvent[]>([])
 const prompt = ref('')
+
+// 个人投资助手上下文注入
+const investmentContextEnabled = ref(false)
+const useProfileContext = ref(false)
+const selectedStrategyId = ref<string | undefined>(undefined)
+const availableStrategies = ref<any[]>([])
 const sending = ref(false)
 const activeTask = ref<VibeTask | null>(null)
 const tasksBySession = ref<Record<string, VibeTask>>({})
@@ -560,10 +588,24 @@ const sendMessage = async () => {
       content,
       created_at: new Date().toISOString()
     })
-    const res = await vibeAgentApi.sendMessage(activeSessionId.value, {
+
+    // 构建消息 payload，包含可选的上下文注入参数
+    const messagePayload: any = {
       content,
       idempotency_key: `web_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    })
+    }
+
+    // 如果启用了投资画像上下文注入
+    if (investmentContextEnabled.value && useProfileContext.value) {
+      messagePayload.profile_id = 'current_user_profile' // 使用当前用户的画像
+    }
+
+    // 如果选择了策略
+    if (selectedStrategyId.value) {
+      messagePayload.strategy_id = selectedStrategyId.value
+    }
+
+    const res = await vibeAgentApi.sendMessage(activeSessionId.value, messagePayload)
     activeTask.value = (res as any).data as VibeTask
     tasksBySession.value[activeTask.value.session_id] = activeTask.value
     streamState.value = 'reconnecting'
@@ -632,6 +674,28 @@ onMounted(async () => {
   }
   if (activeSessionId.value && streamState.value === 'idle') {
     reconnectStream()
+  }
+
+  // 加载个人投资助手上下文选项
+  try {
+    const profileResponse = await fetch('/api/investment/profile')
+    if (profileResponse.ok) {
+      const profileData = await profileResponse.json()
+      if (profileData.success && profileData.data?.context_injection_enabled !== false) {
+        investmentContextEnabled.value = true
+        useProfileContext.value = true
+      }
+    }
+
+    const strategiesResponse = await fetch('/api/investment/strategies?limit=20')
+    if (strategiesResponse.ok) {
+      const strategiesData = await strategiesResponse.json()
+      if (strategiesData.success) {
+        availableStrategies.value = strategiesData.data.items || []
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load investment context:', error)
   }
 })
 
@@ -1170,6 +1234,20 @@ onUnmounted(() => {
 .markdown-body :deep(a) {
   color: var(--el-color-primary);
   word-break: break-all;
+}
+
+.context-options {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.context-options .el-checkbox {
+  margin-right: 0;
 }
 
 .composer {

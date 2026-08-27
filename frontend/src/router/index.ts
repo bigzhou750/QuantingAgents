@@ -219,6 +219,57 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  // 个人投资助手
+  {
+    path: '/investment',
+    name: 'PersonalInvestment',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '个人投资助手',
+      icon: 'UserFilled',
+      requiresAuth: true,
+      transition: 'slide-up'
+    },
+    redirect: '/investment/profile',
+    children: [
+      {
+        path: 'profile',
+        name: 'InvestmentProfile',
+        component: () => import('@/views/PersonalInvestment/Profile.vue'),
+        meta: {
+          title: '投资画像',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'strategies',
+        name: 'StrategyManagement',
+        component: () => import('@/views/PersonalInvestment/Strategies.vue'),
+        meta: {
+          title: '策略管理',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'screening/:taskId?',
+        name: 'ScreeningResults',
+        component: () => import('@/views/PersonalInvestment/ScreeningResults.vue'),
+        meta: {
+          title: '选股结果',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'checkup/:taskId?',
+        name: 'CheckupResults',
+        component: () => import('@/views/PersonalInvestment/CheckupResults.vue'),
+        meta: {
+          title: '体检结果',
+          requiresAuth: true
+        }
+      }
+    ]
+  },
   { path: '/queue', redirect: '/tasks' },
   { path: '/analysis/history', redirect: '/tasks?tab=completed' },
   {
