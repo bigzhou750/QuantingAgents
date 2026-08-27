@@ -1,15 +1,14 @@
 <template>
   <div class="dashboard">
-    <!-- 欢迎区域 -->
+    <!-- 欢迎区 -->
     <div class="welcome-section">
       <div class="welcome-content">
-        <h1 class="welcome-title">
-          欢迎使用 TradingAgents-CN
-          <span class="version-badge">v1.0.1</span>
-        </h1>
-        <p class="welcome-subtitle">
-          现代化的多智能体股票分析学习平台，辅助你掌握更全面的市场视角分析股票
-        </p>
+        <div class="welcome-greeting">
+          <span class="greeting-text">早安，{{ userName }}</span>
+          <span class="version-tag">v1.0.1</span>
+        </div>
+        <h1 class="welcome-title">开启今日投资分析</h1>
+        <p class="welcome-subtitle">多智能体协作，辅助你更全面地看市场</p>
       </div>
       <div class="welcome-actions">
         <el-button type="primary" size="large" @click="quickAnalysis">
@@ -23,80 +22,96 @@
       </div>
     </div>
 
-
-    <!-- 学习中心推荐卡片 -->
-    <el-card class="learning-highlight-card">
-      <div class="learning-highlight">
-        <div class="learning-icon">
-          <el-icon size="48"><Reading /></el-icon>
+    <!-- 数据概览 -->
+    <div class="stats-overview">
+      <div class="stat-item">
+        <div class="stat-icon blue">
+          <el-icon><Document /></el-icon>
         </div>
-        <div class="learning-content">
-          <h2>📚 AI股票分析学习中心</h2>
-          <p>从零开始学习AI、大语言模型和智能股票分析。了解多智能体系统如何协作分析股票，掌握提示词工程技巧，选择合适的大模型，理解AI的能力与局限性。</p>
-          <div class="learning-features">
-            <span class="feature-tag">🤖 AI基础知识</span>
-            <span class="feature-tag">✍️ 提示词工程</span>
-            <span class="feature-tag">🎯 模型选择</span>
-            <span class="feature-tag">📊 分析原理</span>
-            <span class="feature-tag">⚠️ 风险认知</span>
-            <span class="feature-tag">🎓 实战教程</span>
-          </div>
-        </div>
-        <div class="learning-action">
-          <el-button type="primary" size="large" @click="goToLearning">
-            <el-icon><Reading /></el-icon>
-            开始学习
-          </el-button>
+        <div class="stat-info">
+          <div class="stat-value">{{ userStats.totalAnalyses }}</div>
+          <div class="stat-label">总分析数</div>
         </div>
       </div>
-    </el-card>
+      <div class="stat-item">
+        <div class="stat-icon green">
+          <el-icon><CircleCheck /></el-icon>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ userStats.successfulAnalyses }}</div>
+          <div class="stat-label">已完成</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon orange">
+          <el-icon><Timer /></el-icon>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ concurrentRunning }}</div>
+          <div class="stat-label">进行中</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon purple">
+          <el-icon><Star /></el-icon>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ favoriteStocks.length }}</div>
+          <div class="stat-label">自选股</div>
+        </div>
+      </div>
+    </div>
 
-    <!-- 主要功能区域 -->
+    <!-- 主内容区 -->
     <el-row :gutter="24" class="main-content">
-      <!-- 左侧：快速操作 -->
-      <el-col :span="16">
-        <el-card class="quick-actions-card" header="快速操作">
+      <!-- 左侧：快速操作 + 最近分析 + 市场快讯 -->
+      <el-col :lg="16" :md="24" :sm="24">
+        <!-- 快速操作 -->
+        <el-card class="quick-actions-card" shadow="never">
+          <template #header>
+            <span class="section-title">快速操作</span>
+          </template>
           <div class="quick-actions">
             <div class="action-item" @click="goToSingleAnalysis">
-              <div class="action-icon">
+              <div class="action-icon blue">
                 <el-icon><Document /></el-icon>
               </div>
               <div class="action-content">
                 <h3>单股分析</h3>
-                <p>深度分析单只股票的投资价值</p>
+                <p>深度分析单只股票</p>
               </div>
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
 
             <div class="action-item" @click="goToBatchAnalysis">
-              <div class="action-icon">
+              <div class="action-icon green">
                 <el-icon><Files /></el-icon>
               </div>
               <div class="action-content">
                 <h3>批量分析</h3>
-                <p>同时分析多只股票，提高效率</p>
+                <p>同时分析多只股票</p>
               </div>
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
 
             <div class="action-item" @click="goToScreening">
-              <div class="action-icon">
+              <div class="action-icon orange">
                 <el-icon><Search /></el-icon>
               </div>
               <div class="action-content">
-                <h3>股票筛选</h3>
-                <p>通过多维度条件筛选优质股票</p>
+                <h3>选股器</h3>
+                <p>多维度筛选优质股票</p>
               </div>
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
 
             <div class="action-item" @click="goToQueue">
-              <div class="action-icon">
+              <div class="action-icon purple">
                 <el-icon><List /></el-icon>
               </div>
               <div class="action-content">
-                <h3>任务中心</h3>
-                <p>查看和管理分析任务列表</p>
+                <h3>分析任务</h3>
+                <p>查看和管理任务列表</p>
               </div>
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
@@ -104,60 +119,62 @@
         </el-card>
 
         <!-- 最近分析 -->
-        <el-card class="recent-analyses-card" header="最近分析" style="margin-top: 24px;">
-          <el-table :data="recentAnalyses" style="width: 100%">
-            <el-table-column prop="stock_code" label="股票代码" width="120" />
-            <el-table-column prop="stock_name" label="股票名称" width="150" />
-            <el-table-column prop="status" label="状态" width="100">
+        <el-card class="recent-analyses-card" shadow="never" style="margin-top: 24px;">
+          <template #header>
+            <div class="card-header">
+              <span class="section-title">最近分析</span>
+              <el-button link type="primary" size="small" @click="goToHistory">
+                查看全部 <el-icon><ArrowRight /></el-icon>
+              </el-button>
+            </div>
+          </template>
+          <el-table :data="recentAnalyses" style="width: 100%" class="recent-table">
+            <el-table-column prop="stock_code" label="股票代码" width="110" />
+            <el-table-column prop="stock_name" label="股票名称" width="130" />
+            <el-table-column prop="status" label="状态" width="90">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)">
+                <el-tag :type="getStatusType(row.status)" effect="light" round size="small">
                   {{ getStatusText(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="start_time" label="创建时间" width="180">
+            <el-table-column prop="start_time" label="创建时间" width="160">
               <template #default="{ row }">
                 {{ formatTime(row.start_time) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作">
+            <el-table-column label="操作" min-width="120">
               <template #default="{ row }">
-                <el-button type="text" size="small" @click="viewAnalysis(row)">
-                  查看
-                </el-button>
+                <el-button link type="primary" size="small" @click="viewAnalysis(row)">查看</el-button>
                 <el-button
                   v-if="row.status === 'completed'"
-                  type="text"
+                  link
+                  type="primary"
                   size="small"
                   @click="downloadReport(row)"
-                >
-                  下载
-                </el-button>
+                >下载</el-button>
               </template>
             </el-table-column>
           </el-table>
-
-          <div class="table-footer">
-            <el-button type="text" @click="goToHistory">
-              查看全部历史 <el-icon><ArrowRight /></el-icon>
-            </el-button>
-          </div>
         </el-card>
 
         <!-- 市场快讯 -->
-        <el-card class="market-news-card" style="margin-top: 24px;">
+        <el-card class="market-news-card" shadow="never" style="margin-top: 24px;">
           <template #header>
-            <span>市场快讯</span>
+            <span class="section-title">市场快讯</span>
           </template>
           <div v-if="marketNews.length > 0" class="news-list">
             <div
-              v-for="news in marketNews"
+              v-for="news in marketNews.slice(0, 5)"
               :key="news.id"
               class="news-item"
               @click="openNewsUrl(news.url)"
             >
               <div class="news-title">{{ news.title }}</div>
-              <div class="news-time">{{ formatTime(news.time) }}</div>
+              <div class="news-meta">
+                <span class="news-source">{{ news.source }}</span>
+                <span class="news-time">{{ formatTime(news.time) }}</span>
+              </div>
             </div>
           </div>
           <div v-else class="empty-state">
@@ -167,14 +184,14 @@
         </el-card>
       </el-col>
 
-      <!-- 右侧：自选股和快讯 -->
-      <el-col :span="8">
+      <!-- 右侧：自选股和模拟交易 -->
+      <el-col :lg="8" :md="24" :sm="24">
         <!-- 我的自选股 -->
-        <el-card class="favorites-card">
+        <el-card class="favorites-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span>我的自选股</span>
-              <el-button type="text" size="small" @click="goToFavorites">
+              <span class="section-title">自选股</span>
+              <el-button link type="primary" size="small" @click="goToFavorites">
                 查看全部 <el-icon><ArrowRight /></el-icon>
               </el-button>
             </div>
@@ -182,9 +199,7 @@
 
           <div v-if="favoriteStocks.length === 0" class="empty-favorites">
             <el-empty description="暂无自选股" :image-size="60">
-              <el-button type="primary" size="small" @click="goToFavorites">
-                添加自选股
-              </el-button>
+              <el-button type="primary" size="small" @click="goToFavorites">添加自选股</el-button>
             </el-empty>
           </div>
 
@@ -200,84 +215,39 @@
                 <div class="stock-name">{{ stock.stock_name }}</div>
               </div>
               <div class="stock-price">
-                <div class="current-price">¥{{ stock.current_price }}</div>
-                <div
-                  class="change-percent"
-                  :class="getPriceChangeClass(stock.change_percent)"
-                >
+                <div class="current-price">{{ formatPrice(stock.current_price) }}</div>
+                <div class="change-percent" :class="getPriceChangeClass(stock.change_percent)">
                   {{ stock.change_percent > 0 ? '+' : '' }}{{ Number(stock.change_percent).toFixed(2) }}%
                 </div>
               </div>
             </div>
           </div>
-
-          <div v-if="favoriteStocks.length > 5" class="favorites-footer">
-            <el-button type="text" size="small" @click="goToFavorites">
-              查看全部 {{ favoriteStocks.length }} 只自选股
-            </el-button>
-          </div>
         </el-card>
 
         <!-- 模拟交易账户 -->
-        <el-card class="paper-trading-card" style="margin-top: 24px;">
+        <el-card class="paper-trading-card" shadow="never" style="margin-top: 24px;">
           <template #header>
             <div class="card-header">
-              <span>模拟交易账户</span>
-              <el-button type="text" size="small" @click="goToPaperTrading">
-                查看详情 <el-icon><ArrowRight /></el-icon>
+              <span class="section-title">模拟账户</span>
+              <el-button link type="primary" size="small" @click="goToPaperTrading">
+                详情 <el-icon><ArrowRight /></el-icon>
               </el-button>
             </div>
           </template>
 
           <div v-if="paperAccount" class="paper-account-info">
-            <!-- A股账户 -->
-            <div class="account-section">
-              <div class="account-section-title">🇨🇳 A股账户</div>
-              <div class="account-item">
-                <div class="account-label">现金</div>
-                <div class="account-value">¥{{ formatMoney(getCurrencyAmount(paperAccount.cash, 'CNY')) }}</div>
-              </div>
-              <div class="account-item">
-                <div class="account-label">持仓市值</div>
-                <div class="account-value">¥{{ formatMoney(getCurrencyAmount(paperAccount.positions_value, 'CNY')) }}</div>
-              </div>
-              <div class="account-item">
-                <div class="account-label">总资产</div>
-                <div class="account-value primary">¥{{ formatMoney(getCurrencyAmount(paperAccount.equity, 'CNY')) }}</div>
-              </div>
+            <div class="account-summary">
+              <div class="summary-label">总资产</div>
+              <div class="summary-value primary">¥{{ formatMoney(getCurrencyAmount(paperAccount.equity, 'CNY')) }}</div>
             </div>
-
-            <!-- 港股账户 -->
-            <div class="account-section" v-if="typeof paperAccount.cash !== 'number' && paperAccount.cash?.HKD !== undefined">
-              <div class="account-section-title">🇭🇰 港股账户</div>
-              <div class="account-item">
-                <div class="account-label">现金</div>
-                <div class="account-value">HK${{ formatMoney(getCurrencyAmount(paperAccount.cash, 'HKD')) }}</div>
+            <div class="account-row">
+              <div class="account-row-item">
+                <span class="row-label">现金</span>
+                <span class="row-value">¥{{ formatMoney(getCurrencyAmount(paperAccount.cash, 'CNY')) }}</span>
               </div>
-              <div class="account-item">
-                <div class="account-label">持仓市值</div>
-                <div class="account-value">HK${{ formatMoney(getCurrencyAmount(paperAccount.positions_value, 'HKD')) }}</div>
-              </div>
-              <div class="account-item">
-                <div class="account-label">总资产</div>
-                <div class="account-value primary">HK${{ formatMoney(getCurrencyAmount(paperAccount.equity, 'HKD')) }}</div>
-              </div>
-            </div>
-
-            <!-- 美股账户 -->
-            <div class="account-section" v-if="typeof paperAccount.cash !== 'number' && paperAccount.cash?.USD !== undefined">
-              <div class="account-section-title">🇺🇸 美股账户</div>
-              <div class="account-item">
-                <div class="account-label">现金</div>
-                <div class="account-value">${{ formatMoney(getCurrencyAmount(paperAccount.cash, 'USD')) }}</div>
-              </div>
-              <div class="account-item">
-                <div class="account-label">持仓市值</div>
-                <div class="account-value">${{ formatMoney(getCurrencyAmount(paperAccount.positions_value, 'USD')) }}</div>
-              </div>
-              <div class="account-item">
-                <div class="account-label">总资产</div>
-                <div class="account-value primary">${{ formatMoney(getCurrencyAmount(paperAccount.equity, 'USD')) }}</div>
+              <div class="account-row-item">
+                <span class="row-label">持仓</span>
+                <span class="row-value">¥{{ formatMoney(getCurrencyAmount(paperAccount.positions_value, 'CNY')) }}</span>
               </div>
             </div>
           </div>
@@ -285,21 +255,16 @@
           <div v-else class="empty-state">
             <el-icon class="empty-icon"><InfoFilled /></el-icon>
             <p>暂无账户信息</p>
-            <el-button type="primary" size="small" @click="goToPaperTrading">
-              查看模拟交易
-            </el-button>
+            <el-button type="primary" size="small" @click="goToPaperTrading">查看模拟交易</el-button>
           </div>
         </el-card>
-
-        <!-- 多数据源同步 -->
-        <MultiSourceSyncCard style="margin-top: 24px;" />
       </el-col>
     </el-row>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -310,11 +275,12 @@ import {
   List,
   ArrowRight,
   InfoFilled,
-  Reading
+  CircleCheck,
+  Timer,
+  Star
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { AnalysisTask, AnalysisStatus } from '@/types/analysis'
-import MultiSourceSyncCard from '@/components/Dashboard/MultiSourceSyncCard.vue'
 import { favoritesApi } from '@/api/favorites'
 import { analysisApi } from '@/api/analysis'
 import { newsApi } from '@/api/news'
@@ -323,25 +289,20 @@ import { paperApi, type PaperAccountSummary } from '@/api/paper'
 const router = useRouter()
 const authStore = useAuthStore()
 
-// 响应式数据
+const userName = computed(() => authStore.user?.username || '投资者')
+
 const userStats = ref({
   totalAnalyses: 0,
   successfulAnalyses: 0,
-  dailyQuota: 1000,
-  dailyUsed: 0,
-  concurrentLimit: 3
+  concurrentRunning: 0
 })
 
 const recentAnalyses = ref<AnalysisTask[]>([])
-
-// 自选股数据
 const favoriteStocks = ref<any[]>([])
-
-// 市场快讯数据
 const marketNews = ref<any[]>([])
-
-// 模拟交易账户数据
 const paperAccount = ref<PaperAccountSummary | null>(null)
+
+const concurrentRunning = computed(() => recentAnalyses.value.filter((x: any) => ['processing', 'running', 'pending', 'queued'].includes(x.status)).length)
 
 const getCurrencyAmount = (
   amount: number | { CNY: number; HKD: number; USD: number } | undefined,
@@ -352,43 +313,18 @@ const getCurrencyAmount = (
   return amount?.[currency] ?? fallback
 }
 
-
-
-// 方法
-const quickAnalysis = () => {
-  router.push('/analysis/single')
-}
-
-const goToSingleAnalysis = () => {
-  router.push('/analysis/single')
-}
-
-const goToBatchAnalysis = () => {
-  router.push('/analysis/batch')
-}
-
-const goToScreening = () => {
-  router.push('/screening')
-}
-
-const goToQueue = () => {
-  router.push('/queue')
-}
-
-const goToHistory = () => {
-  router.push('/tasks?tab=completed')
-}
-
-const goToLearning = () => {
-  router.push('/learning')
-}
+const quickAnalysis = () => { router.push('/analysis/single') }
+const goToSingleAnalysis = () => { router.push('/analysis/single') }
+const goToBatchAnalysis = () => { router.push('/analysis/batch') }
+const goToScreening = () => { router.push('/screening') }
+const goToQueue = () => { router.push('/tasks') }
+const goToHistory = () => { router.push('/tasks?tab=completed') }
 
 const viewAnalysis = (analysis: AnalysisTask) => {
   const status = (analysis as any)?.status
   if (status === 'completed') {
     router.push({ name: 'ReportDetail', params: { id: analysis.task_id } })
   } else {
-    // 未完成任务跳转到任务中心的“进行中”标签页
     router.push('/tasks?tab=running')
   }
 }
@@ -397,13 +333,9 @@ const downloadReport = async (analysis: AnalysisTask) => {
   try {
     const reportId = analysis.task_id
     const res = await fetch(`/api/reports/${reportId}/download?format=markdown`, {
-      headers: {
-        'Authorization': `Bearer ${authStore.token}`
-      }
+      headers: { 'Authorization': `Bearer ${authStore.token}` }
     })
     if (!res.ok) {
-      const msg = `下载失败：HTTP ${res.status}`
-      console.error(msg)
       ElMessage.error('下载失败，报告可能尚未生成')
       return
     }
@@ -413,7 +345,6 @@ const downloadReport = async (analysis: AnalysisTask) => {
     a.href = url
     const code = (analysis as any).stock_code || (analysis as any).stock_symbol || 'stock'
     const dateStr = (analysis as any).analysis_date || (analysis as any).start_time || ''
-    // 🔥 统一文件名格式：{code}_分析报告_{date}.md
     a.download = `${code}_分析报告_${String(dateStr).slice(0,10)}.md`
     document.body.appendChild(a)
     a.click()
@@ -421,63 +352,43 @@ const downloadReport = async (analysis: AnalysisTask) => {
     document.body.removeChild(a)
     ElMessage.success('报告已开始下载')
   } catch (err) {
-    console.error('下载报告出错:', err)
     ElMessage.error('下载失败，请稍后重试')
   }
 }
 
 const openNewsUrl = (url?: string) => {
-  if (url) {
-    window.open(url, '_blank')
-  } else {
-    ElMessage.info('该新闻暂无详情链接')
-  }
+  if (url) window.open(url, '_blank')
+  else ElMessage.info('该新闻暂无详情链接')
 }
 
 const getStatusType = (status: string | AnalysisStatus): 'success' | 'info' | 'warning' | 'danger' => {
   const statusMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
-    pending: 'info',
-    processing: 'warning',
-    running: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'info'
+    pending: 'info', processing: 'warning', running: 'warning', completed: 'success', failed: 'danger', cancelled: 'info'
   }
   return statusMap[status] || 'info'
 }
 
 const getStatusText = (status: string | AnalysisStatus) => {
   const statusMap: Record<string, string> = {
-    pending: '等待中',
-    processing: '处理中',
-    running: '处理中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消'
+    pending: '等待中', processing: '处理中', running: '处理中', completed: '已完成', failed: '失败', cancelled: '已取消'
   }
   return statusMap[status] || String(status)
 }
 
 import { formatDateTime } from '@/utils/datetime'
+const formatTime = (time: string) => formatDateTime(time)
 
-const formatTime = (time: string) => {
-  return formatDateTime(time)
-}
-
-// 自选股相关方法
-const goToFavorites = () => {
-  router.push('/favorites')
-}
-
-const viewStockDetail = (stock: any) => {
-  // 可以跳转到股票详情页或分析页
-  router.push(`/analysis/single?stock_code=${stock.stock_code}`)
-}
-
+const goToFavorites = () => { router.push('/favorites') }
+const viewStockDetail = (stock: any) => { router.push(`/analysis/single?stock_code=${stock.stock_code}`) }
 const getPriceChangeClass = (changePercent: number) => {
   if (changePercent > 0) return 'price-up'
   if (changePercent < 0) return 'price-down'
   return 'price-neutral'
+}
+
+const formatPrice = (price?: number) => {
+  if (price === undefined || price === null) return '-'
+  return Number(price).toFixed(2)
 }
 
 const loadFavoriteStocks = async () => {
@@ -498,21 +409,13 @@ const loadFavoriteStocks = async () => {
 
 const loadRecentAnalyses = async () => {
   try {
-    // 使用任务中心的用户任务接口，获取最近10条
-    const res = await analysisApi.getTaskList({
-      limit: 10,
-      offset: 0,
-      // 不限定状态，展示最近任务；如需仅展示已完成可设为 'completed'
-      status: undefined
-    })
-
-    // 兼容不同返回结构（ApiResponse 或直接 data）
+    const res = await analysisApi.getTaskList({ limit: 10, offset: 0, status: undefined })
     const body: any = (res as any)?.data?.data || (res as any)?.data || res || {}
     const tasks = body.tasks || []
-
     recentAnalyses.value = tasks
     userStats.value.totalAnalyses = body.total ?? tasks.length
     userStats.value.successfulAnalyses = tasks.filter((item: any) => item.status === 'completed').length
+    userStats.value.concurrentRunning = tasks.filter((item: any) => ['processing', 'running', 'pending', 'queued'].includes(item.status)).length
   } catch (error) {
     console.error('加载最近分析失败:', error)
     recentAnalyses.value = []
@@ -521,15 +424,10 @@ const loadRecentAnalyses = async () => {
 
 const loadMarketNews = async () => {
   try {
-    // 先尝试获取最近 24 小时的新闻
     let response = await newsApi.getLatestNews(undefined, 10, 24)
-
-    // 如果最近 24 小时没有新闻，则获取最新的 10 条（不限时间）
     if (response.success && response.data && response.data.news.length === 0) {
-      console.log('最近 24 小时没有新闻，获取最新的 10 条新闻（不限时间）')
-      response = await newsApi.getLatestNews(undefined, 10, 24 * 365) // 回溯 1 年
+      response = await newsApi.getLatestNews(undefined, 10, 24 * 365)
     }
-
     if (response.success && response.data) {
       marketNews.value = response.data.news.map((item: any) => ({
         id: item.id || item.title,
@@ -541,12 +439,10 @@ const loadMarketNews = async () => {
     }
   } catch (error) {
     console.error('加载市场快讯失败:', error)
-    // 如果加载失败，显示提示信息
     marketNews.value = []
   }
 }
 
-// 加载模拟交易账户信息
 const loadPaperAccount = async () => {
   try {
     const response = await paperApi.getAccount()
@@ -559,25 +455,16 @@ const loadPaperAccount = async () => {
   }
 }
 
-// 跳转到模拟交易页面
-const goToPaperTrading = () => {
-  router.push('/paper')
-}
+const goToPaperTrading = () => { router.push('/paper') }
 
-// 格式化金额
 const formatMoney = (value: number) => {
   return value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-// 生命周期
 onMounted(async () => {
-  // 加载自选股数据
   await loadFavoriteStocks()
-  // 加载最近分析
   await loadRecentAnalyses()
-  // 加载市场快讯
   await loadMarketNews()
-  // 加载模拟交易账户
   await loadPaperAccount()
 })
 </script>
@@ -585,35 +472,47 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .dashboard {
   .welcome-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    padding: 40px;
+    background: var(--zt-gradient-hero);
+    border-radius: 20px;
+    padding: 36px 40px;
     color: white;
     margin-bottom: 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.3);
 
     .welcome-content {
-      .welcome-title {
-        font-size: 32px;
-        font-weight: 600;
-        margin: 0 0 12px 0;
+      .welcome-greeting {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
+        margin-bottom: 10px;
 
-        .version-badge {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 4px 12px;
-          border-radius: 20px;
+        .greeting-text {
           font-size: 14px;
-          font-weight: 400;
+          opacity: 0.95;
+          font-weight: 500;
+        }
+
+        .version-tag {
+          background: rgba(255, 255, 255, 0.18);
+          padding: 2px 10px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 500;
         }
       }
 
+      .welcome-title {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0 0 8px 0;
+        color: #fff;
+      }
+
       .welcome-subtitle {
-        font-size: 16px;
+        font-size: 15px;
         opacity: 0.9;
         margin: 0;
       }
@@ -621,102 +520,141 @@ onMounted(async () => {
 
     .welcome-actions {
       display: flex;
-      gap: 16px;
-    }
-  }
+      gap: 12px;
 
-  .learning-highlight-card {
-    margin-bottom: 24px;
-    border: 2px solid var(--el-color-primary);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+      .el-button {
+        border-radius: 10px;
 
-    .learning-highlight {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      padding: 8px;
+        &:not(.el-button--primary) {
+          background: rgba(255, 255, 255, 0.15);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          color: #fff;
 
-      .learning-icon {
-        flex-shrink: 0;
-        width: 80px;
-        height: 80px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-      }
-
-      .learning-content {
-        flex: 1;
-
-        h2 {
-          font-size: 20px;
-          font-weight: 600;
-          margin: 0 0 12px 0;
-          color: var(--el-text-color-primary);
-        }
-
-        p {
-          font-size: 14px;
-          color: var(--el-text-color-regular);
-          line-height: 1.6;
-          margin: 0 0 16px 0;
-        }
-
-        .learning-features {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-
-          .feature-tag {
-            padding: 4px 12px;
-            background: var(--el-color-primary-light-9);
-            color: var(--el-color-primary);
-            border-radius: 16px;
-            font-size: 13px;
-            font-weight: 500;
+          &:hover {
+            background: rgba(255, 255, 255, 0.25);
           }
         }
       }
+    }
+  }
 
-      .learning-action {
-        flex-shrink: 0;
+  .stats-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+
+    @media (max-width: 992px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 576px) {
+      grid-template-columns: 1fr;
+    }
+
+    .stat-item {
+      background: var(--el-bg-color);
+      border: 1px solid var(--el-border-color-light);
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.06);
+      }
+
+      .stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+
+        &.blue { background: #E0F2FE; color: #0EA5E9; }
+        &.green { background: #D1FAE5; color: #10B981; }
+        &.orange { background: #FEF3C7; color: #F59E0B; }
+        &.purple { background: #EDE9FE; color: #8B5CF6; }
+      }
+
+      .stat-info {
+        .stat-value {
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--el-text-color-primary);
+          line-height: 1.2;
+        }
+
+        .stat-label {
+          font-size: 13px;
+          color: var(--el-text-color-secondary);
+          margin-top: 2px;
+        }
       }
     }
   }
 
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+
   .quick-actions-card {
+    :deep(.el-card__header) {
+      padding: 18px 20px;
+    }
+
     .quick-actions {
       display: grid;
+      grid-template-columns: repeat(2, 1fr);
       gap: 16px;
+
+      @media (max-width: 576px) {
+        grid-template-columns: 1fr;
+      }
 
       .action-item {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding: 20px;
+        gap: 14px;
+        padding: 18px;
         border: 1px solid var(--el-border-color-lighter);
-        border-radius: 8px;
+        border-radius: 14px;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
 
         &:hover {
-          border-color: var(--el-color-primary);
-          background-color: var(--el-color-primary-light-9);
+          border-color: var(--el-color-primary-light-5);
+          background: var(--el-color-primary-light-9);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+
+          .action-arrow {
+            transform: translateX(4px);
+            color: var(--el-color-primary);
+          }
         }
 
         .action-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 8px;
-          background: var(--el-color-primary-light-8);
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--el-color-primary);
           font-size: 20px;
+          flex-shrink: 0;
+
+          &.blue { background: #E0F2FE; color: #0EA5E9; }
+          &.green { background: #D1FAE5; color: #10B981; }
+          &.orange { background: #FEF3C7; color: #F59E0B; }
+          &.purple { background: #EDE9FE; color: #8B5CF6; }
         }
 
         .action-content {
@@ -724,65 +662,54 @@ onMounted(async () => {
 
           h3 {
             margin: 0 0 4px 0;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--el-text-color-primary);
           }
 
           p {
             margin: 0;
-            font-size: 14px;
-            color: var(--el-text-color-regular);
+            font-size: 13px;
+            color: var(--el-text-color-secondary);
           }
         }
 
         .action-arrow {
           color: var(--el-text-color-placeholder);
-          transition: transform 0.3s ease;
-        }
-
-        &:hover .action-arrow {
-          transform: translateX(4px);
+          transition: all 0.2s ease;
         }
       }
     }
   }
 
   .recent-analyses-card {
-    .table-footer {
-      text-align: center;
-      margin-top: 16px;
+    :deep(.el-card__header) {
+      padding: 18px 20px;
     }
-  }
 
-  .system-status-card {
-    .status-item {
+    .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
+    }
 
-      &:not(:last-child) {
-        border-bottom: 1px solid var(--el-border-color-lighter);
-      }
-
-      .status-label {
-        color: var(--el-text-color-regular);
-      }
-
-      .status-value {
-        font-weight: 600;
-        color: var(--el-text-color-primary);
-      }
+    .recent-table {
+      border-radius: 10px;
+      overflow: hidden;
     }
   }
 
   .market-news-card {
+    :deep(.el-card__header) {
+      padding: 18px 20px;
+    }
+
     .news-list {
       .news-item {
-        padding: 12px 0;
+        padding: 14px 0;
         cursor: pointer;
         border-bottom: 1px solid var(--el-border-color-lighter);
+        transition: background-color 0.2s ease;
 
         &:last-child {
           border-bottom: none;
@@ -790,47 +717,55 @@ onMounted(async () => {
 
         &:hover {
           background-color: var(--el-fill-color-lighter);
-          margin: 0 -16px;
-          padding: 12px 16px;
-          border-radius: 4px;
+          margin: 0 -20px;
+          padding: 14px 20px;
+          border-radius: 10px;
         }
 
         .news-title {
           font-size: 14px;
           color: var(--el-text-color-primary);
-          margin-bottom: 4px;
-          line-height: 1.4;
+          margin-bottom: 6px;
+          line-height: 1.5;
+          font-weight: 500;
         }
 
-        .news-time {
+        .news-meta {
+          display: flex;
+          gap: 10px;
           font-size: 12px;
           color: var(--el-text-color-placeholder);
+
+          .news-source {
+            color: var(--el-color-primary);
+            font-weight: 500;
+          }
         }
       }
     }
 
-    .news-footer {
+    .empty-state {
       text-align: center;
-      margin-top: 16px;
-    }
-  }
+      padding: 30px 0;
 
-  .tips-card {
-    .tip-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 0;
-      font-size: 14px;
-      color: var(--el-text-color-regular);
+      .empty-icon {
+        font-size: 40px;
+        color: var(--el-text-color-placeholder);
+        margin-bottom: 10px;
+      }
 
-      .tip-icon {
-        color: var(--el-color-primary);
+      p {
+        color: var(--el-text-color-secondary);
+        margin: 0;
       }
     }
   }
 
   .favorites-card {
+    :deep(.el-card__header) {
+      padding: 18px 20px;
+    }
+
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -850,13 +785,13 @@ onMounted(async () => {
         padding: 12px 0;
         border-bottom: 1px solid var(--el-border-color-lighter);
         cursor: pointer;
-        transition: background-color 0.3s ease;
+        transition: background-color 0.2s ease;
 
         &:hover {
           background-color: var(--el-fill-color-lighter);
-          margin: 0 -16px;
-          padding: 12px 16px;
-          border-radius: 6px;
+          margin: 0 -20px;
+          padding: 12px 20px;
+          border-radius: 10px;
         }
 
         &:last-child {
@@ -872,7 +807,7 @@ onMounted(async () => {
 
           .stock-name {
             font-size: 12px;
-            color: var(--el-text-color-regular);
+            color: var(--el-text-color-secondary);
             margin-top: 2px;
           }
         }
@@ -889,32 +824,22 @@ onMounted(async () => {
           .change-percent {
             font-size: 12px;
             margin-top: 2px;
+            font-weight: 500;
 
-            &.price-up {
-              color: #f56c6c;
-            }
-
-            &.price-down {
-              color: #67c23a;
-            }
-
-            &.price-neutral {
-              color: var(--el-text-color-regular);
-            }
+            &.price-up { color: #EF4444; }
+            &.price-down { color: #10B981; }
+            &.price-neutral { color: var(--el-text-color-secondary); }
           }
         }
       }
     }
-
-    .favorites-footer {
-      text-align: center;
-      padding-top: 12px;
-      border-top: 1px solid var(--el-border-color-lighter);
-      margin-top: 12px;
-    }
   }
 
   .paper-trading-card {
+    :deep(.el-card__header) {
+      padding: 18px 20px;
+    }
+
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -922,57 +847,52 @@ onMounted(async () => {
     }
 
     .paper-account-info {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+      .account-summary {
+        text-align: center;
+        padding: 16px 0 20px;
+        border-bottom: 1px solid var(--el-border-color-lighter);
+        margin-bottom: 16px;
 
-      .account-section {
-        border: 1px solid var(--el-border-color-lighter);
-        border-radius: 8px;
-        padding: 12px;
-        background-color: var(--el-fill-color-blank);
-
-        .account-section-title {
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--el-text-color-primary);
-          margin-bottom: 12px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--el-border-color-lighter);
-        }
-      }
-
-      .account-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-
-        .account-label {
+        .summary-label {
           font-size: 13px;
-          color: var(--el-text-color-regular);
+          color: var(--el-text-color-secondary);
+          margin-bottom: 6px;
         }
 
-        .account-value {
-          font-size: 15px;
-          font-weight: 600;
+        .summary-value {
+          font-size: 26px;
+          font-weight: 700;
           color: var(--el-text-color-primary);
 
           &.primary {
             color: var(--el-color-primary);
-            font-size: 16px;
+          }
+        }
+      }
+
+      .account-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+
+        .account-row-item {
+          flex: 1;
+          text-align: center;
+          padding: 10px;
+          background: var(--el-fill-color-lighter);
+          border-radius: 10px;
+
+          .row-label {
+            display: block;
+            font-size: 12px;
+            color: var(--el-text-color-secondary);
+            margin-bottom: 4px;
           }
 
-          &.price-up {
-            color: #f56c6c;
-          }
-
-          &.price-down {
-            color: #67c23a;
-          }
-
-          &.price-neutral {
-            color: var(--el-text-color-regular);
+          .row-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--el-text-color-primary);
           }
         }
       }
@@ -983,9 +903,9 @@ onMounted(async () => {
       padding: 20px 0;
 
       .empty-icon {
-        font-size: 48px;
+        font-size: 40px;
         color: var(--el-text-color-placeholder);
-        margin-bottom: 12px;
+        margin-bottom: 10px;
       }
 
       p {
@@ -1003,28 +923,10 @@ onMounted(async () => {
       flex-direction: column;
       text-align: center;
       gap: 24px;
+      padding: 28px 24px;
 
       .welcome-actions {
         justify-content: center;
-      }
-    }
-
-    .learning-highlight-card {
-      .learning-highlight {
-        flex-direction: column;
-        text-align: center;
-
-        .learning-content {
-          .learning-features {
-            justify-content: center;
-          }
-        }
-      }
-    }
-
-    .main-content {
-      .el-col {
-        margin-bottom: 24px;
       }
     }
   }

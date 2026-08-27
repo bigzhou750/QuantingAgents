@@ -8,9 +8,9 @@
     >
       <div class="sidebar-header">
         <div class="logo">
-          <img src="/logo.svg" alt="TradingAgents-CN" />
+          <img src="/logo.svg" alt="智投" />
           <span v-show="!appStore.sidebarCollapsed" class="logo-text">
-            TradingAgents-CN
+            智投
           </span>
         </div>
       </div>
@@ -24,7 +24,7 @@
       </div>
     </aside>
 
-    <!-- 点击蒙层：移动端展开时，点击空白处收起侧边栏 -->
+    <!-- 点击蒙层 -->
     <div
       v-if="isMobile && !appStore.sidebarCollapsed"
       class="sidebar-overlay"
@@ -115,7 +115,7 @@ const handleMainClick = () => {
   }
 }
 
-// 监听窗口大小变化：在小屏幕上自动折叠侧边栏
+// 监听窗口大小变化
 watch(width, (newWidth) => {
   if (newWidth < 768 && !appStore.sidebarCollapsed) {
     appStore.setSidebarCollapsed(true)
@@ -139,8 +139,9 @@ watch(() => route.fullPath, () => {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 950; // 低于侧边栏(1000)，高于内容区
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(2px);
+  z-index: 950;
 }
 
 .sidebar {
@@ -150,20 +151,25 @@ watch(() => route.fullPath, () => {
   height: 100vh;
   background-color: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color-light);
-  transition: width 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
   display: flex;
   flex-direction: column;
 
   &.collapsed {
     width: 64px !important;
+
+    .sidebar-header {
+      padding: 0 16px;
+      justify-content: center;
+    }
   }
 
   .sidebar-header {
-    height: 60px;
+    height: 64px;
     display: flex;
     align-items: center;
-    padding: 0 16px;
+    padding: 0 20px;
     border-bottom: 1px solid var(--el-border-color-lighter);
 
     .logo {
@@ -172,15 +178,19 @@ watch(() => route.fullPath, () => {
       gap: 12px;
 
       img {
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
       }
 
       .logo-text {
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--el-text-color-primary);
+        font-size: 20px;
+        font-weight: 700;
+        background: var(--zt-gradient-hero);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         white-space: nowrap;
+        letter-spacing: -0.5px;
       }
     }
   }
@@ -188,12 +198,12 @@ watch(() => route.fullPath, () => {
   .sidebar-nav {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 0;
+    padding: 12px 0;
   }
 
   .sidebar-footer {
     border-top: 1px solid var(--el-border-color-lighter);
-    padding: 8px;
+    padding: 10px;
   }
 }
 
@@ -201,12 +211,13 @@ watch(() => route.fullPath, () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.3s ease;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .header {
-  height: 60px;
-  background-color: var(--el-bg-color);
+  height: 64px;
+  background-color: rgba(var(--el-bg-color), 0.85);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--el-border-color-light);
   display: flex;
   align-items: center;
@@ -222,7 +233,16 @@ watch(() => route.fullPath, () => {
     gap: 16px;
 
     .sidebar-toggle {
-      padding: 8px;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      padding: 0;
+      color: var(--el-text-color-secondary);
+
+      &:hover {
+        background: var(--el-fill-color-light);
+        color: var(--el-text-color-primary);
+      }
       
       .el-icon {
         font-size: 18px;
@@ -240,18 +260,17 @@ watch(() => route.fullPath, () => {
 .main-content {
   flex: 1;
   padding: 24px;
-  min-height: calc(100vh - 60px - 60px); // 减去header和footer高度
+  min-height: calc(100vh - 64px - 48px);
 
   .content-wrapper {
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
   }
 }
 
 .footer {
-  height: 60px;
-  background-color: var(--el-bg-color);
-  border-top: 1px solid var(--el-border-color-light);
+  height: 48px;
+  background-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,7 +302,7 @@ watch(() => route.fullPath, () => {
 // 路由过渡动画
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .fade-enter-from,
@@ -293,16 +312,16 @@ watch(() => route.fullPath, () => {
 
 .slide-left-enter-active,
 .slide-left-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
 .slide-left-enter-from {
-  transform: translateX(30px);
+  transform: translateX(16px);
   opacity: 0;
 }
 
 .slide-left-leave-to {
-  transform: translateX(-30px);
+  transform: translateX(-16px);
   opacity: 0;
 }
 </style>

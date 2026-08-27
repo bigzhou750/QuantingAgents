@@ -342,7 +342,7 @@ async function loadConfig() {
 async function handleSave() {
   saving.value = true
   try {
-    const res = await tokenBillingApi.updateBillingConfig(form.value)
+    const res = await tokenBillingApi.updateBillingConfig(form.value as any)
     if (res.success) {
       ElMessage.success('计费配置已保存')
       originalForm.value = { ...form.value }

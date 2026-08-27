@@ -1442,7 +1442,7 @@ function exportReport() {
 
 /* 投资建议盒子 - 重点突出 */
 .recommendation-box {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--zt-gradient-hero);
   border-radius: 12px;
   padding: 20px 24px;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);

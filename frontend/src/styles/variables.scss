@@ -1,38 +1,67 @@
-// SCSS变量定义
+// === 智投 (ZhiTou) Design Tokens ===
+// 现代化、年轻化、轻金融风格
 
-// 颜色变量
-$primary-color: #409EFF;
-$success-color: #67C23A;
-$warning-color: #E6A23C;
-$danger-color: #F56C6C;
-$info-color: #909399;
+// Brand colors - 更清透的天蓝，符合金融 App 的信任感与清爽感
+$zt-primary: #0EA5E9;         // sky-500
+$zt-primary-dark: #0284C7;    // sky-600
+$zt-primary-light: #38BDF8;   // sky-400
+$zt-primary-soft: #E0F2FE;    // sky-100
 
-// 间距变量
+// Semantic colors (Chinese market convention: red=up, green=down)
+$zt-up: #EF4444;              // red-500 (price up)
+$zt-down: #10B981;            // emerald-500 (price down)
+$zt-warning: #F59E0B;         // amber-500
+$zt-info: #64748B;            // slate-500
+
+// Dark theme surfaces
+$zt-dark-bg: #0B1120;         // deeper slate
+$zt-dark-surface: #151E2E;    // slate-850
+$zt-dark-overlay: #1E293B;    // slate-800
+
+// Light theme surfaces - 更柔和的金融白背景
+$zt-light-bg: #F4F7FE;        // 淡蓝灰背景
+$zt-light-surface: #FFFFFF;
+$zt-light-elevated: #FFFFFF;
+
+// Legacy compatibility (keep existing SCSS vars pointing to new values)
+$primary-color: $zt-primary;
+$success-color: $zt-down;
+$warning-color: $zt-warning;
+$danger-color: $zt-up;
+$info-color: $zt-info;
+
+// Spacing
 $spacing-xs: 4px;
 $spacing-sm: 8px;
 $spacing-md: 16px;
 $spacing-lg: 24px;
 $spacing-xl: 32px;
+$spacing-2xl: 48px;
 
-// 字体大小
+// Font sizes
 $font-size-xs: 12px;
-$font-size-sm: 14px;
-$font-size-md: 16px;
-$font-size-lg: 18px;
+$font-size-sm: 13px;
+$font-size-md: 14px;
+$font-size-lg: 16px;
 $font-size-xl: 20px;
+$font-size-2xl: 24px;
+$font-size-3xl: 32px;
 
-// 边框圆角
-$border-radius-sm: 4px;
-$border-radius-md: 6px;
-$border-radius-lg: 8px;
-$border-radius-xl: 12px;
+// Border radius - 更大圆角，更年轻
+$border-radius-sm: 6px;
+$border-radius-md: 8px;
+$border-radius-lg: 12px;
+$border-radius-xl: 16px;
+$border-radius-2xl: 20px;
+$border-radius-full: 9999px;
 
-// 阴影
-$box-shadow-light: 0 2px 4px rgba(0, 0, 0, 0.1);
-$box-shadow-medium: 0 4px 8px rgba(0, 0, 0, 0.15);
-$box-shadow-heavy: 0 8px 16px rgba(0, 0, 0, 0.2);
+// Shadows - 更柔和、层次感更强的阴影
+$box-shadow-light: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+$box-shadow-medium: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
+$box-shadow-heavy: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+$box-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.02);
 
-// 断点
+// Breakpoints
 $breakpoint-xs: 480px;
 $breakpoint-sm: 768px;
 $breakpoint-md: 992px;

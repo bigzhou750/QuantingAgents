@@ -8,12 +8,7 @@
   >
     <el-menu-item index="/dashboard">
       <el-icon><Odometer /></el-icon>
-      <template #title>仪表板</template>
-    </el-menu-item>
-
-    <el-menu-item index="/learning">
-      <el-icon><Reading /></el-icon>
-      <template #title>学习中心</template>
+      <template #title>工作台</template>
     </el-menu-item>
 
     <el-sub-menu index="/analysis">
@@ -26,24 +21,14 @@
       <el-menu-item index="/reports">分析报告</el-menu-item>
     </el-sub-menu>
 
-    <el-menu-item index="/tasks">
-      <el-icon><List /></el-icon>
-      <template #title>任务中心</template>
-    </el-menu-item>
-
-    <el-menu-item index="/research-agent">
-      <el-icon><ChatDotRound /></el-icon>
-      <template #title>自然语言研究</template>
-    </el-menu-item>
-
     <el-menu-item index="/screening">
       <el-icon><Search /></el-icon>
-      <template #title>股票筛选</template>
+      <template #title>选股器</template>
     </el-menu-item>
 
     <el-menu-item index="/favorites">
       <el-icon><Star /></el-icon>
-      <template #title>我的自选股</template>
+      <template #title>自选股</template>
     </el-menu-item>
 
     <el-menu-item index="/paper">
@@ -51,19 +36,15 @@
       <template #title>模拟交易</template>
     </el-menu-item>
 
-    <!--
-      子菜单 index 使用非路径字符串 "token-recharge-group" 而非 "/token-recharge"，
-      因为 el-sub-menu 的 index 会与子项 /token-recharge 的路由冲突，导致展开/高亮状态异常。
-      这里仅作为分组标识，实际路由跳转由子菜单项的 index 控制（router 模式）。
-    -->
-    <el-sub-menu index="token-recharge-group">
-      <template #title>
-        <el-icon><Wallet /></el-icon>
-        <span>算力充值</span>
-      </template>
-      <el-menu-item index="/token-recharge">充值</el-menu-item>
-      <el-menu-item index="/token-recharge/transactions">交易明细</el-menu-item>
-    </el-sub-menu>
+    <el-menu-item index="/tasks">
+      <el-icon><List /></el-icon>
+      <template #title>分析任务</template>
+    </el-menu-item>
+
+    <el-menu-item index="/research-agent">
+      <el-icon><ChatDotRound /></el-icon>
+      <template #title>AI 研究</template>
+    </el-menu-item>
 
     <el-sub-menu index="/settings">
       <template #title>
@@ -71,38 +52,18 @@
         <span>设置</span>
       </template>
 
-      <el-sub-menu index="/settings-personal">
-        <template #title>个人设置</template>
-        <el-menu-item index="/settings">通用设置</el-menu-item>
-        <el-menu-item index="/settings?tab=appearance">外观设置</el-menu-item>
-        <el-menu-item index="/settings?tab=analysis">分析偏好</el-menu-item>
-        <el-menu-item index="/settings?tab=notifications">通知设置</el-menu-item>
-        <el-menu-item index="/settings?tab=security">安全设置</el-menu-item>
-      </el-sub-menu>
+      <el-menu-item index="/settings">通用设置</el-menu-item>
+      <el-menu-item index="/settings?tab=appearance">外观设置</el-menu-item>
+      <el-menu-item index="/settings?tab=analysis">分析偏好</el-menu-item>
 
-      <el-sub-menu index="/settings-config">
-        <template #title>系统配置</template>
+      <template v-if="authStore.isAdmin">
         <el-menu-item index="/settings/config">配置管理</el-menu-item>
         <el-menu-item index="/settings/cache">缓存管理</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/settings-admin">
-        <template #title>系统管理</template>
         <el-menu-item index="/settings/database">数据库管理</el-menu-item>
         <el-menu-item index="/settings/logs">操作日志</el-menu-item>
-        <el-menu-item index="/settings/system-logs">系统日志</el-menu-item>
-        <el-menu-item index="/settings/sync">多数据源同步</el-menu-item>
         <el-menu-item index="/settings/scheduler">定时任务</el-menu-item>
-        <el-menu-item index="/settings/usage">使用统计</el-menu-item>
-        <!-- 计费配置涉及全局费率修改，仅管理员可见；普通用户即使直接访问 URL 也会被路由守卫拦截 -->
-        <el-menu-item v-if="authStore.isAdmin" index="/settings/billing">计费配置</el-menu-item>
-      </el-sub-menu>
+      </template>
     </el-sub-menu>
-
-    <el-menu-item index="/about">
-      <el-icon><InfoFilled /></el-icon>
-      <template #title>关于</template>
-    </el-menu-item>
   </el-menu>
 </template>
 
@@ -113,16 +74,13 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import {
   Odometer,
-  Reading,
   TrendCharts,
   Search,
   Star,
   List,
   ChatDotRound,
   Setting,
-  InfoFilled,
-  CreditCard,
-  Wallet
+  CreditCard
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -136,16 +94,59 @@ const activeMenu = computed(() => route.path)
 .sidebar-menu {
   border: none;
   height: 100%;
+  padding: 0 10px;
 
   :deep(.el-menu-item),
   :deep(.el-sub-menu__title) {
-    height: 48px;
-    line-height: 48px;
+    height: 44px;
+    line-height: 44px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    &:hover {
+      background-color: var(--el-fill-color-light);
+      color: var(--el-text-color-primary);
+    }
+
+    .el-icon {
+      font-size: 18px;
+      color: var(--el-text-color-secondary);
+    }
   }
 
   :deep(.el-menu-item.is-active) {
-    background-color: var(--el-color-primary-light-9);
+    background: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-color-primary-light-8) 100%);
     color: var(--el-color-primary);
+    font-weight: 600;
+
+    .el-icon {
+      color: var(--el-color-primary);
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 18px;
+      border-radius: 0 3px 3px 0;
+      background: var(--el-color-primary);
+    }
+  }
+
+  :deep(.el-sub-menu .el-menu) {
+    background: transparent;
+    padding-left: 8px;
+  }
+
+  :deep(.el-sub-menu .el-menu-item) {
+    height: 38px;
+    line-height: 38px;
+    font-size: 13px;
   }
 }
 </style>

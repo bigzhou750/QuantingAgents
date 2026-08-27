@@ -33,7 +33,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Dashboard',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '仪表板',
+      title: '工作台',
       icon: 'Dashboard',
       requiresAuth: true,
       transition: 'fade'
@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
         name: 'DashboardHome',
         component: () => import('@/views/Dashboard/index.vue'),
         meta: {
-          title: '仪表板',
+          title: '工作台',
           requiresAuth: true
         }
       }
@@ -74,7 +74,7 @@ const routes: RouteRecordRaw[] = [
     name: 'StockScreening',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '股票筛选',
+      title: '选股器',
       icon: 'Search',
       requiresAuth: true,
       transition: 'slide-up'
@@ -85,7 +85,7 @@ const routes: RouteRecordRaw[] = [
         name: 'StockScreeningHome',
         component: () => import('@/views/Screening/index.vue'),
         meta: {
-          title: '股票筛选',
+          title: '选股器',
           requiresAuth: true
         }
       }
@@ -97,7 +97,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Favorites',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '我的自选股',
+      title: '自选股',
       icon: 'Star',
       requiresAuth: true,
       transition: 'slide-up'
@@ -108,7 +108,7 @@ const routes: RouteRecordRaw[] = [
         name: 'FavoritesHome',
         component: () => import('@/views/Favorites/index.vue'),
         meta: {
-          title: '我的自选股',
+          title: '自选股',
           requiresAuth: true
         }
       }
@@ -186,7 +186,7 @@ const routes: RouteRecordRaw[] = [
     name: 'TaskCenter',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '任务中心',
+      title: '分析任务',
       icon: 'List',
       requiresAuth: true,
       transition: 'slide-up'
@@ -205,7 +205,7 @@ const routes: RouteRecordRaw[] = [
     name: 'ResearchAgent',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '自然语言研究',
+      title: 'AI 研究',
       icon: 'ChatDotRound',
       requiresAuth: true,
       transition: 'fade'
@@ -482,7 +482,7 @@ router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - TradingAgents-CN`
+    document.title = `${title} - 智投`
   }
 
   console.log('🚦 路由守卫检查:', {
