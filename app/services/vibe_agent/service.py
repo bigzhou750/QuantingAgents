@@ -31,6 +31,14 @@ from .models import (
 from .paths import ensure_session_tree, session_runtime_root, vibe_runtime_base
 from .protocol import encode_event_payload, session_event_channel
 
+# 个人投资助手上下文注入（可选）
+try:
+    from app.services.personal_investment.context_builder import ContextBuilder
+    HAS_CONTEXT_BUILDER = True
+except ImportError:
+    HAS_CONTEXT_BUILDER = False
+    ContextBuilder = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -311,6 +319,22 @@ class VibeAgentService:
                 created_at=now,
                 updated_at=now,
             )
+            # 构建最终 prompt（可能包含个人投资助手上下文）
+            final_prompt = payload.content
+            if HAS_CONTEXT_BUILDER and (payload.profile_id or payload.strategy_id):
+                try:
+                    context_summary = await ContextBuilder.build_context_summary(
+                        user_id=user["id"],
+                        include_profile=bool(payload.profile_id),
+                        strategy_id=payload.strategy_id,
+                    )
+                    if context_summary:
+                        # 将上下文前置到用户输入前
+                        final_prompt = f"{context_summary}\n\n---\n\n{payload.content}"
+                        logger.info(f"Injected investment context for task {task_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to build investment context: {e}, using original prompt")
+
             command = VibeCommand(
                 command_id=new_id("cmd"),
                 command_type="run_research",
@@ -321,7 +345,7 @@ class VibeAgentService:
                 idempotency_key=idempotency_key,
                 runtime_root=str(root),
                 payload={
-                    "prompt": payload.content,
+                    "prompt": final_prompt,
                     "metadata": payload.metadata,
                     "audit_context": self.audit_context(user, session_id, task_id),
                 },

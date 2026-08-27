@@ -50,6 +50,9 @@ class VibeMessageCreate(BaseModel):
     content: str = Field(min_length=1)
     idempotency_key: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    # 个人投资助手上下文注入参数
+    profile_id: Optional[str] = None
+    strategy_id: Optional[str] = None
 
 
 class VibeSession(BaseModel):
