@@ -1,11 +1,16 @@
 // === 智投 (ZhiTou) Design Tokens ===
-// 现代化、年轻化、轻金融风格
+// 金融风：深海蓝主色 + 琥珀金强调，传递专业、信任与财富感
 
-// Brand colors - 更清透的天蓝，符合金融 App 的信任感与清爽感
-$zt-primary: #0EA5E9;         // sky-500
-$zt-primary-dark: #0284C7;    // sky-600
-$zt-primary-light: #38BDF8;   // sky-400
-$zt-primary-soft: #E0F2FE;    // sky-100
+// Brand colors
+$zt-primary: #1E40AF;         // blue-700 信任蓝
+$zt-primary-dark: #1E3A8A;    // blue-800
+$zt-primary-light: #3B82F6;   // blue-500
+$zt-primary-soft: #DBEAFE;    // blue-100
+
+// Wealth accent
+$zt-accent: #F59E0B;          // amber-500 财富金
+$zt-accent-light: #FCD34D;    // amber-300
+$zt-accent-dark: #D97706;     // amber-600
 
 // Semantic colors (Chinese market convention: red=up, green=down)
 $zt-up: #EF4444;              // red-500 (price up)
@@ -14,12 +19,12 @@ $zt-warning: #F59E0B;         // amber-500
 $zt-info: #64748B;            // slate-500
 
 // Dark theme surfaces
-$zt-dark-bg: #0B1120;         // deeper slate
-$zt-dark-surface: #151E2E;    // slate-850
-$zt-dark-overlay: #1E293B;    // slate-800
+$zt-dark-bg: #0B1120;         // deep navy black
+$zt-dark-surface: #111827;    // gray-900
+$zt-dark-overlay: #1F2937;    // gray-800
 
-// Light theme surfaces - 更柔和的金融白背景
-$zt-light-bg: #F4F7FE;        // 淡蓝灰背景
+// Light theme surfaces
+$zt-light-bg: #F8FAFC;        // slate-50 清冷白灰
 $zt-light-surface: #FFFFFF;
 $zt-light-elevated: #FFFFFF;
 
@@ -47,7 +52,7 @@ $font-size-xl: 20px;
 $font-size-2xl: 24px;
 $font-size-3xl: 32px;
 
-// Border radius - 更大圆角，更年轻
+// Border radius
 $border-radius-sm: 6px;
 $border-radius-md: 8px;
 $border-radius-lg: 12px;
@@ -55,11 +60,12 @@ $border-radius-xl: 16px;
 $border-radius-2xl: 20px;
 $border-radius-full: 9999px;
 
-// Shadows - 更柔和、层次感更强的阴影
+// Shadows
 $box-shadow-light: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
 $box-shadow-medium: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
 $box-shadow-heavy: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
 $box-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.02);
+$box-shadow-gold: 0 4px 12px rgba(245, 158, 11, 0.18);
 
 // Breakpoints
 $breakpoint-xs: 480px;

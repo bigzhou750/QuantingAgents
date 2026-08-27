@@ -576,10 +576,10 @@ onMounted(async () => {
         justify-content: center;
         font-size: 22px;
 
-        &.blue { background: #E0F2FE; color: #0EA5E9; }
-        &.green { background: #D1FAE5; color: #10B981; }
-        &.orange { background: #FEF3C7; color: #F59E0B; }
-        &.purple { background: #EDE9FE; color: #8B5CF6; }
+        &.blue { background: #DBEAFE; color: #1E40AF; }
+        &.green { background: #D1FAE5; color: #047857; }
+        &.orange { background: #FEF3C7; color: #B45309; }
+        &.purple { background: #E0E7FF; color: #4338CA; }
       }
 
       .stat-info {

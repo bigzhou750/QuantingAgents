@@ -2,14 +2,19 @@
 
 // --- Theme Override via CSS Custom Properties ---
 :root {
-  // Primary palette
-  --el-color-primary: #0EA5E9;
-  --el-color-primary-light-3: #38BDF8;
-  --el-color-primary-light-5: #7DD3FC;
-  --el-color-primary-light-7: #BAE6FD;
-  --el-color-primary-light-8: #E0F2FE;
-  --el-color-primary-light-9: #F0F9FF;
-  --el-color-primary-dark-2: #0284C7;
+  // Primary palette - 金融深海蓝
+  --el-color-primary: #1E40AF;
+  --el-color-primary-light-3: #3B82F6;
+  --el-color-primary-light-5: #60A5FA;
+  --el-color-primary-light-7: #93C5FD;
+  --el-color-primary-light-8: #BFDBFE;
+  --el-color-primary-light-9: #DBEAFE;
+  --el-color-primary-dark-2: #1E3A8A;
+
+  // Accent - 财富金
+  --zt-color-accent: #F59E0B;
+  --zt-color-accent-light: #FCD34D;
+  --zt-color-accent-dark: #D97706;
 
   // Semantic colors
   --el-color-success: #10B981;
@@ -18,7 +23,7 @@
   --el-color-info: #64748B;
 
   // Light theme surfaces
-  --el-bg-color-page: #F4F7FE;
+  --el-bg-color-page: #F8FAFC;
   --el-bg-color: #FFFFFF;
   --el-fill-color-blank: #FFFFFF;
   --el-fill-color-light: #F1F5F9;
@@ -35,32 +40,33 @@
   --el-text-color-secondary: #64748B;
   --el-text-color-placeholder: #94A3B8;
 
-  // Brand gradient token
-  --zt-gradient-hero: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 50%, #0284C7 100%);
-  --zt-gradient-soft: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+  // Brand gradients
+  --zt-gradient-hero: linear-gradient(135deg, #1E40AF 0%, #1E3A8A 60%, #0F172A 100%);
+  --zt-gradient-soft: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+  --zt-gradient-gold: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);
 }
 
 html.dark {
   // Primary palette for dark mode
-  --el-color-primary: #38BDF8;
-  --el-color-primary-light-3: #0EA5E9;
-  --el-color-primary-light-5: #0284C7;
-  --el-color-primary-light-7: #075985;
-  --el-color-primary-light-8: #0C4A6E;
-  --el-color-primary-light-9: #082F49;
-  --el-color-primary-dark-2: #7DD3FC;
+  --el-color-primary: #3B82F6;
+  --el-color-primary-light-3: #1E40AF;
+  --el-color-primary-light-5: #1E3A8A;
+  --el-color-primary-light-7: #172554;
+  --el-color-primary-light-8: #1E3A5F;
+  --el-color-primary-light-9: #0F172A;
+  --el-color-primary-dark-2: #60A5FA;
 
   // Dark theme surfaces
   --el-bg-color-page: #0B1120;
-  --el-bg-color: #151E2E;
-  --el-bg-color-overlay: #1E293B;
-  --el-fill-color-blank: #151E2E;
-  --el-fill-color-light: #1E293B;
-  --el-fill-color-lighter: #0F172A;
-  --el-border-color: #2D3E52;
-  --el-border-color-light: #253346;
-  --el-border-color-lighter: #1E293B;
-  --el-border-color-extra-light: #151E2E;
+  --el-bg-color: #111827;
+  --el-bg-color-overlay: #1F2937;
+  --el-fill-color-blank: #111827;
+  --el-fill-color-light: #1F2937;
+  --el-fill-color-lighter: #0B1120;
+  --el-border-color: #374151;
+  --el-border-color-light: #1F2937;
+  --el-border-color-lighter: #111827;
+  --el-border-color-extra-light: #111827;
 
   // Text colors
   --el-text-color-primary: #F8FAFC;
@@ -140,12 +146,26 @@ h6 { font-size: 12px; }
 .el-button--primary {
   background: var(--zt-gradient-hero);
   border: none;
-  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);
+  box-shadow: 0 2px 6px rgba(30, 64, 175, 0.25);
 
   &:hover,
   &:focus {
-    background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
-    box-shadow: 0 4px 8px rgba(14, 165, 233, 0.25);
+    background: linear-gradient(135deg, #1E40AF 0%, #172554 100%);
+    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+  }
+}
+
+.el-button--warning {
+  background: var(--zt-gradient-gold);
+  border: none;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+
+  &:hover,
+  &:focus {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    color: #fff;
   }
 }
 
@@ -172,9 +192,9 @@ h6 { font-size: 12px; }
 }
 
 html.dark .el-table {
-  --el-table-header-bg-color: #1E293B;
+  --el-table-header-bg-color: #1F2937;
   --el-table-header-text-color: #94A3B8;
-  --el-table-row-hover-bg-color: #253346;
+  --el-table-row-hover-bg-color: #374151;
 }
 
 // --- Tabs ---
