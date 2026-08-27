@@ -38,6 +38,7 @@ from app.routers import multi_market_stocks as multi_market_stocks_router
 from app.routers import notifications as notifications_router
 from app.routers import websocket_notifications as websocket_notifications_router
 from app.routers import scheduler as scheduler_router
+from app.routers import eval as eval_router
 from app.services.basics_sync_service import get_basics_sync_service
 from app.services.multi_source_basics_sync_service import MultiSourceBasicsSyncService
 from app.services.scheduler_service import set_scheduler_instance
@@ -235,6 +236,22 @@ async def lifespan(app: FastAPI):
         await vibe_agent_service.ensure_indexes()
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
+
+    # 初始化 Agent 评测平台服务（仅当启用时）
+    if settings.EVAL_PLATFORM_ENABLED:
+        try:
+            from app.services.eval.dataset_service import dataset_service
+            from app.services.eval.runner_service import runner_service
+            from app.services.eval.trace_adapter import trace_adapter
+            from app.services.eval.scorer_hub import scorer_hub
+
+            await dataset_service.initialize()
+            await runner_service.initialize()
+            await trace_adapter.initialize()
+            await scorer_hub.initialize()
+            logger.info("✅ Agent 评测平台服务已初始化")
+        except Exception as e:
+            logger.warning(f"Agent 评测平台初始化失败: {e}")
 
     #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
     try:
@@ -736,6 +753,10 @@ app.include_router(financial_data.router, tags=["financial-data"])
 app.include_router(news_data.router, tags=["news-data"])
 app.include_router(social_media.router, tags=["social-media"])
 app.include_router(internal_messages.router, tags=["internal-messages"])
+
+# Agent 评测平台（仅当 EVAL_PLATFORM_ENABLED=True 时启用）
+if settings.EVAL_PLATFORM_ENABLED:
+    app.include_router(eval_router.router, prefix="/api/eval", tags=["evaluation"])
 
 
 @app.get("/")
