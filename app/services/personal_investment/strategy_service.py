@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from app.core.database import get_mongo_db
 from app.models.personal_investment import StrategyDefinition, StrategyStatus
+from app.services.personal_investment.terminology_filter import TerminologyFilter
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,27 @@ class StrategyService:
 
     def __init__(self):
         self._initialized = False
+
+    @staticmethod
+    def _check_terminology(name: str, description: str) -> None:
+        """
+        校验策略名称/描述是否包含买入、卖出、目标价、稳赚等荐股式措辞。
+
+        策略名称和描述是用户主动填写的文本，会被直接展示在候选池、体检
+        报告和上下文注入摘要中，因此必须在源头拒绝，而不是等到结果落盘
+        时才悄悄替换（那样会让用户困惑"我填的内容为什么变了"）。
+        对应 spec: 结果 MUST NOT 直接输出买入、卖出或目标价指令。
+        """
+        for field_label, text in (("策略名称", name), ("策略说明", description)):
+            if not text:
+                continue
+            check = TerminologyFilter.validate_compliance(text)
+            if not check["compliant"]:
+                terms = "、".join(v["term"] for v in check["violations"] if v.get("term"))
+                raise ValueError(
+                    f"{field_label}包含不合规措辞（{terms}），"
+                    f"请使用研究、观察、筛选等中性表述，避免买入/卖出/目标价/稳赚等荐股式用语"
+                )
 
     async def initialize(self):
         """初始化服务，创建索引"""
@@ -51,6 +73,7 @@ class StrategyService:
         tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """创建策略"""
+        self._check_terminology(name, description)
         db = get_mongo_db()
 
         strategy_id = f"strat_{uuid.uuid4().hex[:12]}"
@@ -114,6 +137,12 @@ class StrategyService:
         **kwargs,
     ) -> Optional[Dict[str, Any]]:
         """更新策略"""
+        if kwargs.get("name") is not None or kwargs.get("description") is not None:
+            existing = await self.get_strategy(strategy_id, user_id)
+            name = kwargs.get("name", existing.get("name", "") if existing else "")
+            description = kwargs.get("description", existing.get("description", "") if existing else "")
+            self._check_terminology(name, description)
+
         db = get_mongo_db()
 
         allowed_fields = {"name", "description", "applicable_markets", "screening_criteria", "parameters", "tags"}

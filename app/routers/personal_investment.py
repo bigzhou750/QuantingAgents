@@ -169,6 +169,8 @@ async def create_strategy(request: Request, body: StrategyCreateRequest):
             tags=body.tags,
         )
         return ApiResponse(success=True, data=result, message="策略创建成功")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create strategy: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -227,6 +229,8 @@ async def update_strategy(strategy_id: str, request: Request, body: StrategyUpda
         return ApiResponse(success=True, data=strategy, message="策略更新成功")
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to update strategy: {e}")
         raise HTTPException(status_code=500, detail=str(e))

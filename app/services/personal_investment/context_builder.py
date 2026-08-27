@@ -189,6 +189,22 @@ class ContextBuilder:
         if stock_sector and stock_sector in excluded_sectors:
             return f"该标的属于您回避的 {stock_sector} 行业"
 
+        # 检查仓位约束冲突：候选标的已在当前持仓中
+        # 注：由于缺少总资产/市值数据，无法精确计算持仓占比，因此不编造
+        # 具体百分比，只提示用户结合自身设置的单只最大仓位比例审慎追加。
+        current_holdings = profile.get("current_holdings", [])
+        held_codes = {
+            h.get("stock_code") for h in current_holdings if h.get("stock_code")
+        }
+        if stock_code in held_codes:
+            max_position = profile.get("max_position_per_stock")
+            if max_position is not None:
+                return (
+                    f"您已持有该标的，请结合您设置的单只最大仓位比例"
+                    f"（{int(max_position * 100)}%）审慎评估是否继续追加"
+                )
+            return "您已持有该标的，请结合仓位约束审慎评估是否继续追加"
+
         return None
 
 

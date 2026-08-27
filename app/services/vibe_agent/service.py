@@ -320,14 +320,32 @@ class VibeAgentService:
                 updated_at=now,
             )
             # 构建最终 prompt（可能包含个人投资助手上下文）
+            # 注意：即使调用方传入了 profile_id，也必须以画像自身的
+            # context_injection_enabled 开关为准，避免前端状态过期/传参错误
+            # 导致用户已关闭的画像内容被强行注入（对应 spec: User disables
+            # context injection）。
             final_prompt = payload.content
             if HAS_CONTEXT_BUILDER and (payload.profile_id or payload.strategy_id):
                 try:
-                    context_summary = await ContextBuilder.build_context_summary(
-                        user_id=user["id"],
-                        include_profile=bool(payload.profile_id),
-                        strategy_id=payload.strategy_id,
-                    )
+                    include_profile = False
+                    if payload.profile_id:
+                        from app.services.personal_investment.profile_service import profile_service
+                        profile = await profile_service.get_profile(user["id"])
+                        include_profile = bool(
+                            profile and profile.get("context_injection_enabled", True)
+                        )
+                        if profile and not include_profile:
+                            logger.info(
+                                f"Profile context injection disabled by user for task {task_id}, skipping"
+                            )
+
+                    context_summary = None
+                    if include_profile or payload.strategy_id:
+                        context_summary = await ContextBuilder.build_context_summary(
+                            user_id=user["id"],
+                            include_profile=include_profile,
+                            strategy_id=payload.strategy_id,
+                        )
                     if context_summary:
                         # 将上下文前置到用户输入前
                         final_prompt = f"{context_summary}\n\n---\n\n{payload.content}"

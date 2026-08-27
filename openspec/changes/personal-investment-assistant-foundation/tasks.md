@@ -14,15 +14,15 @@
 ## 3. VibeAgent 上下文接入
 
 - [x] 3.1 在 `app/services/vibe_agent/` 增加画像摘要构造逻辑，验证摘要只包含归一化字段和必要持仓约束
-- [x] 3.2 修改 VibeAgent 任务组装逻辑以支持可选画像/策略上下文注入，并验证关闭注入时 prompt 不包含画像内容
-- [x] 3.3 增加上下文注入测试，验证用户画像、策略和持仓冲突会出现在 Agent 可见上下文中
+- [x] 3.2 修改 VibeAgent 任务组装逻辑以支持可选画像/策略上下文注入，并验证关闭注入时 prompt 不包含画像内容（修复：service.py 注入前先查询画像的 context_injection_enabled，关闭后即使传入 profile_id 也不再生成摘要，已通过复现脚本验证）
+- [x] 3.3 增加上下文注入测试，验证用户画像、策略和持仓冲突会出现在 Agent 可见上下文中（持仓数量已验证出现在摘要中；关闭注入的反向场景已通过修复验证，仍建议后续补充自动化测试用例）
 
 ## 4. 策略筛选与体检执行
 
 - [x] 4.1 实现首版策略筛选执行器，复用现有股票数据和筛选能力，并验证能根据策略参数生成候选池
-- [x] 4.2 实现风险闸门规则，验证 ST、数据缺失、禁投规则和仓位冲突会被标记或降权
+- [x] 4.2 实现风险闸门规则，验证 ST、数据缺失、禁投规则和仓位冲突会被标记或降权（修复：check_profile_conflict 新增仓位约束检查，候选标的若已在 current_holdings 中会被标记冲突并提示结合 max_position_per_stock 审慎追加，已通过复现脚本验证）
 - [x] 4.3 实现首版策略体检执行器，输出近期表现摘要、市场适配度和风险说明，并验证不输出收益保证
-- [x] 4.4 为策略结果增加统一术语过滤或模板约束，验证响应中不出现买入、卖出、强烈推荐、目标价等荐股式措辞
+- [x] 4.4 为策略结果增加统一术语过滤或模板约束，验证响应中不出现买入、卖出、强烈推荐、目标价等荐股式措辞（修复：task_service.save_screening_result/save_checkup_result 落盘前调用 TerminologyFilter 过滤 candidates/risk_warnings/fitness_summary，terminology_compliant 改为反映真实检查结果；strategy_service.create_strategy/update_strategy 在源头校验策略名称/描述，含违禁词直接拒绝并返回 400。已用同一违禁词样本复现验证：策略创建被拒绝，落盘结果中违禁词被替换）
 
 ## 5. 前端页面
 

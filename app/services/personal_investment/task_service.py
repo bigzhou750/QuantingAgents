@@ -13,6 +13,7 @@ from app.models.personal_investment import (
     StrategyTask, TaskStatus, TaskType,
     ScreeningResult, CheckupResult,
 )
+from app.services.personal_investment.terminology_filter import TerminologyFilter
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -197,13 +198,30 @@ class TaskService:
 
         result_id = f"scr_{uuid.uuid4().hex[:12]}"
 
+        # 落盘前统一跑术语过滤，确保 candidates/overall_risks 中不残留
+        # 买入、卖出、目标价、稳赚等荐股式措辞（对应 spec: MUST NOT 直接
+        # 输出买入、卖出或目标价指令）。terminology_compliant 必须反映
+        # 真实检查结果，不能是恒为 True 的占位值。
+        filtered_candidates = [TerminologyFilter.filter_candidate(c) for c in candidates]
+        filtered_risks = []
+        any_violation = False
+        for risk in (overall_risks or []):
+            cleaned, replacements = TerminologyFilter.filter_text(risk)
+            filtered_risks.append(cleaned)
+            if replacements:
+                any_violation = True
+        for candidate in candidates:
+            for text in candidate.get("match_reasons", []) + candidate.get("risk_warnings", []):
+                if not TerminologyFilter.validate_compliance(text)["compliant"]:
+                    any_violation = True
+
         screening_result = ScreeningResult(
             result_id=result_id,
             task_id=task_id,
-            candidates=candidates,
-            total_candidates=len(candidates),
-            overall_risks=overall_risks or [],
-            terminology_compliant=True,  # 默认合规，后续可检查
+            candidates=filtered_candidates,
+            total_candidates=len(filtered_candidates),
+            overall_risks=filtered_risks,
+            terminology_compliant=not any_violation,
         )
 
         doc = screening_result.model_dump(by_alias=True, exclude={"id"})
@@ -216,8 +234,11 @@ class TaskService:
                 {"$set": {"data_sources": data_sources, "data_as_of": now_tz()}}
             )
 
+        if any_violation:
+            logger.warning(f"Terminology violations filtered for screening result {result_id}")
+
         logger.info(f"Saved screening result {result_id} for task {task_id}")
-        return {"result_id": result_id, "total_candidates": len(candidates)}
+        return {"result_id": result_id, "total_candidates": len(filtered_candidates)}
 
     async def get_screening_result(self, task_id: str) -> Optional[Dict[str, Any]]:
         """获取选股结果"""
@@ -243,13 +264,20 @@ class TaskService:
 
         result_id = f"chk_{uuid.uuid4().hex[:12]}"
 
+        # 落盘前过滤掉可能出现的收益保证/荐股式措辞（对应 spec: MUST NOT
+        # 声称保证收益）。
+        filtered_summary, summary_replacements = TerminologyFilter.filter_text(fitness_summary)
+        filtered_warnings = [TerminologyFilter.filter_text(w)[0] for w in (risk_warnings or [])]
+        if summary_replacements:
+            logger.warning(f"Terminology violations filtered for checkup result {result_id}")
+
         checkup_result = CheckupResult(
             result_id=result_id,
             task_id=task_id,
             fitness_level=fitness_level,
-            fitness_summary=fitness_summary,
+            fitness_summary=filtered_summary,
             key_metrics=key_metrics,
-            risk_warnings=risk_warnings or [],
+            risk_warnings=filtered_warnings,
             data_sufficient=data_sufficient,
             data_quality_note=data_quality_note,
             recent_performance=recent_performance or {},
