@@ -16,6 +16,9 @@
         <span>{{ capabilities.tool_count }} tools</span>
         <span>{{ capabilities.skill_count }} skills</span>
         <span>{{ capabilities.swarm_count }} Swarm</span>
+        <span class="balance-chip" :class="{ low: billingStore.isLowBalance, empty: billingStore.isEmptyBalance }">
+          {{ billingStore.balanceDisplay }}
+        </span>
       </div>
 
       <el-scrollbar class="session-scroll">
@@ -184,11 +187,14 @@
               :icon="Promotion"
               native-type="submit"
               :loading="sending"
-              :disabled="!prompt.trim() || !activeSessionId || hasRunningTask"
+              :disabled="!prompt.trim() || !activeSessionId || hasRunningTask || billingStore.isEmptyBalance"
             >
               发送
             </el-button>
-            <div v-if="hasRunningTask" class="composer-lock">
+            <div v-if="billingStore.isEmptyBalance" class="composer-lock balance-empty">
+              额度不足，请 <router-link to="/token-recharge">充值</router-link> 后继续
+            </div>
+            <div v-else-if="hasRunningTask" class="composer-lock">
               当前有研究任务执行中，请等待完成或先取消任务
             </div>
           </form>
@@ -203,6 +209,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close, Delete, List, Plus, Promotion, Refresh } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { useTokenBillingStore } from '@/stores/tokenBilling'
 import { vibeAgentApi,
   type VibeEvent,
   type VibeMessage,
@@ -219,6 +226,7 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const billingStore = useTokenBillingStore()
 
 const sessions = ref<VibeSession[]>([])
 const activeSessionId = ref('')
@@ -545,6 +553,20 @@ const handleEvent = (event: VibeEvent) => {
     streamError.value = event.payload.error
     scheduleReconnect(streamGeneration)
   }
+  // Token计费：余额更新（后端推送 balance 单位为元）
+  if (event.event_type === 'balance_update' && event.payload) {
+    billingStore.updateBalanceFromSSE(event.payload.balance)
+  }
+  // Token计费：余额耗尽熔断
+  if (event.event_type === 'balance_exhausted') {
+    ElMessageBox.confirm('额度已用完，请充值后继续使用', '余额不足', {
+      confirmButtonText: '去充值',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      router.push('/token-recharge')
+    }).catch(() => {})
+  }
   nextTick(scrollToBottom)
 }
 
@@ -571,7 +593,18 @@ const sendMessage = async () => {
     await nextTick(scrollToBottom)
     reconnectStream()
   } catch (error: any) {
-    ElMessage.error(error?.message || '发送失败')
+    // 402 余额不足 → 引导充值
+    if (error?.status === 402 || error?.code === 40201) {
+      ElMessageBox.confirm('额度不足，无法发起研究任务', '余额不足', {
+        confirmButtonText: '去充值',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        router.push('/token-recharge')
+      }).catch(() => {})
+    } else {
+      ElMessage.error(error?.message || '发送失败')
+    }
   } finally {
     sending.value = false
   }
@@ -618,6 +651,7 @@ watch(
 )
 
 onMounted(async () => {
+  billingStore.fetchAccount()
   if (!await loadHealth() || authRequired.value) return
   try {
     await loadSessions()
@@ -1196,6 +1230,45 @@ onUnmounted(() => {
 @keyframes activity-pulse {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
+}
+
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+
+.balance-chip.low {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.balance-chip.empty {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.balance-empty {
+  grid-column: 1 / -1;
+  padding: 8px 0;
+  color: var(--el-color-danger);
+  font-size: 13px;
+  text-align: center;
+
+  a {
+    color: var(--el-color-primary);
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 @media (max-width: 960px) {

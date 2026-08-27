@@ -352,6 +352,51 @@ const routes: RouteRecordRaw[] = [
           title: '定时任务',
           requiresAuth: true
         }
+      },
+      // 计费配置页：requiresAdmin 标记使路由守卫在用户非管理员时重定向到 /dashboard，
+      // 与侧边栏 v-if="authStore.isAdmin" 形成前后端双重权限校验。
+      {
+        path: 'billing',
+        name: 'BillingConfig',
+        component: () => import('@/views/Settings/BillingConfig.vue'),
+        meta: {
+          title: '计费配置',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      }
+    ]
+  },
+
+  // ==================== 算力充值计费 ====================
+  {
+    path: '/token-recharge',
+    name: 'TokenRecharge',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '算力充值',
+      icon: 'Wallet',
+      requiresAuth: true,
+      transition: 'fade'
+    },
+    children: [
+      {
+        path: '',
+        name: 'TokenRechargeHome',
+        component: () => import('@/views/TokenRecharge/index.vue'),
+        meta: {
+          title: '算力充值',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'transactions',
+        name: 'TokenTransactions',
+        component: () => import('@/views/TokenRecharge/Transactions.vue'),
+        meta: {
+          title: '交易明细',
+          requiresAuth: true
+        }
       }
     ]
   },
@@ -463,6 +508,14 @@ router.beforeEach(async (to, _from, next) => {
   }
 
 
+
+  // 管理员权限校验：放在认证检查之后，确保 authStore 已完成用户信息加载。
+  // requiresAdmin 路由的 meta 在路由配置中声明，此处统一拦截，避免每个页面自行判断。
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    ElMessage.error('需要管理员权限')
+    next('/dashboard')
+    return
+  }
 
   // 如果已登录且访问登录页，重定向到仪表板
   if (authStore.isAuthenticated && to.name === 'Login') {

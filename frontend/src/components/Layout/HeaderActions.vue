@@ -17,6 +17,22 @@
       </el-button>
     </el-tooltip>
 
+    <!-- 算力余额（仅登录用户显示） -->
+    <el-tooltip
+      v-if="authStore.isAuthenticated"
+      :content="billingStore.isLowBalance ? '余额不足，请及时充值' : '点击查看充值详情'"
+      placement="bottom"
+    >
+      <div
+        class="balance-chip"
+        :class="{ low: billingStore.isLowBalance, empty: billingStore.isEmptyBalance }"
+        @click="router.push('/token-recharge')"
+      >
+        <el-icon><Wallet /></el-icon>
+        <span>{{ billingStore.balanceDisplay }}</span>
+      </div>
+    </el-tooltip>
+
     <!-- 通知 -->
     <el-tooltip content="通知" placement="bottom">
       <el-badge :value="unreadCount" :hidden="unreadCount === 0">
@@ -65,17 +81,22 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { useTokenBillingStore } from '@/stores/tokenBilling'
+import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
   Sunny,
   Moon,
   FullScreen,
   Bell,
-  QuestionFilled
+  QuestionFilled,
+  Wallet
 } from '@element-plus/icons-vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const billingStore = useTokenBillingStore()
+const router = useRouter()
 const notifStore = useNotificationStore()
 const { unreadCount, items } = storeToRefs(notifStore)
 const drawerVisible = ref(false)
@@ -101,6 +122,10 @@ function toLocal(iso: string) { try { return new Date(iso).toLocaleString() } ca
 function go(n: any) { if (n.link) window.open(n.link, '_blank') }
 
 onMounted(() => {
+  // 登录后自动拉取算力余额
+  if (authStore.isAuthenticated) {
+    billingStore.fetchAccount()
+  }
   notifStore.refreshUnreadCount()
   // 🔥 建立 WebSocket 连接（优先），失败自动降级到 SSE
   notifStore.connect()
@@ -140,6 +165,41 @@ function showHelp() {
   display: flex;
   align-items: center;
   gap: 8px;
+
+  /* 算力余额芯片 */
+  .balance-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    background: var(--el-fill-color-light);
+    color: var(--el-text-color-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+
+    &:hover {
+      background: var(--el-color-primary-light-9);
+      color: var(--el-color-primary);
+    }
+
+    &.low {
+      background: var(--el-color-warning-light-9);
+      color: var(--el-color-warning);
+    }
+
+    &.empty {
+      background: var(--el-color-danger-light-9);
+      color: var(--el-color-danger);
+    }
+
+    .el-icon {
+      font-size: 14px;
+    }
+  }
 
   .action-btn {
     width: 36px;

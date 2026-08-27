@@ -23,7 +23,6 @@
       </template>
       <el-menu-item index="/analysis/single">单股分析</el-menu-item>
       <el-menu-item index="/analysis/batch">批量分析</el-menu-item>
-      <!-- 新增：将分析报告作为股票分析的子菜单 -->
       <el-menu-item index="/reports">分析报告</el-menu-item>
     </el-sub-menu>
 
@@ -52,14 +51,19 @@
       <template #title>模拟交易</template>
     </el-menu-item>
 
-
-    <!-- 分析报告已移至“股票分析”子菜单，保留注释便于追踪 -->
     <!--
-    <el-menu-item index="/reports">
-      <el-icon><Document /></el-icon>
-      <template #title>分析报告</template>
-    </el-menu-item>
+      子菜单 index 使用非路径字符串 "token-recharge-group" 而非 "/token-recharge"，
+      因为 el-sub-menu 的 index 会与子项 /token-recharge 的路由冲突，导致展开/高亮状态异常。
+      这里仅作为分组标识，实际路由跳转由子菜单项的 index 控制（router 模式）。
     -->
+    <el-sub-menu index="token-recharge-group">
+      <template #title>
+        <el-icon><Wallet /></el-icon>
+        <span>算力充值</span>
+      </template>
+      <el-menu-item index="/token-recharge">充值</el-menu-item>
+      <el-menu-item index="/token-recharge/transactions">交易明细</el-menu-item>
+    </el-sub-menu>
 
     <el-sub-menu index="/settings">
       <template #title>
@@ -67,7 +71,6 @@
         <span>设置</span>
       </template>
 
-      <!-- 个人设置 -->
       <el-sub-menu index="/settings-personal">
         <template #title>个人设置</template>
         <el-menu-item index="/settings">通用设置</el-menu-item>
@@ -77,14 +80,12 @@
         <el-menu-item index="/settings?tab=security">安全设置</el-menu-item>
       </el-sub-menu>
 
-      <!-- 系统配置 -->
       <el-sub-menu index="/settings-config">
         <template #title>系统配置</template>
         <el-menu-item index="/settings/config">配置管理</el-menu-item>
         <el-menu-item index="/settings/cache">缓存管理</el-menu-item>
       </el-sub-menu>
 
-      <!-- 系统管理 -->
       <el-sub-menu index="/settings-admin">
         <template #title>系统管理</template>
         <el-menu-item index="/settings/database">数据库管理</el-menu-item>
@@ -93,6 +94,8 @@
         <el-menu-item index="/settings/sync">多数据源同步</el-menu-item>
         <el-menu-item index="/settings/scheduler">定时任务</el-menu-item>
         <el-menu-item index="/settings/usage">使用统计</el-menu-item>
+        <!-- 计费配置涉及全局费率修改，仅管理员可见；普通用户即使直接访问 URL 也会被路由守卫拦截 -->
+        <el-menu-item v-if="authStore.isAdmin" index="/settings/billing">计费配置</el-menu-item>
       </el-sub-menu>
     </el-sub-menu>
 
@@ -107,6 +110,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import {
   Odometer,
   Reading,
@@ -115,14 +119,15 @@ import {
   Star,
   List,
   ChatDotRound,
-  /* Document 移除：不再使用顶级分析报告菜单图标 */
   Setting,
   InfoFilled,
-  CreditCard
+  CreditCard,
+  Wallet
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const activeMenu = computed(() => route.path)
 </script>

@@ -25,6 +25,16 @@ from contextlib import asynccontextmanager
 import asyncio
 from pathlib import Path
 
+# 加载 .env.local（如果存在），覆盖 .env 中的同名变量
+# 用途：本地开发时设置 WXPAY_MOCK=true 等，不影响生产 .env
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _local_env = Path(__file__).parent.parent / ".env.local"
+    if _local_env.exists():
+        _load_dotenv(_local_env, override=True)
+except ImportError:
+    pass
+
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.core.logging_config import setup_logging
@@ -38,6 +48,7 @@ from app.routers import multi_market_stocks as multi_market_stocks_router
 from app.routers import notifications as notifications_router
 from app.routers import websocket_notifications as websocket_notifications_router
 from app.routers import scheduler as scheduler_router
+from app.routers import token_billing as token_billing_router
 from app.services.basics_sync_service import get_basics_sync_service
 from app.services.multi_source_basics_sync_service import MultiSourceBasicsSyncService
 from app.services.scheduler_service import set_scheduler_instance
@@ -235,6 +246,13 @@ async def lifespan(app: FastAPI):
         await vibe_agent_service.ensure_indexes()
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
+
+    # Token 计费模块初始化（种子数据 + 默认配置）
+    try:
+        from app.services.token_billing_service import init_token_billing
+        await init_token_billing()
+    except Exception as e:
+        logger.warning(f"⚠️ Token计费模块初始化失败: {e}")
 
     #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
     try:
@@ -576,6 +594,46 @@ async def lifespan(app: FastAPI):
         else:
             logger.info(f"📰 新闻数据同步已配置（仅自选股）: {settings.NEWS_SYNC_CRON}")
 
+        # Token计费：每5分钟对账补偿（释放僵死frozen）
+        async def _reconcile_token_billing():
+            try:
+                from app.services.token_billing_service import token_billing_service
+                count = await token_billing_service.reconcile_stale_frozen()
+                if count > 0:
+                    logger.info(f"🔄 Token计费对账: 释放 {count} 个僵死账户")
+            except Exception as e:
+                logger.warning(f"⚠️ Token计费对账失败: {e}")
+
+        scheduler.add_job(
+            _reconcile_token_billing,
+            "interval",
+            minutes=5,
+            id="token_billing_reconcile",
+            name="Token计费对账补偿",
+            replace_existing=True,
+        )
+        logger.info("💰 Token计费对账任务已配置: 每5分钟")
+
+        # Token计费：每2分钟清理过期订单
+        async def _expire_stale_orders():
+            try:
+                from app.services.token_billing_service import token_billing_service
+                count = await token_billing_service.expire_stale_orders()
+                if count > 0:
+                    logger.info(f"⏰ 订单过期清理: {count} 个订单已标记expired")
+            except Exception as e:
+                logger.warning(f"⚠️ 订单过期清理失败: {e}")
+
+        scheduler.add_job(
+            _expire_stale_orders,
+            "interval",
+            minutes=2,
+            id="token_order_expiry",
+            name="Token订单过期清理",
+            replace_existing=True,
+        )
+        logger.info("⏰ Token订单过期清理任务已配置: 每2分钟")
+
         scheduler.start()
 
         # 设置调度器实例到服务中，以便API可以管理任务
@@ -727,6 +785,7 @@ app.include_router(sse.router, prefix="/api/stream", tags=["streaming"])
 app.include_router(sync_router.router)
 app.include_router(multi_source_sync.router)
 app.include_router(paper_router.router, prefix="/api", tags=["paper"])
+app.include_router(token_billing_router.router, prefix="/api", tags=["token-billing"])
 app.include_router(tushare_init.router, prefix="/api", tags=["tushare-init"])
 app.include_router(akshare_init.router, prefix="/api", tags=["akshare-init"])
 app.include_router(baostock_init.router, prefix="/api", tags=["baostock-init"])
