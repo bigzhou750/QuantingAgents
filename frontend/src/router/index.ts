@@ -270,6 +270,48 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  // 新闻关注工作台
+  {
+    path: '/news-watch',
+    name: 'NewsWatch',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '新闻关注',
+      icon: 'Bell',
+      requiresAuth: true,
+      transition: 'slide-up'
+    },
+    redirect: '/news-watch/workbench',
+    children: [
+      {
+        path: 'workbench',
+        name: 'NewsWatchWorkbench',
+        component: () => import('@/views/NewsWatch/Workbench.vue'),
+        meta: {
+          title: '关注工作台',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'impact',
+        name: 'NewsImpactAnalysis',
+        component: () => import('@/views/NewsWatch/ImpactAnalysis.vue'),
+        meta: {
+          title: '持仓影响分析',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'alerts',
+        name: 'NewsAlertConfig',
+        component: () => import('@/views/NewsWatch/AlertConfig.vue'),
+        meta: {
+          title: '告警配置',
+          requiresAuth: true
+        }
+      }
+    ]
+  },
   { path: '/queue', redirect: '/tasks' },
   { path: '/analysis/history', redirect: '/tasks?tab=completed' },
   {

@@ -275,6 +275,7 @@
           <div class="quick-actions">
             <el-button type="primary" @click="onAnalyze" :icon="TrendCharts" plain>发起分析</el-button>
             <el-button @click="onToggleFavorite" :icon="Star">{{ isFav ? '移出自选' : '加入自选' }}</el-button>
+            <el-button @click="collectToWatch" :icon="View">加入关注</el-button>
             <el-button type="success" :icon="CreditCard" @click="goPaperTrading">模拟交易</el-button>
           </div>
         </el-card>
@@ -359,7 +360,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { TrendCharts, Star, Refresh, Link, Document, Clock, Reading, CreditCard, Delete } from '@element-plus/icons-vue'
+import { TrendCharts, Star, Refresh, Link, Document, Clock, Reading, CreditCard, Delete, View } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { stocksApi } from '@/api/stocks'
 import { analysisApi } from '@/api/analysis'
@@ -374,6 +375,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 import { favoritesApi } from '@/api/favorites'
+import axios from 'axios'
 
 
 echartsUse([CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent, CanvasRenderer])
@@ -905,6 +907,21 @@ const basics = reactive({
 function onAnalyze() {
   router.push({ name: 'SingleAnalysis', query: { stock: code.value } })
 }
+// 加入关注工作台（仅收集用于研究，不构成投资建议）
+async function collectToWatch() {
+  try {
+    await axios.post('/api/news-watch/collect', {
+      item_type: 'stock',
+      symbol: code.value,
+      source_page: 'stock_detail',
+      title: stockName.value || code.value,
+    })
+    ElMessage.success('已加入关注工作台')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '加入关注失败')
+  }
+}
+
 async function onToggleFavorite() {
   try {
     if (!isFav.value) {

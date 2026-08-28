@@ -203,6 +203,13 @@
             <el-button
               type="text"
               size="small"
+              @click="collectToWatch(row)"
+            >
+              加入关注
+            </el-button>
+            <el-button
+              type="text"
+              size="small"
               @click="removeFavorite(row)"
               style="color: #f56c6c;"
             >
@@ -981,6 +988,22 @@ const editFavorite = (row: any) => {
     notes: row.notes || ''
   }
   editDialogVisible.value = true
+}
+
+// 加入关注工作台（仅收集用于研究，不构成投资建议）
+const collectToWatch = async (row: any) => {
+  try {
+    const axios = (await import('axios')).default
+    await axios.post('/api/news-watch/collect', {
+      item_type: 'stock',
+      symbol: row.stock_code,
+      source_page: 'favorites',
+      title: row.stock_name || row.stock_code,
+    })
+    ElMessage.success('已加入关注工作台')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '加入关注失败')
+  }
 }
 
 const analyzeFavorite = (row: any) => {

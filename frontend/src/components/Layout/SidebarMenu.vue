@@ -63,6 +63,16 @@
       <el-menu-item index="/investment/checkup">体检结果</el-menu-item>
     </el-sub-menu>
 
+    <el-sub-menu index="/news-watch">
+      <template #title>
+        <el-icon><Bell /></el-icon>
+        <span>新闻关注</span>
+      </template>
+      <el-menu-item index="/news-watch/workbench">关注工作台</el-menu-item>
+      <el-menu-item index="/news-watch/impact">持仓影响分析</el-menu-item>
+      <el-menu-item index="/news-watch/alerts">告警配置</el-menu-item>
+    </el-sub-menu>
+
     <el-sub-menu index="/evaluation">
       <template #title>
         <el-icon><DataAnalysis /></el-icon>
@@ -142,7 +152,8 @@ import {
   Setting,
   InfoFilled,
   CreditCard,
-  UserFilled
+  UserFilled,
+  Bell
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
