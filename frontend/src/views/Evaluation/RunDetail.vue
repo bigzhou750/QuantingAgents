@@ -134,13 +134,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VideoPlay } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const route = useRoute()
-const router = useRouter()
 
 const runId = computed(() => route.params.id as string)
 const run = ref<any>({})

@@ -178,8 +178,8 @@ const getStatusLabel = (status: string) => {
   return map[status] || status
 }
 
-const getDifficultyType = (difficulty: string) => {
-  const map: Record<string, string> = { easy: 'success', medium: 'warning', hard: 'danger' }
+const getDifficultyType = (difficulty: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { easy: 'success', medium: 'warning', hard: 'danger' }
   return map[difficulty] || 'info'
 }
 

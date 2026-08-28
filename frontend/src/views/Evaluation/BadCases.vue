@@ -213,8 +213,8 @@ const doConvert = async () => {
   }
 }
 
-const getSourceType = (source: string) => {
-  const map: Record<string, string> = { trial_failure: 'danger', human_review: 'warning', safety_intercept: 'danger', user_feedback: 'info' }
+const getSourceType = (source: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { trial_failure: 'danger', human_review: 'warning', safety_intercept: 'danger', user_feedback: 'info' }
   return map[source] || 'info'
 }
 
@@ -223,8 +223,8 @@ const getSourceLabel = (source: string) => {
   return map[source] || source
 }
 
-const getRiskType = (level: string) => {
-  const map: Record<string, string> = { low: 'success', medium: 'warning', high: 'danger', critical: 'danger' }
+const getRiskType = (level: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { low: 'success', medium: 'warning', high: 'danger', critical: 'danger' }
   return map[level] || 'info'
 }
 

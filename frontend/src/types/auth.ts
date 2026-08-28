@@ -7,6 +7,7 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
+  roles?: string[]
   created_at: string
   updated_at: string
   last_login?: string
