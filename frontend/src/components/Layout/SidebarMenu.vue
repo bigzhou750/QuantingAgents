@@ -52,6 +52,17 @@
       <template #title>模拟交易</template>
     </el-menu-item>
 
+    <el-sub-menu index="/investment">
+      <template #title>
+        <el-icon><UserFilled /></el-icon>
+        <span>个人投资助手</span>
+      </template>
+      <el-menu-item index="/investment/profile">投资画像</el-menu-item>
+      <el-menu-item index="/investment/strategies">策略管理</el-menu-item>
+      <el-menu-item index="/investment/screening">选股结果</el-menu-item>
+      <el-menu-item index="/investment/checkup">体检结果</el-menu-item>
+    </el-sub-menu>
+
     <el-sub-menu index="/evaluation">
       <template #title>
         <el-icon><DataAnalysis /></el-icon>
@@ -130,7 +141,8 @@ import {
   DataAnalysis,
   Setting,
   InfoFilled,
-  CreditCard
+  CreditCard,
+  UserFilled
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

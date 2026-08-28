@@ -12,12 +12,19 @@
           </div>
         </template>
 
+        <el-alert type="info" :closable="false" show-icon class="non-advice-alert">
+          <template #title>
+            以下是基于策略规则匹配的候选研究方向，不是买入或卖出建议。请结合体检结果和自身判断再决定下一步。
+          </template>
+        </el-alert>
+
         <!-- 整体风险提示 -->
         <el-alert
           v-if="result.overall_risks?.length"
           type="warning"
           :closable="false"
           show-icon
+          style="margin-top: 12px;"
         >
           <template #title>
             <div class="risk-alert">
@@ -46,7 +53,7 @@
         <el-table :data="result.candidates" border stripe>
           <el-table-column prop="stock_code" label="代码" width="100" />
           <el-table-column prop="stock_name" label="名称" width="120" />
-          <el-table-column label="评分" width="100">
+          <el-table-column label="策略适配度" width="130">
             <template #default="{ row }">
               <el-progress
                 :percentage="Math.round(row.score * 100)"
@@ -55,7 +62,7 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="命中原因" min-width="250">
+          <el-table-column label="入选原因" min-width="220">
             <template #default="{ row }">
               <el-tag
                 v-for="(reason, idx) in row.match_reasons"
@@ -66,9 +73,10 @@
               >
                 {{ reason }}
               </el-tag>
+              <span v-if="!row.match_reasons?.length" class="wizard-muted">暂无具体命中说明</span>
             </template>
           </el-table-column>
-          <el-table-column label="风险警告" min-width="250">
+          <el-table-column label="主要风险" min-width="220">
             <template #default="{ row }">
               <el-tag
                 v-for="(warning, idx) in row.risk_warnings"
@@ -79,14 +87,25 @@
               >
                 {{ warning }}
               </el-tag>
+              <span v-if="!row.risk_warnings?.length" class="wizard-muted">暂无明确风险提示</span>
             </template>
           </el-table-column>
-          <el-table-column label="画像冲突" width="100">
+          <el-table-column label="与画像是否冲突" width="130">
             <template #default="{ row }">
-              <el-tag v-if="row.conflict_with_profile" type="danger" size="small">
-                是
-              </el-tag>
-              <el-tag v-else type="success" size="small">否</el-tag>
+              <el-tooltip v-if="row.conflict_with_profile" content="该标的可能与你的排除规则或风险偏好不符" placement="top">
+                <el-tag type="danger" size="small">冲突</el-tag>
+              </el-tooltip>
+              <el-tag v-else type="success" size="small">无冲突</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="下一步" width="180" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" @click="addToWatchlist(row)" :loading="watchlistLoading === row.stock_code">
+                加入观察
+              </el-button>
+              <el-button size="small" type="primary" link @click="continueResearch(row)">
+                继续研究
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -99,13 +118,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const result = ref<any>(null)
+const watchlistLoading = ref('')
 
 // 格式化时间
 const formatTime = (timeStr: string) => {
@@ -123,6 +144,33 @@ const getScoreColor = (score: number) => {
   if (score >= 0.7) return '#67C23A'
   if (score >= 0.4) return '#E6A23C'
   return '#F56C6C'
+}
+
+// 加入观察（复用自选股作为观察池过渡入口）
+const addToWatchlist = async (row: any) => {
+  watchlistLoading.value = row.stock_code
+  try {
+    await axios.post('/api/favorites/', {
+      stock_code: row.stock_code,
+      stock_name: row.stock_name,
+      tags: ['策略候选'],
+      notes: `来自选股任务候选，入选原因：${(row.match_reasons || []).join('、') || '规则匹配'}`,
+    })
+    ElMessage.success(`${row.stock_name} 已加入观察（自选股）`)
+  } catch (error: any) {
+    if (error.response?.status === 400) {
+      ElMessage.info('该股票已在自选股中')
+    } else {
+      ElMessage.error(error.response?.data?.detail || '加入观察失败')
+    }
+  } finally {
+    watchlistLoading.value = ''
+  }
+}
+
+// 继续研究：跳转到自然语言研究工作台
+const continueResearch = (row: any) => {
+  router.push({ path: '/research-agent', query: { symbol: row.stock_code } })
 }
 
 // 加载结果
@@ -205,5 +253,14 @@ onMounted(() => {
   align-items: center;
   font-size: 13px;
   color: #909399;
+}
+
+.non-advice-alert {
+  margin-bottom: 4px;
+}
+
+.wizard-muted {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

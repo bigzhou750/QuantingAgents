@@ -1,15 +1,64 @@
 <template>
   <div class="investment-profile">
+    <!-- 首次使用引导 -->
+    <el-alert
+      v-if="isFirstTime"
+      type="info"
+      :closable="false"
+      show-icon
+      class="onboarding-alert"
+    >
+      <template #title>
+        <div class="onboarding-content">
+          <strong>欢迎使用个人投资助手</strong>
+          <p>先选择一个贴近你风险偏好的起步模板，系统会帮你预填常用参数，之后你可以随时调整。这不是投资建议，只是帮你更快完成第一次设置。</p>
+        </div>
+      </template>
+    </el-alert>
+
+    <!-- 画像模板选择 -->
+    <el-card class="template-card" v-if="isFirstTime || showTemplates">
+      <template #header>
+        <div class="card-header">
+          <span>选择起步模板</span>
+          <el-button v-if="!isFirstTime" link @click="showTemplates = false">收起</el-button>
+        </div>
+      </template>
+      <div class="template-list">
+        <div
+          v-for="tpl in profileTemplates"
+          :key="tpl.key"
+          class="template-item"
+          :class="{ active: selectedTemplate === tpl.key }"
+          @click="applyTemplate(tpl.key)"
+        >
+          <div class="template-icon" :style="{ color: tpl.color }">
+            <el-icon :size="28"><component :is="tpl.icon" /></el-icon>
+          </div>
+          <div class="template-name">{{ tpl.label }}</div>
+          <div class="template-desc">{{ tpl.description }}</div>
+        </div>
+      </div>
+      <div class="template-tip">
+        模板只是预填表单，不代表推荐结论，你可以在下方随时修改任何字段。
+      </div>
+    </el-card>
+
     <el-card class="profile-card">
       <template #header>
         <div class="card-header">
           <span>投资画像设置</span>
-          <el-switch
-            v-model="contextInjectionEnabled"
-            active-text="启用上下文注入"
-            inactive-text="关闭"
-            @change="(val: any) => toggleContextInjection(val)"
-          />
+          <div class="header-actions">
+            <el-button v-if="!isFirstTime && !showTemplates" link @click="showTemplates = true">
+              重新选择模板
+            </el-button>
+            <el-switch
+              v-model="contextInjectionEnabled"
+              active-text="启用上下文注入"
+              inactive-text="关闭"
+              @change="(val: any) => toggleContextInjection(val)"
+            />
+          </div>
         </div>
       </template>
 
@@ -160,12 +209,75 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { Umbrella, Coin, TrendCharts } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const contextInjectionEnabled = ref(true)
 const showHoldingsDialog = ref(false)
+const isFirstTime = ref(false)
+const showTemplates = ref(false)
+const selectedTemplate = ref('')
+
+// 起步模板：仅用于预填表单，不构成投资建议
+const profileTemplates = [
+  {
+    key: 'conservative',
+    label: '保守型',
+    description: '优先控制波动，偏好低估值、分红稳定的标的',
+    icon: Umbrella,
+    color: '#67C23A',
+    values: {
+      risk_preference: 'conservative',
+      trading_style: 'dividend',
+      target_markets: ['A股'],
+      exclude_st: true,
+      max_position_per_stock: 0.15,
+    },
+  },
+  {
+    key: 'balanced',
+    label: '平衡型',
+    description: '兼顾成长与稳健，适合大多数新手起步',
+    icon: Coin,
+    color: '#409EFF',
+    values: {
+      risk_preference: 'balanced',
+      trading_style: 'value',
+      target_markets: ['A股'],
+      exclude_st: true,
+      max_position_per_stock: 0.2,
+    },
+  },
+  {
+    key: 'aggressive',
+    label: '进取型',
+    description: '愿意承担更高波动以追求成长机会',
+    icon: TrendCharts,
+    color: '#E6A23C',
+    values: {
+      risk_preference: 'aggressive',
+      trading_style: 'growth',
+      target_markets: ['A股'],
+      exclude_st: false,
+      max_position_per_stock: 0.25,
+    },
+  },
+]
+
+// 应用模板：仅预填表单字段，用户可继续编辑
+const applyTemplate = (key: string) => {
+  const tpl = profileTemplates.find(t => t.key === key)
+  if (!tpl) return
+  selectedTemplate.value = key
+  Object.assign(profileForm, tpl.values)
+  ElMessage.success(`已套用「${tpl.label}」模板，可继续调整下方字段`)
+  if (isFirstTime.value) {
+    isFirstTime.value = false
+  }
+  showTemplates.value = false
+}
 
 // 表单数据
 const profileForm = reactive({
@@ -201,12 +313,17 @@ const rules: FormRules = {
 const loadProfile = async () => {
   try {
     const response = await axios.get('/api/investment/profile')
-    if (response.data.success && response.data.data) {
+    if (response.data.success && response.data.data && Object.keys(response.data.data).length > 0) {
       Object.assign(profileForm, response.data.data)
       contextInjectionEnabled.value = profileForm.context_injection_enabled ?? true
+      isFirstTime.value = false
+    } else {
+      isFirstTime.value = true
     }
   } catch (error: any) {
-    if (error.response?.status !== 404) {
+    if (error.response?.status === 404) {
+      isFirstTime.value = true
+    } else {
       ElMessage.error('加载画像失败')
     }
   }
@@ -228,6 +345,7 @@ const saveProfile = async () => {
 
       if (response.data.success) {
         ElMessage.success('画像保存成功')
+        isFirstTime.value = false
       } else {
         ElMessage.error(response.data.message || '保存失败')
       }
@@ -273,6 +391,76 @@ onMounted(() => {
 <style scoped>
 .investment-profile {
   padding: 20px;
+}
+
+.onboarding-alert {
+  max-width: 800px;
+  margin: 0 auto 16px;
+}
+
+.onboarding-content p {
+  margin: 8px 0 0 0;
+  color: #606266;
+  font-size: 13px;
+}
+
+.template-card {
+  max-width: 800px;
+  margin: 0 auto 16px;
+}
+
+.template-list {
+  display: flex;
+  gap: 16px;
+}
+
+.template-item {
+  flex: 1;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.template-item:hover {
+  border-color: #409EFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.template-item.active {
+  border-color: #409EFF;
+  background-color: #ecf5ff;
+}
+
+.template-icon {
+  margin-bottom: 8px;
+}
+
+.template-name {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.template-desc {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.template-tip {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .profile-card {
