@@ -8,9 +8,10 @@
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.routers.auth_db import get_current_user
 from app.services.personal_investment.profile_service import profile_service
 from app.services.personal_investment.strategy_service import strategy_service
 from app.services.personal_investment.task_service import task_service
@@ -75,27 +76,13 @@ class CheckupTaskRequest(BaseModel):
     params: dict = {}
 
 
-# ==================== 权限检查 ====================
-
-async def get_current_user(request: Request) -> dict:
-    """获取当前登录用户（简化版）"""
-    # TODO: 实际应该从 JWT token 或 session 中获取
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未授权访问")
-
-    # 这里返回模拟用户，实际应该验证 token
-    return {"id": "user_001", "username": "test_user"}
-
-
 # ==================== 投资画像 API ====================
 
-@router.get("/profile", dependencies=[Depends(get_current_user)])
-async def get_profile(request: Request):
+@router.get("/profile")
+async def get_profile(current_user: dict = Depends(get_current_user)):
     """获取当前用户的投资画像"""
-    user = await get_current_user(request)
     try:
-        profile = await profile_service.get_profile(user["id"])
+        profile = await profile_service.get_profile(current_user["id"])
         if not profile:
             return ApiResponse(success=True, data={}, message="画像不存在")
         return ApiResponse(success=True, data=profile)
@@ -104,16 +91,15 @@ async def get_profile(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/profile", dependencies=[Depends(get_current_user)])
-async def update_profile(request: Request, body: ProfileUpdateRequest):
+@router.put("/profile")
+async def update_profile(body: ProfileUpdateRequest, current_user: dict = Depends(get_current_user)):
     """创建或更新投资画像"""
-    user = await get_current_user(request)
     try:
         update_data = body.model_dump(exclude_none=True)
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
 
-        profile = await profile_service.create_or_update_profile(user["id"], update_data)
+        profile = await profile_service.create_or_update_profile(current_user["id"], update_data)
         return ApiResponse(success=True, data=profile, message="画像保存成功")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -122,12 +108,11 @@ async def update_profile(request: Request, body: ProfileUpdateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/profile", dependencies=[Depends(get_current_user)])
-async def delete_profile(request: Request):
+@router.delete("/profile")
+async def delete_profile(current_user: dict = Depends(get_current_user)):
     """删除投资画像"""
-    user = await get_current_user(request)
     try:
-        success = await profile_service.delete_profile(user["id"])
+        success = await profile_service.delete_profile(current_user["id"])
         if not success:
             raise HTTPException(status_code=404, detail="Profile not found")
         return ApiResponse(success=True, message="画像已删除")
@@ -138,12 +123,11 @@ async def delete_profile(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/profile/summary", dependencies=[Depends(get_current_user)])
-async def get_profile_summary(request: Request):
+@router.get("/profile/summary")
+async def get_profile_summary(current_user: dict = Depends(get_current_user)):
     """获取画像摘要（用于 VibeAgent 上下文注入）"""
-    user = await get_current_user(request)
     try:
-        summary = await profile_service.get_profile_summary(user["id"])
+        summary = await profile_service.get_profile_summary(current_user["id"])
         if not summary:
             return ApiResponse(success=True, data={}, message="画像不存在")
         return ApiResponse(success=True, data=summary)
@@ -154,13 +138,12 @@ async def get_profile_summary(request: Request):
 
 # ==================== 策略管理 API ====================
 
-@router.post("/strategies", dependencies=[Depends(get_current_user)])
-async def create_strategy(request: Request, body: StrategyCreateRequest):
+@router.post("/strategies")
+async def create_strategy(body: StrategyCreateRequest, current_user: dict = Depends(get_current_user)):
     """创建策略"""
-    user = await get_current_user(request)
     try:
         result = await strategy_service.create_strategy(
-            user_id=user["id"],
+            user_id=current_user["id"],
             name=body.name,
             description=body.description,
             applicable_markets=body.applicable_markets,
@@ -176,18 +159,17 @@ async def create_strategy(request: Request, body: StrategyCreateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/strategies", dependencies=[Depends(get_current_user)])
+@router.get("/strategies")
 async def list_strategies(
-    request: Request,
     include_disabled: bool = False,
     skip: int = 0,
     limit: int = 50,
+    current_user: dict = Depends(get_current_user),
 ):
     """列出策略列表"""
-    user = await get_current_user(request)
     try:
         strategies = await strategy_service.list_strategies(
-            user_id=user["id"],
+            user_id=current_user["id"],
             include_disabled=include_disabled,
             skip=skip,
             limit=limit,
@@ -198,12 +180,11 @@ async def list_strategies(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/strategies/{strategy_id}", dependencies=[Depends(get_current_user)])
-async def get_strategy(strategy_id: str, request: Request):
+@router.get("/strategies/{strategy_id}")
+async def get_strategy(strategy_id: str, current_user: dict = Depends(get_current_user)):
     """获取策略详情"""
-    user = await get_current_user(request)
     try:
-        strategy = await strategy_service.get_strategy(strategy_id, user["id"])
+        strategy = await strategy_service.get_strategy(strategy_id, current_user["id"])
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
         return ApiResponse(success=True, data=strategy)
@@ -214,16 +195,15 @@ async def get_strategy(strategy_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/strategies/{strategy_id}", dependencies=[Depends(get_current_user)])
-async def update_strategy(strategy_id: str, request: Request, body: StrategyUpdateRequest):
+@router.put("/strategies/{strategy_id}")
+async def update_strategy(strategy_id: str, body: StrategyUpdateRequest, current_user: dict = Depends(get_current_user)):
     """更新策略"""
-    user = await get_current_user(request)
     try:
         update_data = body.model_dump(exclude_none=True)
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
 
-        strategy = await strategy_service.update_strategy(strategy_id, user["id"], **update_data)
+        strategy = await strategy_service.update_strategy(strategy_id, current_user["id"], **update_data)
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
         return ApiResponse(success=True, data=strategy, message="策略更新成功")
@@ -236,12 +216,11 @@ async def update_strategy(strategy_id: str, request: Request, body: StrategyUpda
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/strategies/{strategy_id}/disable", dependencies=[Depends(get_current_user)])
-async def disable_strategy(strategy_id: str, request: Request):
+@router.post("/strategies/{strategy_id}/disable")
+async def disable_strategy(strategy_id: str, current_user: dict = Depends(get_current_user)):
     """停用策略"""
-    user = await get_current_user(request)
     try:
-        success = await strategy_service.disable_strategy(strategy_id, user["id"])
+        success = await strategy_service.disable_strategy(strategy_id, current_user["id"])
         if not success:
             raise HTTPException(status_code=404, detail="Strategy not found")
         return ApiResponse(success=True, message="策略已停用")
@@ -252,12 +231,11 @@ async def disable_strategy(strategy_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/strategies/{strategy_id}/enable", dependencies=[Depends(get_current_user)])
-async def enable_strategy(strategy_id: str, request: Request):
+@router.post("/strategies/{strategy_id}/enable")
+async def enable_strategy(strategy_id: str, current_user: dict = Depends(get_current_user)):
     """启用策略"""
-    user = await get_current_user(request)
     try:
-        success = await strategy_service.enable_strategy(strategy_id, user["id"])
+        success = await strategy_service.enable_strategy(strategy_id, current_user["id"])
         if not success:
             raise HTTPException(status_code=404, detail="Strategy not found")
         return ApiResponse(success=True, message="策略已启用")
@@ -270,18 +248,17 @@ async def enable_strategy(strategy_id: str, request: Request):
 
 # ==================== 策略选股 API ====================
 
-@router.post("/screening-tasks", dependencies=[Depends(get_current_user)])
-async def create_screening_task(request: Request, body: ScreeningTaskRequest):
+@router.post("/screening-tasks")
+async def create_screening_task(body: ScreeningTaskRequest, current_user: dict = Depends(get_current_user)):
     """创建策略选股任务"""
-    user = await get_current_user(request)
     try:
         # 验证策略存在且属于当前用户
-        strategy = await strategy_service.get_strategy(body.strategy_id, user["id"])
+        strategy = await strategy_service.get_strategy(body.strategy_id, current_user["id"])
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
 
         result = await task_service.create_task(
-            user_id=user["id"],
+            user_id=current_user["id"],
             task_type=TaskType.STRATEGY_SCREENING,
             strategy_id=body.strategy_id,
             profile_id=body.profile_id,
@@ -295,13 +272,12 @@ async def create_screening_task(request: Request, body: ScreeningTaskRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/screening-tasks/{task_id}/result", dependencies=[Depends(get_current_user)])
-async def get_screening_result(task_id: str, request: Request):
+@router.get("/screening-tasks/{task_id}/result")
+async def get_screening_result(task_id: str, current_user: dict = Depends(get_current_user)):
     """获取选股结果"""
-    user = await get_current_user(request)
     try:
         # 验证任务属于当前用户
-        task = await task_service.get_task(task_id, user["id"])
+        task = await task_service.get_task(task_id, current_user["id"])
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
@@ -318,18 +294,17 @@ async def get_screening_result(task_id: str, request: Request):
 
 # ==================== 策略体检 API ====================
 
-@router.post("/checkup-tasks", dependencies=[Depends(get_current_user)])
-async def create_checkup_task(request: Request, body: CheckupTaskRequest):
+@router.post("/checkup-tasks")
+async def create_checkup_task(body: CheckupTaskRequest, current_user: dict = Depends(get_current_user)):
     """创建策略体检任务"""
-    user = await get_current_user(request)
     try:
         # 验证策略存在且属于当前用户
-        strategy = await strategy_service.get_strategy(body.strategy_id, user["id"])
+        strategy = await strategy_service.get_strategy(body.strategy_id, current_user["id"])
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
 
         result = await task_service.create_task(
-            user_id=user["id"],
+            user_id=current_user["id"],
             task_type=TaskType.STRATEGY_CHECKUP,
             strategy_id=body.strategy_id,
             profile_id=body.profile_id,
@@ -343,13 +318,12 @@ async def create_checkup_task(request: Request, body: CheckupTaskRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/checkup-tasks/{task_id}/result", dependencies=[Depends(get_current_user)])
-async def get_checkup_result(task_id: str, request: Request):
+@router.get("/checkup-tasks/{task_id}/result")
+async def get_checkup_result(task_id: str, current_user: dict = Depends(get_current_user)):
     """获取体检结果"""
-    user = await get_current_user(request)
     try:
         # 验证任务属于当前用户
-        task = await task_service.get_task(task_id, user["id"])
+        task = await task_service.get_task(task_id, current_user["id"])
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
@@ -366,19 +340,18 @@ async def get_checkup_result(task_id: str, request: Request):
 
 # ==================== 任务列表 API ====================
 
-@router.get("/tasks", dependencies=[Depends(get_current_user)])
+@router.get("/tasks")
 async def list_tasks(
-    request: Request,
     task_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
+    current_user: dict = Depends(get_current_user),
 ):
     """列出任务列表"""
-    user = await get_current_user(request)
     try:
         type_enum = TaskType(task_type) if task_type else None
         tasks = await task_service.list_tasks(
-            user_id=user["id"],
+            user_id=current_user["id"],
             task_type=type_enum,
             skip=skip,
             limit=limit,
@@ -391,12 +364,11 @@ async def list_tasks(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/tasks/{task_id}", dependencies=[Depends(get_current_user)])
-async def get_task(task_id: str, request: Request):
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: str, current_user: dict = Depends(get_current_user)):
     """获取任务详情"""
-    user = await get_current_user(request)
     try:
-        task = await task_service.get_task(task_id, user["id"])
+        task = await task_service.get_task(task_id, current_user["id"])
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         return ApiResponse(success=True, data=task)

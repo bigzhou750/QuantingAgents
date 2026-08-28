@@ -209,8 +209,8 @@ const viewTrialTrace = async (trialId: string) => {
 }
 
 // 工具函数
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { pending: 'info', running: 'warning', completed: 'success', failed: 'danger', cancelled: 'info' }
+const getStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { pending: 'info', running: 'warning', completed: 'success', failed: 'danger', cancelled: 'info' }
   return map[status] || 'info'
 }
 
@@ -219,8 +219,8 @@ const getStatusLabel = (status: string) => {
   return map[status] || status
 }
 
-const getTrialStatusType = (status: string) => {
-  const map: Record<string, string> = { pending: 'info', running: 'warning', completed: 'success', failed: 'danger', timeout: 'danger', cancelled: 'info' }
+const getTrialStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { pending: 'info', running: 'warning', completed: 'success', failed: 'danger', timeout: 'danger', cancelled: 'info' }
   return map[status] || 'info'
 }
 
@@ -237,9 +237,9 @@ const getTraceEventType = (eventType: string) => {
   return 'primary'
 }
 
-const getTraceEventTagType = (eventType: string) => {
+const getTraceEventTagType = (eventType: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   if (eventType === 'error') return 'danger'
-  if (eventType === 'llm_call') return ''
+  if (eventType === 'llm_call') return 'primary'
   if (eventType === 'tool_call') return 'warning'
   if (eventType === 'lifecycle') return 'info'
   if (eventType === 'streaming') return 'success'

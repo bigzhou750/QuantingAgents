@@ -182,8 +182,8 @@ const loadData = async () => {
 }
 
 // 工具函数
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = {
+const getStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     pending: 'info',
     running: 'warning',
     completed: 'success',

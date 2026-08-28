@@ -886,8 +886,18 @@ const validateStockCodeInput = () => {
 }
 
 // 获取股票信息
-const fetchStockInfo = () => {
-  // TODO: 实现股票信息获取
+const fetchStockInfo = async () => {
+  const code = analysisForm.stockCode.trim()
+  if (!code) return
+  try {
+    const res = await stocksApi.getQuote(code)
+    const data = res.data
+    if (data?.name) {
+      stockCodeHelp.value = `${code} - ${data.name}`
+    }
+  } catch {
+    // 静默处理，不影响主流程
+  }
 }
 
 // 切换分析师

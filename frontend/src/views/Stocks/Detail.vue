@@ -38,7 +38,7 @@
             <span>{{ fmtPercent(quote.changePercent) }}</span>
           </div>
           <el-tag type="info" size="small">{{ refreshText }}</el-tag>
-          <el-button text size="small" @click="refreshMockQuote" :icon="Refresh">刷新</el-button>
+          <el-button text size="small" @click="refreshQuote" :icon="Refresh">刷新</el-button>
         </div>
         <div class="stats">
           <div class="item"><span>今开</span><b>{{ fmtPrice(quote.open) }}</b></div>
@@ -608,8 +608,7 @@ async function handleSync() {
   }
 }
 
-async function refreshMockQuote() {
-  // 改为调用后端接口获取真实数据
+async function refreshQuote() {
   await fetchQuote()
 }
 
@@ -887,7 +886,7 @@ const filteredNews = computed(() => {
   return newsItems.value
 })
 
-// 基本面（mock）
+// 基本面数据
 const basics = reactive({
   industry: '-',
   sector: '-',

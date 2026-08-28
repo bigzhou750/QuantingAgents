@@ -397,7 +397,39 @@ const openReport = (row:any): void => {
   void router.push({ name: 'ReportDetail', params: { id } })
 }
 
-const retryTask = (_row:any) => { ElMessage.info('重试功能待实现') }
+const retryTask = async (row: any) => {
+  const taskId = row.task_id || row.analysis_id || row.id
+  if (!taskId) {
+    ElMessage.warning('未找到任务ID')
+    return
+  }
+  try {
+    // 获取原任务详情以提取参数
+    const res = await analysisApi.getTaskStatus(taskId)
+    const task = (res as any)?.data?.data || {}
+    const params = task.params || task.request || {}
+
+    if (!params.symbol && !params.stock_code) {
+      ElMessage.warning('无法获取原任务参数，请手动重新发起分析')
+      return
+    }
+
+    // 用原参数重新发起分析
+    await analysisApi.startSingleAnalysis({
+      symbol: params.symbol || params.stock_code,
+      parameters: {
+        market_type: params.market_type || params.market || 'A股',
+        research_depth: params.research_depth || '1',
+        selected_analysts: params.analysts || params.selected_analysts || [],
+      },
+    })
+
+    ElMessage.success('任务已重新提交')
+    loadList() // 刷新列表
+  } catch (error: any) {
+    ElMessage.error(error?.message || '重试失败')
+  }
+}
 
 // 显示错误详情
 const showErrorDetail = async (row: any) => {

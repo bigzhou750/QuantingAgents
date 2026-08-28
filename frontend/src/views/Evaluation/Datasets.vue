@@ -153,8 +153,8 @@ const runEvaluation = (id: string) => {
   router.push(`/evaluation/runs/create?dataset_id=${id}`)
 }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { draft: 'info', active: 'success', archived: 'warning' }
+const getStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { draft: 'info', active: 'success', archived: 'warning' }
   return map[status] || 'info'
 }
 
