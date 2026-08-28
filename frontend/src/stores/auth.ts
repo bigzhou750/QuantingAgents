@@ -198,9 +198,14 @@ export const useAuthStore = defineStore('auth', {
           // 设置认证信息
           this.setAuthInfo(access_token, refresh_token, user)
 
-          // 开源版admin用户拥有所有权限
-          this.permissions = ['*']
-          this.roles = ['admin']
+          // 根据后端返回的用户信息设置角色和权限
+          if (user?.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = user?.roles || ['user']
+          }
 
           // 同步用户偏好设置到 appStore
           this.syncUserPreferencesToAppStore()
@@ -337,10 +342,25 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     
-    // 开源版不需要权限检查，admin拥有所有权限
+    // 根据后端返回的用户信息获取角色和权限
     async fetchUserPermissions() {
-      this.permissions = ['*']
-      this.roles = ['admin']
+      try {
+        const response = await authApi.getUserInfo()
+        if (response.success && response.data) {
+          const user = response.data
+          if (user.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = user.roles || ['user']
+          }
+        }
+      } catch (error) {
+        console.warn('获取用户权限失败，使用默认权限:', error)
+        this.permissions = []
+        this.roles = ['user']
+      }
       return true
     },
     

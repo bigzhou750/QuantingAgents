@@ -468,11 +468,17 @@ class SessionService:
         from src.tools import build_registry
         from src.providers.chat import ChatLLM
         from src.agent.loop import AgentLoop
-        from src.memory.persistent import PersistentMemory
         from src.config.loader import load_runtime_agent_config, sanitize_session_overrides
 
+        try:
+            from src.memory.persistent import PersistentMemory
+            pm = PersistentMemory()
+        except (ImportError, ModuleNotFoundError):
+            # vendor 同步时可能漏拷 src/memory/ 包，降级为 None
+            # build_registry 和 AgentLoop 均已支持 persistent_memory=None
+            pm = None
+
         llm = ChatLLM()
-        pm = PersistentMemory()
 
         session_id = attempt.session_id
         attempt_id = attempt.attempt_id

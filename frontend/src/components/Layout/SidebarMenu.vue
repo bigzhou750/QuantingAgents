@@ -47,13 +47,25 @@
       <template #title>我的自选股</template>
     </el-menu-item>
 
-    <el-menu-item index="/paper">
+    <el-menu-item index=”/paper”>
       <el-icon><CreditCard /></el-icon>
       <template #title>模拟交易</template>
     </el-menu-item>
 
+    <el-sub-menu index=”/evaluation”>
+      <template #title>
+        <el-icon><DataAnalysis /></el-icon>
+        <span>Agent 评测</span>
+      </template>
+      <el-menu-item index=”/evaluation/dashboard”>评测概览</el-menu-item>
+      <el-menu-item index=”/evaluation/datasets”>评测集管理</el-menu-item>
+      <el-menu-item index=”/evaluation/runs”>评测运行</el-menu-item>
+      <el-menu-item index=”/evaluation/trends”>质量趋势</el-menu-item>
+      <el-menu-item index=”/evaluation/review”>人工复核</el-menu-item>
+      <el-menu-item index=”/evaluation/bad-cases”>Bad Case 池</el-menu-item>
+    </el-sub-menu>
 
-    <!-- 分析报告已移至“股票分析”子菜单，保留注释便于追踪 -->
+    <!-- 分析报告已移至”股票分析”子菜单，保留注释便于追踪 -->
     <!--
     <el-menu-item index="/reports">
       <el-icon><Document /></el-icon>
@@ -115,7 +127,7 @@ import {
   Star,
   List,
   ChatDotRound,
-  /* Document 移除：不再使用顶级分析报告菜单图标 */
+  DataAnalysis,
   Setting,
   InfoFilled,
   CreditCard

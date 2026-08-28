@@ -1,0 +1,461 @@
+"""
+评测运行服务
+
+负责评测运行的创建、执行、trial 管理和状态跟踪。
+对接 Vibe Agent runtime，支持多 trial、超时、取消和预算限制。
+"""
+
+import asyncio
+import logging
+import uuid
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+from app.core.database import get_mongo_db
+from app.core.config import settings
+from app.models.eval import (
+    EvalRun, EvalTrial, RunStatus, TrialStatus, EvalRunConfig,
+)
+from app.services.eval.dataset_service import dataset_service
+from app.utils.timezone import now_tz
+
+logger = logging.getLogger(__name__)
+
+
+def _make_trace_sink(trial_id: str):
+    """
+    构造一个绑定到指定 trial 的事件回调，将 embedded_agent_runtime 推送的
+    (event_type, payload) 事件对接到 trace_adapter，归一化并落盘为标准
+    trace 事件（对应 spec: MUST 记录与该 trial 关联的结构化事件序列）。
+
+    embedded_agent_runtime 调用 sink 时传入的是两个独立参数
+    (event_type: str, payload: dict)，而 TraceAdapter.adapt_vibe_event()
+    期望的是一个组合字典，字段名为 "type"/"data"（而不是
+    "event_type"/"payload"），因此这里需要做一次字段名转换，而不能直接
+    转发原始参数。
+
+    必须是异步函数：embedded_agent_runtime 内部通过
+    asyncio.run_coroutine_threadsafe 调度 sink 回调，要求返回协程对象。
+    """
+    sequence_counter = {"n": 0}
+
+    async def _sink(event_type: str, payload: Dict[str, Any]) -> None:
+        try:
+            from app.services.eval.trace_adapter import trace_adapter
+
+            sequence_counter["n"] += 1
+            vibe_event = {
+                "type": event_type,
+                "data": payload if isinstance(payload, dict) else {"raw": payload},
+            }
+            trace_event = trace_adapter.adapt_vibe_event(
+                vibe_event, trial_id=trial_id, sequence=sequence_counter["n"]
+            )
+            if trace_event:
+                await trace_adapter.save_single_event(trace_event)
+        except Exception:
+            # trace 记录失败不应该影响 trial 本身的执行
+            logger.warning(f"Failed to record trace event for trial {trial_id}", exc_info=True)
+
+    return _sink
+
+
+class EvalRunnerService:
+    """评测运行服务"""
+
+    COLLECTION_RUNS = "eval_runs"
+    COLLECTION_TRIALS = "eval_trials"
+
+    def __init__(self):
+        self._initialized = False
+        self._running_tasks: Dict[str, asyncio.Task] = {}
+
+    async def initialize(self):
+        """初始化服务，创建索引"""
+        if self._initialized:
+            return
+
+        logger.info("Initializing EvalRunnerService")
+        db = get_mongo_db()
+
+        # 创建索引
+        await db[self.COLLECTION_RUNS].create_index("run_id", unique=True)
+        await db[self.COLLECTION_RUNS].create_index("dataset_id")
+        await db[self.COLLECTION_RUNS].create_index("status")
+        await db[self.COLLECTION_RUNS].create_index("created_at")
+
+        await db[self.COLLECTION_TRIALS].create_index("trial_id", unique=True)
+        await db[self.COLLECTION_TRIALS].create_index("run_id")
+        await db[self.COLLECTION_TRIALS].create_index([("run_id", 1), ("case_id", 1)])
+        await db[self.COLLECTION_TRIALS].create_index("status")
+
+        self._initialized = True
+        logger.info("EvalRunnerService initialized with indexes")
+
+    async def create_run(
+        self,
+        dataset_id: str,
+        dataset_version: Optional[str] = None,
+        num_trials: int = 1,
+        config: Optional[Dict[str, Any]] = None,
+        created_by: str = "",
+    ) -> Dict[str, Any]:
+        """创建评测运行"""
+        db = get_mongo_db()
+
+        # 验证数据集存在
+        dataset = await dataset_service.get_dataset(dataset_id)
+        if not dataset:
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        # 使用指定版本或当前版本
+        version = dataset_version or dataset.get("version", "1.0.0")
+
+        # 获取数据集下指定版本的所有 case
+        cases = await dataset_service.list_cases(dataset_id, limit=1000, version=version)
+        if not cases:
+            raise ValueError(f"Dataset {dataset_id} v{version} has no cases")
+
+        run_id = f"run_{uuid.uuid4().hex[:12]}"
+        run_config = EvalRunConfig(**(config or {}))
+
+        run = EvalRun(
+            run_id=run_id,
+            dataset_id=dataset_id,
+            dataset_version=version,
+            status=RunStatus.PENDING,
+            config=run_config,
+            num_trials_per_case=num_trials,
+            total_cases=len(cases),
+            created_by=created_by,
+        )
+
+        doc = run.model_dump(by_alias=True, exclude={"id"})
+        await db[self.COLLECTION_RUNS].insert_one(doc)
+
+        logger.info(f"Created eval run {run_id} for dataset {dataset_id} v{version}")
+        return {"run_id": run_id, "total_cases": len(cases), "num_trials_per_case": num_trials}
+
+    async def start_run(self, run_id: str) -> bool:
+        """启动评测运行"""
+        db = get_mongo_db()
+
+        run_doc = await db[self.COLLECTION_RUNS].find_one({"run_id": run_id})
+        if not run_doc:
+            raise ValueError(f"Run {run_id} not found")
+
+        if run_doc["status"] != RunStatus.PENDING.value:
+            raise ValueError(f"Run {run_id} is already {run_doc['status']}")
+
+        # 更新状态为 running
+        await db[self.COLLECTION_RUNS].update_one(
+            {"run_id": run_id},
+            {"$set": {"status": RunStatus.RUNNING.value, "started_at": now_tz()}}
+        )
+
+        # 异步启动运行任务
+        task = asyncio.create_task(self._execute_run(run_id))
+        self._running_tasks[run_id] = task
+
+        logger.info(f"Started eval run {run_id}")
+        return True
+
+    async def _execute_run(self, run_id: str):
+        """执行评测运行（内部方法）"""
+        db = get_mongo_db()
+
+        try:
+            run_doc = await db[self.COLLECTION_RUNS].find_one({"run_id": run_id})
+            if not run_doc:
+                logger.error(f"Run {run_id} not found during execution")
+                return
+
+            dataset_id = run_doc["dataset_id"]
+            dataset_version = run_doc.get("dataset_version")
+            num_trials = run_doc["num_trials_per_case"]
+            timeout_seconds = run_doc["config"]["timeout_seconds"]
+
+            # 按创建运行时记录的版本获取 case，确保可复现
+            cases = await dataset_service.list_cases(
+                dataset_id, limit=1000, version=dataset_version
+            )
+
+            # 为每个 case 创建并执行 trial
+            for case in cases:
+                case_id = case["case_id"]
+
+                for trial_idx in range(num_trials):
+                    trial_id = f"{run_id}_{case_id}_t{trial_idx}"
+
+                    # 创建 trial
+                    trial = EvalTrial(
+                        trial_id=trial_id,
+                        run_id=run_id,
+                        case_id=case_id,
+                        trial_index=trial_idx,
+                        status=TrialStatus.PENDING,
+                        input_data=case.get("input", {}),
+                    )
+
+                    trial_doc = trial.model_dump(by_alias=True, exclude={"id"})
+                    await db[self.COLLECTION_TRIALS].insert_one(trial_doc)
+
+                    # 执行 trial
+                    await self._execute_trial(run_id, trial_id, case, timeout_seconds)
+
+            # 完成运行
+            completed_count = await db[self.COLLECTION_TRIALS].count_documents({
+                "run_id": run_id,
+                "status": TrialStatus.COMPLETED.value
+            })
+            failed_count = await db[self.COLLECTION_TRIALS].count_documents({
+                "run_id": run_id,
+                "status": {"$in": [TrialStatus.FAILED.value, TrialStatus.TIMEOUT.value]}
+            })
+
+            await db[self.COLLECTION_RUNS].update_one(
+                {"run_id": run_id},
+                {
+                    "$set": {
+                        "status": RunStatus.COMPLETED.value,
+                        "completed_at": now_tz(),
+                        "completed_trials": completed_count,
+                        "failed_trials": failed_count,
+                    }
+                }
+            )
+
+            logger.info(f"Eval run {run_id} completed: {completed_count} succeeded, {failed_count} failed")
+
+        except asyncio.CancelledError:
+            logger.info(f"Eval run {run_id} was cancelled")
+            await db[self.COLLECTION_RUNS].update_one(
+                {"run_id": run_id},
+                {"$set": {"status": RunStatus.CANCELLED.value, "completed_at": now_tz()}}
+            )
+        except Exception as e:
+            logger.exception(f"Eval run {run_id} failed: {e}")
+            await db[self.COLLECTION_RUNS].update_one(
+                {"run_id": run_id},
+                {"$set": {"status": RunStatus.FAILED.value, "error_message": str(e), "completed_at": now_tz()}}
+            )
+        finally:
+            self._running_tasks.pop(run_id, None)
+
+    async def _execute_trial(self, run_id: str, trial_id: str, case: Dict[str, Any], timeout_seconds: int):
+        """执行单个 trial"""
+        db = get_mongo_db()
+        case_id = case.get("case_id", "")
+
+        try:
+            # 更新 trial 状态为 running
+            await db[self.COLLECTION_TRIALS].update_one(
+                {"trial_id": trial_id},
+                {"$set": {"status": TrialStatus.RUNNING.value, "started_at": now_tz()}}
+            )
+
+            # 对接 Vibe Agent runtime
+            try:
+                from vibe_agent_runtime import embedded_agent_runtime
+
+                start_time = now_tz()
+
+                # 创建临时的 session 和 task 用于评测
+                eval_session_id = f"eval_{run_id}_{case_id}"
+                eval_task_id = f"task_{trial_id}"
+
+                prompt = case.get("input", {}).get("prompt", "")
+
+                result = await asyncio.wait_for(
+                    embedded_agent_runtime.run(
+                        session_id=eval_session_id,
+                        task_id=eval_task_id,
+                        prompt=prompt,
+                        title=f"Eval: {case.get('name', 'Unknown')}",
+                        user_id="eval_system",
+                        username="Evaluation System",
+                        sink=_make_trace_sink(trial_id),  # 归一化事件并落盘为标准 trace
+                    ),
+                    timeout=timeout_seconds,
+                )
+
+                if result is None:
+                    raise RuntimeError(
+                        "embedded_agent_runtime.run() returned None "
+                        "(Vibe Agent runtime 执行内部失败，未返回结果)"
+                    )
+
+                end_time = now_tz()
+                latency_ms = int((end_time - start_time).total_seconds() * 1000)
+
+                # 注意：result 中的 "metrics" 键即使存在也可能显式为 None
+                # （而不是缺失该键），此时 dict.get(key, default) 的默认值
+                # 不会生效，必须用 `or {}` 兜底，否则链式 .get() 调用会在
+                # None 上报 AttributeError。
+                metrics = result.get("metrics") or {}
+                output_data = {
+                    "content": result.get("content", ""),
+                    "status": result.get("status"),
+                    "tool_trail": result.get("tool_trail", []),
+                    "metrics": metrics,
+                }
+
+                # runtime 可能不抛异常、正常返回字典，但字典内部
+                # status="failed" 并携带 reason —— 必须显式检查，否则会把
+                # 真实失败的 trial 误标记为 COMPLETED（对应 spec: trial 失败
+                # MUST 保留失败原因，不能被静默吞掉）。
+                runtime_status = result.get("status")
+                if runtime_status not in ("completed", "success", "ok"):
+                    error_message = result.get("reason") or f"Agent runtime status={runtime_status!r}"
+                    await db[self.COLLECTION_TRIALS].update_one(
+                        {"trial_id": trial_id},
+                        {
+                            "$set": {
+                                "status": TrialStatus.FAILED.value,
+                                "completed_at": end_time,
+                                "output_data": output_data,
+                                "latency_ms": latency_ms,
+                                "error_message": error_message,
+                            }
+                        }
+                    )
+                    logger.warning(f"Trial {trial_id} runtime returned non-success status: {error_message}")
+                else:
+                    await db[self.COLLECTION_TRIALS].update_one(
+                        {"trial_id": trial_id},
+                        {
+                            "$set": {
+                                "status": TrialStatus.COMPLETED.value,
+                                "completed_at": end_time,
+                                "output_data": output_data,
+                                "latency_ms": latency_ms,
+                                "token_usage": metrics.get("token_usage", {}),
+                            }
+                        }
+                    )
+
+            except ImportError:
+                # Vibe Agent runtime 未安装，使用模拟模式
+                logger.warning("vibe_agent_runtime not available, using simulation mode")
+                await asyncio.sleep(0.1)
+
+                await db[self.COLLECTION_TRIALS].update_one(
+                    {"trial_id": trial_id},
+                    {
+                        "$set": {
+                            "status": TrialStatus.COMPLETED.value,
+                            "completed_at": now_tz(),
+                            "output_data": {"result": "simulated_output", "mode": "simulation"},
+                            "latency_ms": 100,
+                        }
+                    }
+                )
+
+            logger.debug(f"Trial {trial_id} completed")
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Trial {trial_id} timed out after {timeout_seconds}s")
+            await db[self.COLLECTION_TRIALS].update_one(
+                {"trial_id": trial_id},
+                {
+                    "$set": {
+                        "status": TrialStatus.TIMEOUT.value,
+                        "completed_at": now_tz(),
+                        "error_message": f"Timeout after {timeout_seconds}s",
+                    }
+                }
+            )
+        except Exception as e:
+            logger.exception(f"Trial {trial_id} failed: {e}")
+            await db[self.COLLECTION_TRIALS].update_one(
+                {"trial_id": trial_id},
+                {
+                    "$set": {
+                        "status": TrialStatus.FAILED.value,
+                        "completed_at": now_tz(),
+                        "error_message": str(e),
+                    }
+                }
+            )
+
+    async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """获取评测运行"""
+        db = get_mongo_db()
+        doc = await db[self.COLLECTION_RUNS].find_one({"run_id": run_id})
+        if doc:
+            doc["id"] = str(doc.pop("_id"))
+        return doc
+
+    async def list_runs(
+        self,
+        dataset_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """列出评测运行"""
+        db = get_mongo_db()
+
+        query = {}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+
+        cursor = db[self.COLLECTION_RUNS].find(query).sort("created_at", -1).skip(skip).limit(limit)
+        results = []
+        async for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))
+            results.append(doc)
+        return results
+
+    async def cancel_run(self, run_id: str, cancelled_by: str = "") -> bool:
+        """取消评测运行"""
+        db = get_mongo_db()
+
+        # 检查是否有正在运行的任务
+        task = self._running_tasks.get(run_id)
+        if task and not task.done():
+            task.cancel()
+
+        # 更新运行状态
+        result = await db[self.COLLECTION_RUNS].update_one(
+            {"run_id": run_id, "status": {"$in": [RunStatus.PENDING.value, RunStatus.RUNNING.value]}},
+            {"$set": {"status": RunStatus.CANCELLED.value, "completed_at": now_tz()}}
+        )
+
+        # 更新未完成的 trial 状态
+        await db[self.COLLECTION_TRIALS].update_many(
+            {"run_id": run_id, "status": {"$in": [TrialStatus.PENDING.value, TrialStatus.RUNNING.value]}},
+            {"$set": {"status": TrialStatus.CANCELLED.value, "completed_at": now_tz()}}
+        )
+
+        return result.modified_count > 0
+
+    async def get_trial(self, trial_id: str) -> Optional[Dict[str, Any]]:
+        """获取 trial 详情"""
+        db = get_mongo_db()
+        doc = await db[self.COLLECTION_TRIALS].find_one({"trial_id": trial_id})
+        if doc:
+            doc["id"] = str(doc.pop("_id"))
+        return doc
+
+    async def list_trials(
+        self,
+        run_id: str,
+        case_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """列出某个运行的所有 trial"""
+        db = get_mongo_db()
+
+        query = {"run_id": run_id}
+        if case_id:
+            query["case_id"] = case_id
+
+        cursor = db[self.COLLECTION_TRIALS].find(query).sort("trial_index", 1)
+        results = []
+        async for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))
+            results.append(doc)
+        return results
+
+
+# 单例实例
+runner_service = EvalRunnerService()

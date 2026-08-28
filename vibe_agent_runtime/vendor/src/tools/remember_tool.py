@@ -6,8 +6,14 @@ import json
 from typing import Any
 
 from src.agent.tools import BaseTool
-from src.memory.lifecycle import MemoryLifecycle
-from src.memory.persistent import PersistentMemory
+
+try:
+    from src.memory.lifecycle import MemoryLifecycle
+    from src.memory.persistent import PersistentMemory
+except (ImportError, ModuleNotFoundError):
+    # vendor 同步时可能漏拷 src/memory/ 包，降级占位
+    MemoryLifecycle = None  # type: ignore[assignment,misc]
+    PersistentMemory = None  # type: ignore[assignment,misc]
 
 
 class RememberTool(BaseTool):

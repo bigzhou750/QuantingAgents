@@ -1,0 +1,257 @@
+"""
+评测指标聚合服务
+
+计算跨 trial/run 的聚合指标：
+- pass@k: k 次 trial 中至少通过一次的概率
+- pass^k: k 次 trial 全部通过的概率
+- 方差 / 标准差
+- 成功率 / 失败率
+- 平均成本 / 延迟 / token 用量
+- 跨版本对比
+
+对应 spec 二期任务 2.8。
+"""
+
+import math
+import logging
+from typing import Optional, List, Dict, Any
+from collections import defaultdict
+
+from app.core.database import get_mongo_db
+
+logger = logging.getLogger(__name__)
+
+
+class MetricsService:
+    """评测指标聚合服务"""
+
+    async def compute_run_metrics(self, run_id: str) -> Dict[str, Any]:
+        """计算单个 run 的聚合指标"""
+        db = get_mongo_db()
+
+        # 获取所有 trial
+        cursor = db["eval_trials"].find({"run_id": run_id})
+        trials = []
+        async for doc in cursor:
+            trials.append(doc)
+
+        if not trials:
+            return {"run_id": run_id, "total_trials": 0}
+
+        total = len(trials)
+        completed = [t for t in trials if t.get("status") == "completed"]
+        failed = [t for t in trials if t.get("status") in ("failed", "timeout")]
+        cancelled = [t for t in trials if t.get("status") == "cancelled"]
+
+        # 基础统计
+        latencies = [t.get("latency_ms", 0) for t in completed if t.get("latency_ms")]
+        token_usages = []
+        costs = []
+        for t in completed:
+            tu = t.get("token_usage", {})
+            if isinstance(tu, dict) and tu:
+                token_usages.append(sum(tu.values()))
+            cost = t.get("cost_usd", 0)
+            if cost:
+                costs.append(cost)
+
+        result = {
+            "run_id": run_id,
+            "total_trials": total,
+            "completed_count": len(completed),
+            "failed_count": len(failed),
+            "cancelled_count": len(cancelled),
+            "success_rate": round(len(completed) / max(1, total), 4),
+            "failure_rate": round(len(failed) / max(1, total), 4),
+        }
+
+        # 延迟统计
+        if latencies:
+            result["latency"] = {
+                "mean_ms": round(sum(latencies) / len(latencies), 1),
+                "p50_ms": round(sorted(latencies)[len(latencies) // 2], 1),
+                "p95_ms": round(sorted(latencies)[int(len(latencies) * 0.95)], 1),
+                "min_ms": min(latencies),
+                "max_ms": max(latencies),
+                "stddev_ms": round(self._stddev(latencies), 1),
+            }
+
+        # Token 统计
+        if token_usages:
+            result["tokens"] = {
+                "mean": round(sum(token_usages) / len(token_usages), 1),
+                "total": sum(token_usages),
+            }
+
+        # 成本统计
+        if costs:
+            result["cost"] = {
+                "mean_usd": round(sum(costs) / len(costs), 6),
+                "total_usd": round(sum(costs), 6),
+            }
+
+        return result
+
+    async def compute_pass_at_k(
+        self,
+        run_id: str,
+        k: int = 3,
+    ) -> Dict[str, Any]:
+        """计算 pass@k 和 pass^k
+
+        pass@k: 对每个 case，k 次 trial 中至少通过一次的概率
+        pass^k: 对每个 case，k 次 trial 全部通过的概率
+        """
+        db = get_mongo_db()
+
+        # 按 case_id 分组
+        cursor = db["eval_trials"].find({"run_id": run_id})
+        case_trials: Dict[str, List[Dict]] = defaultdict(list)
+        async for doc in cursor:
+            case_trials[doc.get("case_id", "")].append(doc)
+
+        if not case_trials:
+            return {"pass_at_k": 0.0, "pass_pow_k": 0.0, "k": k, "cases": 0}
+
+        pass_at_k_values = []
+        pass_pow_k_values = []
+
+        for case_id, trials in case_trials.items():
+            n = len(trials)
+            passed = sum(1 for t in trials if t.get("status") == "completed")
+            failed = n - passed
+
+            if n < k:
+                # trial 数不足 k，用实际数量计算
+                actual_k = n
+            else:
+                actual_k = k
+
+            # pass@k = 1 - C(failed, k) / C(n, k)
+            if failed >= actual_k:
+                # 从组合数学角度，如果失败数 >= k，则有可能 k 次都失败
+                pass_at_k = 1.0 - self._combination(failed, actual_k) / max(1, self._combination(n, actual_k))
+            else:
+                pass_at_k = 1.0  # 失败数 < k，必然至少有一次通过
+
+            # pass^k = C(passed, k) / C(n, k)
+            if passed >= actual_k:
+                pass_pow_k = self._combination(passed, actual_k) / max(1, self._combination(n, actual_k))
+            else:
+                pass_pow_k = 0.0
+
+            pass_at_k_values.append(max(0.0, min(1.0, pass_at_k)))
+            pass_pow_k_values.append(max(0.0, min(1.0, pass_pow_k)))
+
+        return {
+            "pass_at_k": round(sum(pass_at_k_values) / len(pass_at_k_values), 4) if pass_at_k_values else 0.0,
+            "pass_pow_k": round(sum(pass_pow_k_values) / len(pass_pow_k_values), 4) if pass_pow_k_values else 0.0,
+            "k": k,
+            "cases": len(case_trials),
+            "per_case": {
+                cid: {
+                    "pass_at_k": round(pak, 4),
+                    "pass_pow_k": round(ppk, 4),
+                    "trials": len(trials),
+                }
+                for cid, pak, ppk, trials in zip(
+                    case_trials.keys(),
+                    pass_at_k_values,
+                    pass_pow_k_values,
+                    case_trials.values(),
+                )
+            },
+        }
+
+    async def compare_runs(
+        self,
+        run_ids: List[str],
+    ) -> Dict[str, Any]:
+        """对比多个 run 的指标"""
+        comparisons = []
+        for run_id in run_ids:
+            metrics = await self.compute_run_metrics(run_id)
+            run_doc = await get_mongo_db()["eval_runs"].find_one({"run_id": run_id})
+            if run_doc:
+                metrics["dataset_version"] = run_doc.get("dataset_version", "")
+                metrics["created_at"] = str(run_doc.get("created_at", ""))
+            comparisons.append(metrics)
+
+        return {
+            "runs": comparisons,
+            "count": len(comparisons),
+        }
+
+    async def get_score_aggregation(
+        self,
+        run_id: str,
+    ) -> Dict[str, Any]:
+        """聚合某个 run 下所有 trial 的评分统计"""
+        db = get_mongo_db()
+
+        # 获取该 run 的所有 trial ID
+        trial_cursor = db["eval_trials"].find({"run_id": run_id}, {"trial_id": 1})
+        trial_ids = []
+        async for doc in trial_cursor:
+            trial_ids.append(doc["trial_id"])
+
+        if not trial_ids:
+            return {"run_id": run_id, "scores": {}}
+
+        # 聚合评分
+        pipeline = [
+            {"$match": {"trial_id": {"$in": trial_ids}}},
+            {"$group": {
+                "_id": "$score_name",
+                "avg_score": {"$avg": "$score"},
+                "min_score": {"$min": "$score"},
+                "max_score": {"$max": "$score"},
+                "count": {"$sum": 1},
+                "passed_count": {"$sum": {"$cond": [{"$eq": ["$passed", True]}, 1, 0]}},
+            }},
+            {"$sort": {"_id": 1}},
+        ]
+
+        score_stats = {}
+        async for doc in db["eval_scores"].aggregate(pipeline):
+            name = doc["_id"]
+            count = doc["count"]
+            score_stats[name] = {
+                "avg_score": round(doc["avg_score"], 4),
+                "min_score": round(doc["min_score"], 4),
+                "max_score": round(doc["max_score"], 4),
+                "count": count,
+                "passed_count": doc["passed_count"],
+                "pass_rate": round(doc["passed_count"] / max(1, count), 4),
+                "variance": round(
+                    (doc["max_score"] - doc["min_score"]) ** 2 / 12, 4
+                ),  # 近似方差（均匀分布假设）
+            }
+
+        return {
+            "run_id": run_id,
+            "scores": score_stats,
+            "total_score_dimensions": len(score_stats),
+        }
+
+    @staticmethod
+    def _stddev(values: List[float]) -> float:
+        """计算标准差"""
+        if len(values) < 2:
+            return 0.0
+        mean = sum(values) / len(values)
+        variance = sum((x - mean) ** 2 for x in values) / (len(values) - 1)
+        return math.sqrt(variance)
+
+    @staticmethod
+    def _combination(n: int, k: int) -> int:
+        """计算组合数 C(n, k)"""
+        if k > n or k < 0:
+            return 0
+        if k == 0 or k == n:
+            return 1
+        return math.comb(n, k)
+
+
+# 单例实例
+metrics_service = MetricsService()
