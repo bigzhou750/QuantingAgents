@@ -1,5 +1,6 @@
 import { ApiClient } from './request'
 import type { LatestNewsResponse, NewsQueryResponse } from './news'
+import type { NewsResponse } from './stocks'
 
 export type NewsWatchItemType = 'stock' | 'news'
 export type NewsWatchImpactLevel = 'low' | 'medium' | 'high'
@@ -91,4 +92,7 @@ export const newsWatchApi = {
 
   queryStockNews: (symbol: string, params: { limit?: number; hours_back?: number } = {}) =>
     ApiClient.get<NewsQueryResponse>('/api/news-data/query/' + symbol, params),
+
+  getStockNews: (symbol: string, params: { days?: number; limit?: number; include_announcements?: boolean } = {}) =>
+    ApiClient.get<NewsResponse>('/api/stocks/' + symbol + '/news', params),
 }

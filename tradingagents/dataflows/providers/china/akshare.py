@@ -1317,7 +1317,10 @@ class AKShareProvider(BaseStockDataProvider):
                         self.logger.warning(f"⚠️ {symbol} Docker 环境直接调用 API 异常: {e}，回退到 AKShare")
                         news_df = None
 
-                # 如果直接调用失败或不在 Docker 环境，使用 AKShare
+                # 如果直接调用失败或不在 Docker 环境，使用 AKShare。
+                # AKShare 1.18.x 在 pandas/pyarrow 字符串后端下可能因
+                # str.replace(r"\u3000", ..., regex=True) 抛 ArrowInvalid，
+                # 此时回退到东方财富直连接口。
                 if news_df is None:
                     for attempt in range(max_retries):
                         try:
@@ -1351,6 +1354,15 @@ class AKShareProvider(BaseStockDataProvider):
                                     self.logger.error(f"❌ {symbol} 获取新闻失败(字段错误): {e}")
                                     return []
                         except Exception as e:
+                            error_text = str(e)
+                            if "invalid escape sequence: \\u" in error_text or "Invalid regular expression" in error_text:
+                                self.logger.warning(f"⚠️ {symbol} AKShare新闻解析失败，回退到东方财富直连: {e}")
+                                news_df = await asyncio.to_thread(
+                                    self._get_stock_news_direct,
+                                    symbol=symbol_6,
+                                    limit=limit
+                                )
+                                break
                             if attempt < max_retries - 1:
                                 self.logger.warning(f"⚠️ {symbol} 第{attempt+1}次获取新闻失败: {e}，{retry_delay}秒后重试...")
                                 await asyncio.sleep(retry_delay)

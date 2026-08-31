@@ -172,7 +172,26 @@ const loadRelatedNews = async () => {
     const symbols = getCollectedSymbols()
     if (symbols.length === 0) {
       const res = await newsWatchApi.getLatestNews({ limit: 10, hours_back: 168 })
-      relatedNews.value = res.data?.news || []
+      const marketNews = res.data?.news || []
+      if (marketNews.length > 0) {
+        relatedNews.value = marketNews
+        return
+      }
+
+      const fallback = await newsWatchApi.getStockNews('000001', {
+        days: 30,
+        limit: 10,
+        include_announcements: true,
+      })
+      relatedNews.value = (fallback.data?.items || []).map((item) => ({
+        id: item.url || item.title,
+        symbol: fallback.data?.symbol || fallback.data?.code || '000001',
+        title: item.title,
+        source: item.source,
+        publish_time: item.time,
+        url: item.url,
+        data_source: fallback.data?.source,
+      }))
       return
     }
 
