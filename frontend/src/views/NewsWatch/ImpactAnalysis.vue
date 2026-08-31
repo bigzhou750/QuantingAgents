@@ -123,7 +123,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { newsWatchApi } from '@/api/newsWatch'
 
 const loading = ref(false)
 const analyzed = ref(false)
@@ -136,10 +136,8 @@ const highImpactCount = computed(() =>
 const runAnalysis = async () => {
   loading.value = true
   try {
-    const res = await axios.post('/api/news-watch/impact-analysis', null, {
-      params: { hours_back: 72 },
-    })
-    result.value = res.data?.data || {}
+    const res = await newsWatchApi.analyzeImpact({ hours_back: 72 })
+    result.value = res.data || {}
     analyzed.value = true
   } catch {
     ElMessage.error('分析失败，请稍后重试')

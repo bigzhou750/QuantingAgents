@@ -89,19 +89,52 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- 相关新闻流 -->
+    <el-card class="related-news-card">
+      <template #header>
+        <div class="card-header">
+          <span>相关新闻流</span>
+          <span class="source-label">{{ relatedNewsLabel }}</span>
+        </div>
+      </template>
+
+      <el-empty v-if="!newsLoading && relatedNews.length === 0" description="暂无相关新闻" />
+      <el-skeleton v-else-if="newsLoading" :rows="4" animated />
+      <div v-else class="news-list">
+        <div v-for="news in relatedNews" :key="news.id || news.url || news.title" class="news-item">
+          <div class="news-main">
+            <a v-if="news.url" :href="news.url" target="_blank" rel="noopener" class="news-title">
+              {{ news.title || '未命名新闻' }}
+            </a>
+            <span v-else class="news-title">{{ news.title || '未命名新闻' }}</span>
+            <div class="news-meta">
+              <span>{{ news.symbol || '市场' }}</span>
+              <span>{{ news.source || news.data_source || '未知来源' }}</span>
+              <span>{{ formatTime(news.publish_time) }}</span>
+            </div>
+          </div>
+          <el-button size="small" link type="primary" @click="collectNews(news)">
+            收集
+          </el-button>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { newsWatchApi } from '@/api/newsWatch'
 
 const router = useRouter()
 const loading = ref(false)
+const newsLoading = ref(false)
 const items = ref<any[]>([])
+const relatedNews = ref<any[]>([])
 const filterType = ref('')
 
 const refreshCollected = async () => {
@@ -109,12 +142,69 @@ const refreshCollected = async () => {
   try {
     const params: Record<string, any> = { limit: 100 }
     if (filterType.value) params.item_type = filterType.value
-    const res = await axios.get('/api/news-watch/collected', { params })
-    items.value = res.data?.data?.items || []
+    const res = await newsWatchApi.listCollected(params)
+    items.value = res.data?.items || []
+    await loadRelatedNews()
   } catch {
     ElMessage.error('加载关注记录失败')
   } finally {
     loading.value = false
+  }
+}
+
+const relatedNewsLabel = computed(() => {
+  const symbols = getCollectedSymbols()
+  if (symbols.length > 0) return `基于 ${symbols.slice(0, 3).join('、')} 的近期新闻`
+  return '暂无关注对象，展示近期市场新闻'
+})
+
+const getCollectedSymbols = () => {
+  return Array.from(new Set(
+    items.value
+      .filter((item) => item.item_type === 'stock' && item.symbol)
+      .map((item) => item.symbol)
+  ))
+}
+
+const loadRelatedNews = async () => {
+  newsLoading.value = true
+  try {
+    const symbols = getCollectedSymbols()
+    if (symbols.length === 0) {
+      const res = await newsWatchApi.getLatestNews({ limit: 10, hours_back: 168 })
+      relatedNews.value = res.data?.news || []
+      return
+    }
+
+    const batches = await Promise.all(
+      symbols.slice(0, 5).map((symbol) =>
+        newsWatchApi.queryStockNews(symbol, { limit: 5, hours_back: 168 })
+          .then((res) => res.data?.news || [])
+          .catch(() => [])
+      )
+    )
+    relatedNews.value = batches
+      .flat()
+      .sort((a, b) => new Date(b.publish_time || 0).getTime() - new Date(a.publish_time || 0).getTime())
+      .slice(0, 20)
+  } finally {
+    newsLoading.value = false
+  }
+}
+
+const collectNews = async (news: any) => {
+  try {
+    await newsWatchApi.collect({
+      item_type: 'news',
+      symbol: news.symbol,
+      news_id: news.id || news._id || news.url || news.title,
+      source_page: 'news_watch_workbench',
+      title: news.title || '',
+    })
+    ElMessage.success('新闻已收集')
+    refreshCollected()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '收集新闻失败')
   }
 }
 
@@ -123,7 +213,7 @@ const removeItem = async (row: any) => {
     await ElMessageBox.confirm('确定要移除这条关注记录吗？', '确认', {
       type: 'warning',
     })
-    await axios.delete(`/api/news-watch/collected/${row._id}`)
+    await newsWatchApi.removeCollected(row._id)
     ElMessage.success('已移除')
     refreshCollected()
   } catch {
@@ -200,6 +290,53 @@ onMounted(() => {
 
 .empty-guide {
   text-align: left;
+}
+
+.related-news-card {
+  margin-top: 16px;
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.news-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.news-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.news-main {
+  min-width: 0;
+}
+
+.news-title {
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.news-title:hover {
+  color: #409eff;
+}
+
+.news-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .guide-list {
