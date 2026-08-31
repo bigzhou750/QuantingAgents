@@ -45,6 +45,9 @@ export interface PlaceOrderPayload {
   side: 'buy' | 'sell'
   quantity: number
   analysis_id?: string
+  source_type?: string
+  source_observation_id?: string
+  source_strategy_id?: string
 }
 
 export const paperApi = {

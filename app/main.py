@@ -245,6 +245,31 @@ async def lifespan(app: FastAPI):
         await marketplace_service.initialize()
         await marketplace_service.seed_builtin_templates()
 
+        # 数据就绪服务
+        from app.services.data_readiness_service import get_data_readiness_service
+        data_readiness = await get_data_readiness_service()
+        try:
+            await data_readiness.refresh()
+        except Exception as e:
+            logger.warning(f"初始数据就绪检查失败（非阻塞）: {e}")
+
+        # 策略模拟服务
+        if settings.SIMULATION_ENABLED:
+            from app.services.simulation_service import get_simulation_service
+            await get_simulation_service()
+
+        # 观察标的服务
+        from app.services.personal_investment.observation_service import observation_service
+        await observation_service.initialize()
+
+        # 新闻智能闭环服务
+        from app.services.news_aggregator_service import get_news_aggregator_service
+        await get_news_aggregator_service()
+        from app.services.news_impact_agent_service import get_news_impact_agent_service
+        await get_news_impact_agent_service()
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        await get_news_closed_loop_service()
+
         logger.info("✅ 个人投资助手服务已初始化")
     except Exception as e:
         logger.warning(f"个人投资助手初始化失败: {e}")
@@ -631,6 +656,89 @@ async def lifespan(app: FastAPI):
         else:
             logger.info(f"📰 新闻数据同步已配置（仅自选股）: {settings.NEWS_SYNC_CRON}")
 
+        # 数据就绪状态定期刷新
+        async def run_data_readiness_refresh():
+            try:
+                from app.services.data_readiness_service import get_data_readiness_service
+                dr = await get_data_readiness_service()
+                await dr.refresh()
+            except Exception as e:
+                logger.warning(f"数据就绪刷新失败: {e}")
+
+        scheduler.add_job(
+            run_data_readiness_refresh,
+            CronTrigger.from_crontab(settings.DATA_READINESS_REFRESH_CRON, timezone=settings.TIMEZONE),
+            id="data_readiness_refresh",
+            name="数据就绪状态刷新",
+        )
+        if not settings.DATA_READINESS_ENABLED:
+            scheduler.pause_job("data_readiness_refresh")
+            logger.info(f"⏸️ 数据就绪刷新已添加但暂停")
+        else:
+            logger.info(f"📊 数据就绪刷新已配置: {settings.DATA_READINESS_REFRESH_CRON}")
+
+        # 策略自动模拟（收盘后运行）
+        async def run_auto_simulations():
+            try:
+                from app.services.simulation_service import get_simulation_service
+                from app.services.personal_investment.marketplace_service import marketplace_service
+                from app.core.config import get_settings as _gs
+                _settings = _gs()
+                sim_svc = await get_simulation_service()
+                db = __import__("app.core.database", fromlist=["get_mongo_db"]).get_mongo_db()
+
+                # 获取所有已上架模板
+                cursor = db[marketplace_service.COLLECTION_TEMPLATES].find({"status": "published"})
+                async for tpl in cursor:
+                    template_id = tpl.get("template_id", "")
+                    screening_criteria = tpl.get("screening_criteria", {})
+
+                    # 按策略条件动态筛选股票池
+                    query = {}
+                    if screening_criteria:
+                        query["$or"] = [
+                            {"market_info.market": "CN"},
+                            {"category": "stock_cn"},
+                        ]
+                    pool_cursor = db["stock_basic_info"].find(query).limit(200)
+                    stock_pool = []
+                    async for doc in pool_cursor:
+                        code = doc.get("code", "")
+                        if code:
+                            stock_pool.append(code)
+
+                    if not stock_pool:
+                        continue
+
+                    end_date = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+                    start_date = (__import__("datetime").datetime.now() - __import__("datetime").timedelta(days=_settings.SIMULATION_DEFAULT_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+
+                    from app.services.simulation_service import SimulationConfig
+                    config = SimulationConfig(
+                        stock_pool=stock_pool[:100],  # 限制规模
+                        start_date=start_date,
+                        end_date=end_date,
+                        rebalance_frequency="monthly",
+                    )
+                    result = await sim_svc.run_simulation(template_id, config)
+                    await sim_svc.update_template_metrics(template_id, result)
+                    logger.info(f"Auto simulation for {template_id}: return={result.cumulative_return:.2%}")
+
+            except Exception as e:
+                logger.error(f"自动模拟任务失败: {e}", exc_info=True)
+
+        scheduler.add_job(
+            run_auto_simulations,
+            CronTrigger.from_crontab(settings.SIMULATION_AUTO_RUN_CRON, timezone=settings.TIMEZONE),
+            id="auto_simulation",
+            name="策略自动模拟",
+        )
+        if not settings.SIMULATION_ENABLED:
+            scheduler.pause_job("auto_simulation")
+            logger.info(f"⏸️ 策略自动模拟已添加但暂停")
+        else:
+            logger.info(f"📈 策略自动模拟已配置: {settings.SIMULATION_AUTO_RUN_CRON}")
+
         scheduler.start()
 
         # 设置调度器实例到服务中，以便API可以管理任务
@@ -803,6 +911,10 @@ if settings.EVAL_PLATFORM_ENABLED:
 if settings.EVOLUTION_ENABLED:
     from app.routers import evolution as evolution_router
     app.include_router(evolution_router.router, prefix="/api/evolution", tags=["evolution"])
+
+# 数据就绪状态 API
+from app.routers import data_readiness as data_readiness_router
+app.include_router(data_readiness_router.router, prefix="/api/system", tags=["data-readiness"])
 
 
 @app.get("/")

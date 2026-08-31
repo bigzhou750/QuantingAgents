@@ -95,4 +95,32 @@ export const newsWatchApi = {
 
   getStockNews: (symbol: string, params: { days?: number; limit?: number; include_announcements?: boolean } = {}) =>
     ApiClient.get<NewsResponse>('/api/stocks/' + symbol + '/news', params),
+
+  // 新闻智能闭环新增 API
+  aggregatedNews: (symbol: string) =>
+    ApiClient.get('/api/news-watch/aggregated-news', { symbol }),
+
+  sourceCoverage: () =>
+    ApiClient.get('/api/news-watch/source-coverage'),
+
+  analyzeNews: (data: Record<string, unknown>) =>
+    ApiClient.post('/api/news-watch/analyze', data),
+
+  analyzeBatch: (data: { news_items: Record<string, unknown>[]; cluster_first?: boolean }) =>
+    ApiClient.post('/api/news-watch/analyze-batch', data),
+
+  holdingsImpactAuto: () =>
+    ApiClient.get('/api/news-watch/holdings-impact/auto'),
+
+  updateAlertStatus: (alertId: string, action: string, note: string = '') =>
+    ApiClient.put(`/api/news-watch/alerts/${alertId}/status`, { action, note }),
+
+  createObservationFromNews: (data: Record<string, unknown>) =>
+    ApiClient.post('/api/news-watch/observation-from-news', data),
+
+  reviewSummary: () =>
+    ApiClient.get('/api/news-watch/review-summary'),
+
+  closedLoopMetrics: () =>
+    ApiClient.get('/api/news-watch/closed-loop-metrics'),
 }

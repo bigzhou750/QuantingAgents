@@ -192,6 +192,9 @@ class TaskService:
         candidates: List[Dict[str, Any]],
         overall_risks: Optional[List[str]] = None,
         data_sources: Optional[List[str]] = None,
+        data_as_of: Optional[Any] = None,
+        coverage_rate: float = 0.0,
+        data_sufficient: bool = True,
     ) -> Dict[str, Any]:
         """保存选股结果"""
         db = get_mongo_db()
@@ -222,16 +225,25 @@ class TaskService:
             total_candidates=len(filtered_candidates),
             overall_risks=filtered_risks,
             terminology_compliant=not any_violation,
+            data_sufficient=data_sufficient,
+            coverage_rate=coverage_rate,
+            data_as_of=data_as_of,
         )
 
         doc = screening_result.model_dump(by_alias=True, exclude={"id"})
         await db[self.COLLECTION_SCREENING_RESULTS].insert_one(doc)
 
-        # 更新任务的数据源信息
-        if data_sources:
+        # 更新任务的数据源信息（使用实际数据日期而非写入时间）
+        if data_sources or data_as_of:
+            actual_data_as_of = data_as_of or now_tz()
+            update_task_fields = {}
+            if data_sources:
+                update_task_fields["data_sources"] = data_sources
+            if actual_data_as_of:
+                update_task_fields["data_as_of"] = actual_data_as_of
             await db[self.COLLECTION_TASKS].update_one(
                 {"task_id": task_id},
-                {"$set": {"data_sources": data_sources, "data_as_of": now_tz()}}
+                {"$set": update_task_fields}
             )
 
         if any_violation:
@@ -258,6 +270,9 @@ class TaskService:
         data_sufficient: bool = True,
         data_quality_note: Optional[str] = None,
         recent_performance: Optional[Dict[str, Any]] = None,
+        coverage_rate: float = 0.0,
+        data_as_of: Optional[Any] = None,
+        data_sources: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """保存体检结果"""
         db = get_mongo_db()
@@ -281,10 +296,24 @@ class TaskService:
             data_sufficient=data_sufficient,
             data_quality_note=data_quality_note,
             recent_performance=recent_performance or {},
+            coverage_rate=coverage_rate,
+            data_as_of=data_as_of,
         )
 
         doc = checkup_result.model_dump(by_alias=True, exclude={"id"})
         await db[self.COLLECTION_CHECKUP_RESULTS].insert_one(doc)
+
+        # 更新任务的数据源信息（修复：体检之前从未写入 data_sources/data_as_of）
+        if data_sources or data_as_of:
+            update_task_fields = {}
+            if data_sources:
+                update_task_fields["data_sources"] = data_sources
+            if data_as_of:
+                update_task_fields["data_as_of"] = data_as_of
+            await db[self.COLLECTION_TASKS].update_one(
+                {"task_id": task_id},
+                {"$set": update_task_fields}
+            )
 
         logger.info(f"Saved checkup result {result_id} for task {task_id}")
         return {"result_id": result_id, "fitness_level": fitness_level}

@@ -269,6 +269,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'observations',
+        name: 'MyObservations',
+        component: () => import('@/views/PersonalInvestment/Observations.vue'),
+        meta: {
+          title: '我的观察',
+          requiresAuth: true
+        }
+      },
+      {
         path: 'screening/:taskId?',
         name: 'ScreeningResults',
         component: () => import('@/views/PersonalInvestment/ScreeningResults.vue'),
@@ -327,6 +336,24 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/NewsWatch/AlertConfig.vue'),
         meta: {
           title: '告警配置',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'events',
+        name: 'NewsEventAnalysis',
+        component: () => import('@/views/NewsWatch/EventAnalysis.vue'),
+        meta: {
+          title: '事件分析',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'closed-loop',
+        name: 'NewsClosedLoop',
+        component: () => import('@/views/NewsWatch/ClosedLoop.vue'),
+        meta: {
+          title: '闭环复盘',
           requiresAuth: true
         }
       }

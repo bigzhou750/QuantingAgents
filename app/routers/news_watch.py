@@ -273,3 +273,174 @@ async def get_alert_records(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取告警记录失败: {str(e)}",
         )
+
+
+# ── 4. 新闻聚合与覆盖 ────────────────────────────────────────
+
+from app.models.news_intelligence import (
+    AnalyzeNewsRequest,
+    AnalyzeBatchRequest,
+    AlertStatusUpdateRequest,
+    ObservationFromNewsRequest,
+)
+
+
+@router.get("/aggregated-news")
+async def get_aggregated_news(
+    symbol: str = Query(..., description="股票代码"),
+    current_user: dict = Depends(get_current_user),
+):
+    """获取聚合新闻（含降级链和来源状态）"""
+    try:
+        from app.services.news_aggregator_service import get_news_aggregator_service
+        aggregator = await get_news_aggregator_service()
+        result = await aggregator.aggregate(symbol, current_user["id"])
+        return ok(data=result.to_dict())
+    except Exception as e:
+        logger.error(f"Aggregated news failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/source-coverage")
+async def get_source_coverage(current_user: dict = Depends(get_current_user)):
+    """获取新闻来源覆盖调试信息"""
+    try:
+        from app.services.news_aggregator_service import get_news_aggregator_service
+        aggregator = await get_news_aggregator_service()
+        result = await aggregator.get_source_coverage()
+        return ok(data=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 5. Agent 新闻影响分析 ─────────────────────────────────────
+
+@router.post("/analyze")
+async def analyze_news(
+    request: AnalyzeNewsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """单条新闻 Agent 结构化分析"""
+    try:
+        from app.services.news_impact_agent_service import get_news_impact_agent_service
+        agent = await get_news_impact_agent_service()
+        news_item = request.model_dump()
+        record = await agent.analyze_single(news_item)
+        return ok(data=record.to_doc())
+    except Exception as e:
+        logger.error(f"News analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze-batch")
+async def analyze_batch(
+    request: AnalyzeBatchRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """批量新闻 Agent 分析"""
+    try:
+        from app.services.news_impact_agent_service import get_news_impact_agent_service
+        agent = await get_news_impact_agent_service()
+        items = [item.model_dump() for item in request.news_items]
+        records = await agent.analyze_batch(items)
+        return ok(data={"items": [r.to_doc() for r in records], "count": len(records)})
+    except Exception as e:
+        logger.error(f"Batch analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 6. 持仓影响自动分析 ───────────────────────────────────────
+
+@router.get("/holdings-impact/auto")
+async def auto_holdings_impact(current_user: dict = Depends(get_current_user)):
+    """自动加载持仓影响分析（缓存+后台刷新）"""
+    try:
+        service = await get_news_watch_service()
+        result = await service.analyze_holdings_impact(
+            user_id=current_user["id"],
+            hours_back=72,
+        )
+        return ok(data=result)
+    except Exception as e:
+        logger.error(f"Auto holdings impact failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 7. 告警状态管理 ───────────────────────────────────────────
+
+@router.put("/alerts/{alert_id}/status")
+async def update_alert_status(
+    alert_id: str,
+    request: AlertStatusUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """更新告警状态（确认/忽略/转观察/复盘）"""
+    try:
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        closed_loop = await get_news_closed_loop_service()
+        result = await closed_loop.update_alert_status(
+            alert_id=alert_id,
+            user_id=current_user["id"],
+            action=request.action,
+            note=request.note,
+        )
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return ok(data=result, message="状态已更新")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Alert status update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 8. 观察任务桥接 ──────────────────────────────────────────
+
+@router.post("/observation-from-news")
+async def create_observation_from_news(
+    request: ObservationFromNewsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """从新闻分析创建观察任务"""
+    try:
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        closed_loop = await get_news_closed_loop_service()
+        result = await closed_loop.create_observation_from_news(
+            user_id=current_user["id"],
+            stock_code=request.stock_code,
+            stock_name=request.stock_name,
+            news_event_id=request.news_event_id,
+            analysis_id=request.analysis_id,
+            verification_indicators=request.verification_indicators,
+            user_notes=request.user_notes,
+        )
+        return ok(data=result, message="观察任务已创建")
+    except Exception as e:
+        logger.error(f"Create observation from news failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 9. 复盘与闭环指标 ────────────────────────────────────────
+
+@router.get("/review-summary")
+async def get_review_summary(current_user: dict = Depends(get_current_user)):
+    """获取复盘汇总"""
+    try:
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        closed_loop = await get_news_closed_loop_service()
+        result = await closed_loop.get_review_summary(current_user["id"])
+        return ok(data=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/closed-loop-metrics")
+async def get_closed_loop_metrics(current_user: dict = Depends(get_current_user)):
+    """获取闭环指标概览"""
+    try:
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        closed_loop = await get_news_closed_loop_service()
+        metrics = await closed_loop.get_metrics(current_user["id"])
+        return ok(data=metrics.to_dict())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

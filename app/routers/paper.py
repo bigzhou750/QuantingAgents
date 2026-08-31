@@ -28,6 +28,10 @@ class PlaceOrderRequest(BaseModel):
     market: Optional[str] = Field(None, description="市场类型 (CN/HK/US)，不传则自动识别")
     # 可选：关联的分析ID，便于从分析页面一键下单后追踪
     analysis_id: Optional[str] = None
+    # 可选：来源追踪字段，用于观察→模拟交易闭环
+    source_type: Optional[str] = Field(None, description="来源类型 (observation/screening/manual)")
+    source_observation_id: Optional[str] = Field(None, description="关联的观察标的ID")
+    source_strategy_id: Optional[str] = Field(None, description="关联的策略ID")
 
 
 def _detect_market_and_code(code: str) -> Tuple[str, str]:

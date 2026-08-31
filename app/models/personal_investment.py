@@ -209,6 +209,14 @@ class StrategyTemplate(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
     tags: List[str] = Field(default_factory=list)
 
+    # 模拟指标（由定时任务或按需触发更新）
+    simulation_cumulative_return: Optional[float] = Field(default=None, description="最新模拟累计收益")
+    simulation_max_drawdown: Optional[float] = Field(default=None, description="最新模拟最大回撤")
+    simulation_period: Optional[str] = Field(default=None, description="模拟区间，如 '2024-01-01 ~ 2024-12-31'")
+    simulation_data_as_of: Optional[datetime] = Field(default=None, description="模拟数据截至时间")
+    simulation_data_sufficient: bool = Field(default=False, description="模拟数据是否充分")
+    data_preparation_status: Optional[str] = Field(default=None, description="数据准备状态: ready/preparing/insufficient")
+
     # 元数据
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
@@ -282,6 +290,11 @@ class ScreeningResult(BaseModel):
     # 风险提示
     overall_risks: List[str] = Field(default_factory=list, description="整体风险提示")
 
+    # 数据质量
+    data_sufficient: bool = Field(default=True, description="数据是否充分")
+    coverage_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="数据覆盖率")
+    data_as_of: Optional[datetime] = Field(default=None, description="实际数据截至日期")
+
     # 术语合规检查
     terminology_compliant: bool = Field(default=True, description="术语是否合规")
 
@@ -322,6 +335,10 @@ class CheckupResult(BaseModel):
     # 数据质量
     data_sufficient: bool = Field(default=True, description="数据是否充分")
     data_quality_note: Optional[str] = Field(default=None, description="数据质量说明")
+
+    # 数据质量
+    coverage_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="数据覆盖率")
+    data_as_of: Optional[datetime] = Field(default=None, description="实际行情数据日期")
 
     # 免责声明
     disclaimer: str = Field(

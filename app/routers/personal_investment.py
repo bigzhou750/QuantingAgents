@@ -487,25 +487,25 @@ async def get_home_summary(current_user: dict = Depends(get_current_user)):
         result["simulation"] = {"has_positions": False, "position_count": 0}
         result["errors"]["simulation"] = str(e)
 
-    # 5. 关注动态摘要（复用 news_watch_collected）
+    # 5. 观察标的摘要（真实观察集合 + 待复盘计数）
     try:
-        from app.core.database import get_mongo_db
-        db = get_mongo_db()
-        obs_count = await db["news_watch_collected"].count_documents({"user_id": user_id})
-        latest = await db["news_watch_collected"].find_one(
-            {"user_id": user_id}, sort=[("collected_at", -1)]
-        )
+        obs_data = await observation_service.list_observations(user_id, status="active", skip=0, limit=1)
+        pending = await observation_service.get_pending_reviews(user_id)
+        items = obs_data.get("items", [])
+        latest_item = items[0] if items else None
         result["observations"] = {
-            "count": obs_count,
+            "count": obs_data.get("total", 0),
+            "pending_review_count": pending.get("count", 0),
             "latest_item": {
-                "title": latest.get("title", ""),
-                "stock_code": latest.get("stock_code", ""),
-                "collected_at": latest.get("collected_at"),
-            } if latest else None,
+                "stock_code": latest_item.get("stock_code", ""),
+                "stock_name": latest_item.get("stock_name", ""),
+                "source_type": latest_item.get("source_type", ""),
+                "created_at": latest_item.get("created_at"),
+            } if latest_item else None,
         }
     except Exception as e:
         logger.warning(f"[HomeSummary] Observations fetch failed for {user_id}: {e}")
-        result["observations"] = {"count": 0, "latest_item": None}
+        result["observations"] = {"count": 0, "pending_review_count": 0, "latest_item": None}
         result["errors"]["observations"] = str(e)
 
     # 清理空 errors
@@ -563,4 +563,152 @@ async def adopt_template(template_id: str, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to adopt template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 观察标的 API ====================
+
+from app.models.observation import (
+    AddObservationRequest,
+    UpdateObservationRequest,
+    AddReviewNoteRequest,
+    ObservationRecord,
+)
+from app.services.personal_investment.observation_service import observation_service
+
+
+@router.get("/observations/review-summary")
+async def get_review_summary(current_user: dict = Depends(get_current_user)):
+    """获取待复盘汇总"""
+    try:
+        result = await observation_service.get_pending_reviews(current_user["id"])
+        return ApiResponse(success=True, data=result)
+    except Exception as e:
+        logger.error(f"Failed to get review summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/observations")
+async def list_observations(
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    """列出观察标的"""
+    try:
+        result = await observation_service.list_observations(
+            user_id=current_user["id"],
+            status=status,
+            skip=skip,
+            limit=limit,
+        )
+        return ApiResponse(success=True, data=result)
+    except Exception as e:
+        logger.error(f"Failed to list observations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/observations")
+async def add_observation(body: AddObservationRequest, current_user: dict = Depends(get_current_user)):
+    """添加观察标的"""
+    try:
+        record = ObservationRecord(
+            user_id=current_user["id"],
+            stock_code=body.stock_code,
+            stock_name=body.stock_name,
+            market=body.market,
+            source_type=body.source_type,
+            source_strategy_id=body.source_strategy_id,
+            source_task_id=body.source_task_id,
+            match_reasons=body.match_reasons,
+            risk_warnings=body.risk_warnings,
+            user_notes=body.user_notes,
+        )
+        result = await observation_service.add_observation(current_user["id"], record)
+        return ApiResponse(success=True, data=result, message="已加入观察")
+    except Exception as e:
+        logger.error(f"Failed to add observation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/observations/{observation_id}")
+async def get_observation(observation_id: str, current_user: dict = Depends(get_current_user)):
+    """获取观察标的详情"""
+    try:
+        result = await observation_service.get_observation(observation_id, current_user["id"])
+        if not result:
+            raise HTTPException(status_code=404, detail="Observation not found")
+        return ApiResponse(success=True, data=result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get observation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/observations/{observation_id}")
+async def update_observation(
+    observation_id: str,
+    body: UpdateObservationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """更新观察标的备注"""
+    try:
+        update_data = body.model_dump(exclude_none=True)
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        result = await observation_service.update_observation(
+            observation_id, current_user["id"], **update_data
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Observation not found")
+        return ApiResponse(success=True, data=result, message="更新成功")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update observation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/observations/{observation_id}/remove")
+async def remove_observation(observation_id: str, current_user: dict = Depends(get_current_user)):
+    """移出观察标的（状态更新，不删除）"""
+    try:
+        success = await observation_service.remove_observation(observation_id, current_user["id"])
+        if not success:
+            raise HTTPException(status_code=404, detail="Observation not found")
+        return ApiResponse(success=True, message="已移出观察")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove observation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/observations/{observation_id}/review")
+async def add_review_note(
+    observation_id: str,
+    body: AddReviewNoteRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """添加复盘备注"""
+    try:
+        # 验证观察标的存在且属于当前用户
+        obs = await observation_service.get_observation(observation_id, current_user["id"])
+        if not obs:
+            raise HTTPException(status_code=404, detail="Observation not found")
+
+        result = await observation_service.add_review_note(
+            user_id=current_user["id"],
+            target_id=observation_id,
+            content=body.content,
+            target_type=body.target_type,
+        )
+        return ApiResponse(success=True, data=result, message="复盘备注已保存")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add review note: {e}")
         raise HTTPException(status_code=500, detail=str(e))

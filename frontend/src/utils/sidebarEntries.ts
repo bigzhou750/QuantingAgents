@@ -12,6 +12,7 @@ export const investmentAssistantEntries: SidebarEntry[] = [
   { path: '/investment/profile', label: '投资画像' },
   { path: '/investment/strategies', label: '策略管理' },
   { path: '/investment/marketplace', label: '策略广场' },
+  { path: '/investment/observations', label: '我的观察' },
 ]
 
 export const evaluationPlatformEntries: SidebarEntry[] = [

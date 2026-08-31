@@ -353,6 +353,22 @@ class Settings(BaseSettings):
     NEWS_SYNC_HOURS_BACK: int = Field(default=24)
     NEWS_SYNC_MAX_PER_SOURCE: int = Field(default=50)
 
+    # ==================== 数据就绪检查配置 ====================
+    DATA_READINESS_ENABLED: bool = Field(default=True, description="启用数据就绪检查")
+    DATA_READINESS_REFRESH_CRON: str = Field(default="*/30 * * * *", description="数据就绪刷新调度")
+    DATA_READINESS_FRESHNESS_STOCK_POOL_HOURS: int = Field(default=48, ge=1, description="股票池新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_QUOTES_HOURS: int = Field(default=2, ge=1, description="行情新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_HISTORICAL_HOURS: int = Field(default=26, ge=1, description="历史行情新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_FINANCIAL_HOURS: int = Field(default=168, ge=1, description="财务数据新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_INDEX_HOURS: int = Field(default=26, ge=1, description="指数数据新鲜度阈值（小时）")
+    DATA_READINESS_MIN_COVERAGE_RATE: float = Field(default=0.5, ge=0.0, le=1.0, description="最低覆盖率阈值")
+
+    # ==================== 策略模拟配置 ====================
+    SIMULATION_ENABLED: bool = Field(default=True, description="启用策略模拟")
+    SIMULATION_DEFAULT_LOOKBACK_DAYS: int = Field(default=365, ge=30, le=1825, description="默认回看天数")
+    SIMULATION_MIN_COVERAGE_RATE: float = Field(default=0.5, ge=0.0, le=1.0, description="最低覆盖率以生成有效结果")
+    SIMULATION_AUTO_RUN_CRON: str = Field(default="0 20 * * 1-5", description="收盘后自动模拟调度")
+
     @property
     def is_production(self) -> bool:
         """是否为生产环境"""

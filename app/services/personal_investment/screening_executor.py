@@ -67,8 +67,38 @@ class ScreeningExecutor:
                 limit=50,
             )
 
+            # 5.5 数据质量闸门检查
+            from app.services.data_readiness_service import get_data_readiness_service, DataCategory
+            try:
+                dr = await get_data_readiness_service()
+                gate_passed, gate_failures = await dr.check_gate([DataCategory.STOCK_POOL])
+            except Exception as e:
+                logger.warning(f"Data readiness check failed (non-blocking): {e}")
+                gate_passed = True  # 不阻塞正常流程
+                gate_failures = []
+
             logger.info(f"Executing screening for task {task_id} with conditions: {conditions}")
             screening_result = self.screening_service.run(conditions, params)
+
+            # 检查股票池是否为空（禁止演示标的冒充真实结果）
+            universe_size = screening_result.get("universe_size", 0)
+            coverage_rate = screening_result.get("coverage_rate", 0.0)
+
+            if universe_size == 0 or not gate_passed:
+                logger.warning(
+                    f"Screening task {task_id}: data insufficient "
+                    f"(universe={universe_size}, gate_passed={gate_passed})"
+                )
+                await task_service.save_screening_result(
+                    task_id=task_id,
+                    candidates=[],
+                    overall_risks=gate_failures or ["股票池为空或数据不足"],
+                    data_sources=["stock_basic_info"],
+                    data_sufficient=False,
+                    coverage_rate=0.0,
+                )
+                await task_service.update_task_status(task_id, TaskStatus.DATA_INSUFFICIENT)
+                return {"status": "data_insufficient", "failures": gate_failures}
 
             # 6. 应用风险闸门和画像冲突检查
             candidates = await self._apply_risk_gates(
@@ -77,12 +107,14 @@ class ScreeningExecutor:
                 strategy,
             )
 
-            # 7. 保存结果
+            # 7. 保存结果（含真实数据质量信息）
             result_summary = await task_service.save_screening_result(
                 task_id=task_id,
                 candidates=candidates,
                 overall_risks=self._collect_overall_risks(candidates),
                 data_sources=["stock_basic_info", "kline_data"],
+                coverage_rate=coverage_rate,
+                data_sufficient=True,
             )
 
             # 8. 更新任务状态为完成

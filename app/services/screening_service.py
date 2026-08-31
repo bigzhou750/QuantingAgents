@@ -180,9 +180,14 @@ class ScreeningService:
         end = start + (params.limit or 50)
         page_items = results[start:end]
 
+        universe_size = len(symbols)
+        coverage_rate = len(results) / max(universe_size, 1) if universe_size > 0 else 0.0
+
         return {
             "total": total,
             "items": page_items,
+            "universe_size": universe_size,
+            "coverage_rate": coverage_rate,
         }
     def _evaluate_fund_conditions(self, snap: Dict[str, Any], node: Dict[str, Any]) -> bool:
         """Delegate fundamental condition evaluation to utils to keep service slim."""
@@ -230,12 +235,12 @@ class ScreeningService:
                 logger.info(f"📊 从 MongoDB 获取到 {len(codes)} 只A股股票")
                 return codes
             else:
-                # 如果数据库为空，返回常见股票代码作为兜底
-                logger.warning("⚠️ MongoDB 中未找到股票数据，使用兜底股票列表")
-                return ["000001", "000002", "000858", "600519", "600036", "601318", "300750"]
+                # 股票池为空时不返回演示标的，由调用方处理 DATA_INSUFFICIENT
+                logger.warning("⚠️ MongoDB 中未找到股票数据，股票池为空")
+                return []
 
         except Exception as e:
             logger.error(f"❌ 从 MongoDB 获取股票列表失败: {e}")
-            # 异常时返回常见股票代码作为兜底
-            return ["000001", "000002", "000858", "600519", "600036", "601318", "300750"]
+            # 异常时返回空列表，不使用固定演示标的冒充真实结果
+            return []
 

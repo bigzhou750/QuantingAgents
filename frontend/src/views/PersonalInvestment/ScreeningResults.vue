@@ -128,7 +128,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { investmentApi } from '@/api/investment'
-import { ApiClient } from '@/api/request'
+import { observationApi } from '@/api/observation'
 
 const route = useRoute()
 const router = useRouter()
@@ -154,23 +154,22 @@ const getScoreColor = (score: number) => {
   return '#F56C6C'
 }
 
-// 加入观察（复用自选股作为观察池过渡入口）
+// 加入观察（写入独立观察集合，保留来源链路）
 const addToWatchlist = async (row: any) => {
   watchlistLoading.value = row.stock_code
   try {
-    await ApiClient.post('/api/favorites/', {
+    const taskId = route.params.taskId as string
+    await observationApi.add({
       stock_code: row.stock_code,
       stock_name: row.stock_name,
-      tags: ['策略候选'],
-      notes: `来自选股任务候选，入选原因：${(row.match_reasons || []).join('、') || '规则匹配'}`,
+      source_type: 'screening',
+      source_task_id: taskId || undefined,
+      match_reasons: row.match_reasons || [],
+      risk_warnings: row.risk_warnings || [],
     })
-    ElMessage.success(`${row.stock_name} 已加入观察（自选股）`)
+    ElMessage.success(`${row.stock_name || row.stock_code} 已加入观察`)
   } catch (error: any) {
-    if (error.response?.status === 400) {
-      ElMessage.info('该股票已在自选股中')
-    } else {
-      ElMessage.error(error.response?.data?.detail || '加入观察失败')
-    }
+    ElMessage.error(error.response?.data?.detail || '加入观察失败')
   } finally {
     watchlistLoading.value = ''
   }

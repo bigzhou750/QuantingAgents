@@ -69,7 +69,7 @@ class CheckupExecutor:
             # 8. 检查数据充分性
             data_sufficient, data_quality_note = self._check_data_sufficiency(market_data)
 
-            # 9. 保存结果
+            # 9. 保存结果（含数据质量信息）
             result_summary = await task_service.save_checkup_result(
                 task_id=task_id,
                 fitness_level=fitness_assessment["level"],
@@ -79,6 +79,9 @@ class CheckupExecutor:
                 data_sufficient=data_sufficient,
                 data_quality_note=data_quality_note,
                 recent_performance=fitness_assessment.get("performance", {}),
+                coverage_rate=market_data.get("coverage_rate", 0.0),
+                data_as_of=market_data.get("data_as_of"),
+                data_sources=market_data.get("data_sources", []),
             )
 
             # 10. 更新任务状态
@@ -146,9 +149,31 @@ class CheckupExecutor:
                 except Exception as e:
                     logger.warning(f"Failed to fetch index {idx_code}: {e}")
 
+            # 从指数数据中提取实际行情日期（而非墙上时钟）
+            latest_trade_date = None
+            for idx_code, idx_info in index_data.items():
+                td = idx_info.get("latest_trade_date")
+                if td and (latest_trade_date is None or str(td) > str(latest_trade_date)):
+                    latest_trade_date = td
+
+            data_as_of = None
+            if latest_trade_date:
+                try:
+                    data_as_of = datetime.strptime(str(latest_trade_date), "%Y%m%d")
+                except (ValueError, TypeError):
+                    try:
+                        data_as_of = datetime.strptime(str(latest_trade_date), "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        pass
+
+            coverage_rate = len(index_data) / len(indices) if indices else 0.0
+
             return {
                 "indices": index_data,
-                "data_timestamp": datetime.now().isoformat(),
+                "data_timestamp": latest_trade_date.isoformat() if isinstance(latest_trade_date, datetime) else (str(latest_trade_date) if latest_trade_date else datetime.now().isoformat()),
+                "data_as_of": data_as_of,
+                "coverage_rate": coverage_rate,
+                "data_sources": ["index_daily_quotes"],
                 "market_phase": self._determine_market_phase(index_data),
             }
 
@@ -157,6 +182,9 @@ class CheckupExecutor:
             return {
                 "indices": {},
                 "data_timestamp": datetime.now().isoformat(),
+                "data_as_of": None,
+                "coverage_rate": 0.0,
+                "data_sources": [],
                 "market_phase": "unknown",
                 "error": str(e),
             }

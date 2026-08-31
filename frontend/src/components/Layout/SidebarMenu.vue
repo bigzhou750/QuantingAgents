@@ -59,6 +59,7 @@
       </template>
       <el-menu-item index="/investment/home">新手首页</el-menu-item>
       <el-menu-item index="/investment/marketplace">策略广场</el-menu-item>
+      <el-menu-item index="/investment/observations">我的观察</el-menu-item>
       <el-menu-item index="/investment/profile">投资画像</el-menu-item>
       <el-menu-item index="/investment/strategies">策略管理</el-menu-item>
     </el-sub-menu>
@@ -70,6 +71,8 @@
       </template>
       <el-menu-item index="/news-watch/workbench">关注工作台</el-menu-item>
       <el-menu-item index="/news-watch/impact">持仓影响分析</el-menu-item>
+      <el-menu-item index="/news-watch/events">事件分析</el-menu-item>
+      <el-menu-item index="/news-watch/closed-loop">闭环复盘</el-menu-item>
       <el-menu-item index="/news-watch/alerts">告警配置</el-menu-item>
     </el-sub-menu>
 

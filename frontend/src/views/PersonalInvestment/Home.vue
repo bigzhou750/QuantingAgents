@@ -125,20 +125,33 @@
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>👁️ 关注动态</span>
-              <el-button link type="primary" size="small" @click="$router.push('/news-watch/workbench')">进入工作台</el-button>
+              <span>📋 我的观察</span>
+              <el-button link type="primary" size="small" @click="$router.push('/investment/observations')">查看全部</el-button>
             </div>
           </template>
+          <!-- 待复盘提示 -->
+          <el-alert
+            v-if="summary.observations?.pending_review_count > 0"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px;"
+          >
+            <template #title>
+              有 <strong>{{ summary.observations.pending_review_count }}</strong> 条观察标的待复盘
+              <el-button link type="warning" size="small" @click="$router.push('/investment/observations')">去复盘 →</el-button>
+            </template>
+          </el-alert>
           <div v-if="summary.observations?.count > 0">
-            <p>已关注 <strong>{{ summary.observations.count }}</strong> 条信息</p>
+            <p>正在观察 <strong>{{ summary.observations.count }}</strong> 只标的</p>
             <p v-if="summary.observations.latest_item">
-              最新: {{ summary.observations.latest_item.title || summary.observations.latest_item.stock_code }}
-              <span class="muted">({{ formatDate(summary.observations.latest_item.collected_at) }})</span>
+              最近加入: {{ summary.observations.latest_item.stock_name || summary.observations.latest_item.stock_code }}
+              <el-tag size="small" type="info">{{ sourceLabel(summary.observations.latest_item.source_type) }}</el-tag>
             </p>
           </div>
           <div v-else class="empty-hint">
-            <p>关注你感兴趣的股票或新闻，系统会持续追踪。</p>
-            <el-button link type="primary" @click="$router.push('/news-watch/workbench')">开始关注 →</el-button>
+            <p>从选股结果或手动添加观察标的，开始你的投资学习闭环。</p>
+            <el-button link type="primary" @click="$router.push('/investment/observations')">添加观察 →</el-button>
           </div>
         </el-card>
       </el-col>
@@ -234,7 +247,7 @@ const handlePrimaryAction = () => {
   switch (action.type) {
     case 'profile': router.push('/investment/profile'); break
     case 'strategy': router.push('/investment/strategies'); break
-    case 'observation': router.push('/news-watch/workbench'); break
+    case 'observation': router.push('/investment/observations'); break
     case 'review': router.push('/paper'); break
   }
 }
@@ -247,6 +260,7 @@ const taskStatusLabel = (s: string) => ({ pending: '等待中', running: '执行
 const taskStatusType = (s: string) => ({ pending: 'info', running: '', completed: 'success', failed: 'danger' }[s] || '')
 const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('zh-CN') : '-'
 const formatNumber = (n: number) => n != null ? n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'
+const sourceLabel = (type: string) => ({ screening: '策略选股', manual: '手动添加', favorites: '自选股导入', news: '新闻关注' }[type] || type || '')
 
 onMounted(loadSummary)
 </script>
