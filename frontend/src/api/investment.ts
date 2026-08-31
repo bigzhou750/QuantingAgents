@@ -30,4 +30,15 @@ export const investmentApi = {
     const endpoint = type === 'screening' ? 'screening-tasks' : 'checkup-tasks'
     return ApiClient.get(`/api/investment/${endpoint}/${taskId}/result`)
   },
+
+  // 策略广场
+  listMarketplaceTemplates(params?: Record<string, unknown>) {
+    return ApiClient.get('/api/investment/marketplace', params)
+  },
+  getMarketplaceTemplate(templateId: string) {
+    return ApiClient.get(`/api/investment/marketplace/${templateId}`)
+  },
+  adoptTemplate(templateId: string) {
+    return ApiClient.post(`/api/investment/marketplace/${templateId}/adopt`)
+  },
 }

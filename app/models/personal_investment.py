@@ -79,6 +79,22 @@ class TaskType(str, Enum):
     STRATEGY_CHECKUP = "strategy_checkup"      # 策略体检
 
 
+class TemplateStatus(str, Enum):
+    """策略模板状态"""
+    DRAFT = "draft"             # 草稿
+    PENDING_REVIEW = "pending_review"  # 待审核
+    PUBLISHED = "published"     # 已上架
+    REJECTED = "rejected"       # 审核未通过
+    DISABLED = "disabled"       # 已下架
+
+
+class TemplateSource(str, Enum):
+    """策略模板来源"""
+    BUILTIN = "builtin"         # 系统内置
+    OPERATIONS = "operations"   # 运营沉淀
+    AGENT_DRAFT = "agent_draft" # Agent 生成草案
+
+
 # ==================== 投资画像模型 ====================
 
 class InvestmentProfile(BaseModel):
@@ -154,6 +170,44 @@ class StrategyDefinition(BaseModel):
 
     # 标签
     tags: List[str] = Field(default_factory=list, description="策略标签")
+
+    # 元数据
+    created_at: datetime = Field(default_factory=now_tz)
+    updated_at: datetime = Field(default_factory=now_tz)
+
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+
+
+# ==================== 策略模板模型（策略广场） ====================
+
+class StrategyTemplate(BaseModel):
+    """策略广场模板——平台公共资产，与用户策略实例分离"""
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    template_id: str = Field(..., description="模板唯一标识")
+
+    # 基本信息
+    name: str = Field(..., min_length=1, max_length=100, description="策略名称")
+    one_liner: str = Field(default="", max_length=200, description="一句话说明（面向新手）")
+    description: str = Field(default="", max_length=2000, description="详细描述")
+
+    # 状态与来源
+    status: TemplateStatus = Field(default=TemplateStatus.DRAFT)
+    source: TemplateSource = Field(default=TemplateSource.BUILTIN)
+    version: str = Field(default="1.0.0", description="模板版本")
+    author: str = Field(default="system", description="作者/维护者")
+
+    # 新手解释字段
+    audience: str = Field(default="", max_length=500, description="适合人群")
+    not_for: str = Field(default="", max_length=500, description="不适合人群")
+    risk_boundary: str = Field(default="", max_length=1000, description="风险边界说明")
+    data_requirements: str = Field(default="", max_length=500, description="数据要求")
+    rule_explanation: Dict[str, Any] = Field(default_factory=dict, description="规则拆解和指标解释")
+
+    # 策略核心配置（复制到用户策略时使用）
+    applicable_markets: List[str] = Field(default_factory=lambda: ["A股"])
+    screening_criteria: Dict[str, Any] = Field(default_factory=dict)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list)
 
     # 元数据
     created_at: datetime = Field(default_factory=now_tz)

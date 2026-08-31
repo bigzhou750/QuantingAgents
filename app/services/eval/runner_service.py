@@ -308,6 +308,15 @@ class EvalRunnerService:
 
             logger.info(f"Eval run {run_id} completed: {completed_count} succeeded, {failed_count} failed")
 
+            # 自进化触发 hook：通知 trigger_service 检查是否需要创建候选提案
+            try:
+                from app.core.config import settings as _settings
+                if _settings.EVOLUTION_ENABLED:
+                    from app.services.evolution.trigger_service import trigger_service
+                    await trigger_service.on_run_completed(run_id)
+            except Exception as evo_err:
+                logger.warning(f"[Evolution] Trigger hook error for run {run_id}: {evo_err}")
+
         except asyncio.CancelledError:
             logger.info(f"Eval run {run_id} was cancelled")
             await db[self.COLLECTION_RUNS].update_one(

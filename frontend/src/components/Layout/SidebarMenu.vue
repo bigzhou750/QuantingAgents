@@ -57,10 +57,10 @@
         <el-icon><UserFilled /></el-icon>
         <span>个人投资助手</span>
       </template>
+      <el-menu-item index="/investment/home">新手首页</el-menu-item>
+      <el-menu-item index="/investment/marketplace">策略广场</el-menu-item>
       <el-menu-item index="/investment/profile">投资画像</el-menu-item>
       <el-menu-item index="/investment/strategies">策略管理</el-menu-item>
-      <el-menu-item index="/investment/screening">选股结果</el-menu-item>
-      <el-menu-item index="/investment/checkup">体检结果</el-menu-item>
     </el-sub-menu>
 
     <el-sub-menu index="/news-watch">
@@ -84,6 +84,16 @@
       <el-menu-item index="/evaluation/trends">质量趋势</el-menu-item>
       <el-menu-item index="/evaluation/review">人工复核</el-menu-item>
       <el-menu-item index="/evaluation/bad-cases">Bad Case 池</el-menu-item>
+    </el-sub-menu>
+
+    <el-sub-menu v-if="showEvaluationPlatform" index="/evolution">
+      <template #title>
+        <el-icon><MagicStick /></el-icon>
+        <span>自进化</span>
+      </template>
+      <el-menu-item index="/evolution/proposals">候选提案</el-menu-item>
+      <el-menu-item index="/evolution/artifacts">Artifact 管理</el-menu-item>
+      <el-menu-item index="/evolution/receipts">进化回执</el-menu-item>
     </el-sub-menu>
 
     <!-- 分析报告已移至"股票分析"子菜单，保留注释便于追踪 -->
@@ -154,7 +164,8 @@ import {
   InfoFilled,
   CreditCard,
   UserFilled,
-  Bell
+  Bell,
+  MagicStick
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

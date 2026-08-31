@@ -72,6 +72,14 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="来源" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.source_template_id" size="small" type="primary">
+              📦 策略广场
+            </el-tag>
+            <el-tag v-else size="small" type="info">自建</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'info'">
@@ -79,8 +87,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="row.source_template_id" size="small" type="primary" plain @click="viewSourceTemplate(row)">查看模板</el-button>
             <el-button size="small" @click="editStrategy(row)">编辑</el-button>
             <el-button
               size="small"
@@ -580,6 +589,13 @@ const confirmTaskWizard = async () => {
     ElMessage.error(error.response?.data?.detail || '创建任务失败')
   } finally {
     creatingTask.value = false
+  }
+}
+
+// 查看来源模板
+const viewSourceTemplate = (strategy: any) => {
+  if (strategy.source_template_id) {
+    router.push('/investment/marketplace')
   }
 }
 

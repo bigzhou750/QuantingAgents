@@ -203,6 +203,17 @@ class Settings(BaseSettings):
     EVAL_OBSERVABILITY_HOST: str = Field(default="", description="评测观测后端地址")
     EVAL_OBSERVABILITY_PROJECT: str = Field(default="quantingagents-eval", description="评测观测项目名")
 
+    # ==================== Agent 自进化配置 ====================
+    EVOLUTION_ENABLED: bool = Field(default=False, description="是否启用 Agent 自进化闭环（默认关闭）")
+    EVOLUTION_AUTOMATION_MODE: str = Field(default="manual", description="自动化模式: manual/semi-auto/auto")
+    EVOLUTION_TRIGGER_REGRESSION_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0, description="趋势回退触发阈值（成功率下降比例）")
+    EVOLUTION_TRIGGER_BAD_CASE_COUNT: int = Field(default=10, ge=1, description="Bad Case 阈值触发数量")
+    EVOLUTION_BUDGET_MAX_RUNS_PER_DAY: int = Field(default=5, ge=1, le=50, description="每日最大验证 run 次数")
+    EVOLUTION_HUMAN_GATE: bool = Field(default=True, description="生产环境是否要求人工审批")
+    EVOLUTION_ALLOWED_ARTIFACT_TYPES: str = Field(default="skill,prompt,rubric,policy,case", description="允许自进化的 artifact 类型（逗号分隔）")
+    EVOLUTION_FORBIDDEN_TARGETS: str = Field(default="", description="禁止修改的 artifact ID 列表（逗号分隔）")
+    EVOLUTION_SCHEDULE_CRON: str = Field(default="", description="定时触发表达式（空=禁用）")
+
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)
     HEALTH_CHECK_INTERVAL: int = Field(default=60)  # 60秒

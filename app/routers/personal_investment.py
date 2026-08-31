@@ -387,3 +387,180 @@ async def get_task(task_id: str, current_user: dict = Depends(get_current_user))
     except Exception as e:
         logger.error(f"Failed to get task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 首页聚合摘要 ====================
+
+@router.get("/home-summary")
+async def get_home_summary(current_user: dict = Depends(get_current_user)):
+    """个人投资助手首页聚合摘要
+
+    返回当前用户的画像、策略、任务、观察和模拟持仓摘要。
+    每个模块独立 try-catch，支持局部失败降级。
+    """
+    user_id = current_user["id"]
+    user_name = current_user.get("name", current_user.get("username", "投资者"))
+    result: dict = {"user_name": user_name, "errors": {}}
+
+    # 1. 画像摘要
+    try:
+        profile = await profile_service.get_profile(user_id)
+        if profile:
+            result["profile"] = {
+                "exists": True,
+                "risk_preference": profile.get("risk_preference", ""),
+                "trading_style": profile.get("trading_style", ""),
+                "target_markets": profile.get("target_markets", []),
+            }
+        else:
+            result["profile"] = {"exists": False}
+    except Exception as e:
+        logger.warning(f"[HomeSummary] Profile fetch failed for {user_id}: {e}")
+        result["profile"] = {"exists": False}
+        result["errors"]["profile"] = str(e)
+
+    # 2. 策略摘要
+    try:
+        strategies = await strategy_service.list_strategies(user_id, include_disabled=False, skip=0, limit=5)
+        items = strategies.get("items", []) if isinstance(strategies, dict) else []
+        active_count = len(items)
+        result["strategies"] = {
+            "active_count": active_count,
+            "recent": [
+                {"strategy_id": s.get("strategy_id"), "name": s.get("name"), "status": s.get("status")}
+                for s in items[:3]
+            ],
+        }
+    except Exception as e:
+        logger.warning(f"[HomeSummary] Strategies fetch failed for {user_id}: {e}")
+        result["strategies"] = {"active_count": 0, "recent": []}
+        result["errors"]["strategies"] = str(e)
+
+    # 3. 最近任务
+    try:
+        tasks = await task_service.list_tasks(user_id, skip=0, limit=5)
+        task_items = tasks.get("items", []) if isinstance(tasks, dict) else []
+        result["tasks"] = {
+            "recent": [
+                {
+                    "task_id": t.get("task_id"),
+                    "task_type": t.get("task_type"),
+                    "status": t.get("status"),
+                    "created_at": t.get("created_at"),
+                }
+                for t in task_items[:5]
+            ]
+        }
+    except Exception as e:
+        logger.warning(f"[HomeSummary] Tasks fetch failed for {user_id}: {e}")
+        result["tasks"] = {"recent": []}
+        result["errors"]["tasks"] = str(e)
+
+    # 4. 模拟持仓摘要
+    try:
+        from app.core.database import get_mongo_db
+        db = get_mongo_db()
+        account = await db["paper_accounts"].find_one({"user_id": user_id})
+        positions_cursor = db["paper_positions"].find({"user_id": user_id, "quantity": {"$gt": 0}})
+        position_count = await db["paper_positions"].count_documents({"user_id": user_id, "quantity": {"$gt": 0}})
+
+        if account:
+            total_equity = 0
+            unrealized_pnl = 0
+            for currency_data in account.get("equity", {}).values():
+                if isinstance(currency_data, dict):
+                    total_equity += currency_data.get("total", 0)
+            for currency_data in account.get("unrealized_pnl", {}).values():
+                if isinstance(currency_data, dict):
+                    unrealized_pnl += currency_data.get("total", 0)
+
+            result["simulation"] = {
+                "has_positions": position_count > 0,
+                "position_count": position_count,
+                "total_equity": total_equity,
+                "unrealized_pnl": unrealized_pnl,
+            }
+        else:
+            result["simulation"] = {"has_positions": False, "position_count": 0}
+    except Exception as e:
+        logger.warning(f"[HomeSummary] Simulation fetch failed for {user_id}: {e}")
+        result["simulation"] = {"has_positions": False, "position_count": 0}
+        result["errors"]["simulation"] = str(e)
+
+    # 5. 关注动态摘要（复用 news_watch_collected）
+    try:
+        from app.core.database import get_mongo_db
+        db = get_mongo_db()
+        obs_count = await db["news_watch_collected"].count_documents({"user_id": user_id})
+        latest = await db["news_watch_collected"].find_one(
+            {"user_id": user_id}, sort=[("collected_at", -1)]
+        )
+        result["observations"] = {
+            "count": obs_count,
+            "latest_item": {
+                "title": latest.get("title", ""),
+                "stock_code": latest.get("stock_code", ""),
+                "collected_at": latest.get("collected_at"),
+            } if latest else None,
+        }
+    except Exception as e:
+        logger.warning(f"[HomeSummary] Observations fetch failed for {user_id}: {e}")
+        result["observations"] = {"count": 0, "latest_item": None}
+        result["errors"]["observations"] = str(e)
+
+    # 清理空 errors
+    if not result["errors"]:
+        del result["errors"]
+
+    return ApiResponse(success=True, data=result)
+
+
+# ==================== 策略广场 API ====================
+
+@router.get("/marketplace")
+async def list_marketplace_templates(
+    tag: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    """列出策略广场已上架的策略模板"""
+    try:
+        from app.services.personal_investment.marketplace_service import marketplace_service
+        result = await marketplace_service.list_published_templates(tag=tag, skip=skip, limit=limit)
+        return ApiResponse(success=True, data=result)
+    except Exception as e:
+        logger.error(f"Failed to list marketplace templates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/marketplace/{template_id}")
+async def get_marketplace_template(template_id: str, current_user: dict = Depends(get_current_user)):
+    """获取策略模板详情"""
+    try:
+        from app.services.personal_investment.marketplace_service import marketplace_service
+        template = await marketplace_service.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Strategy template not found")
+        if template.get("status") != "published":
+            raise HTTPException(status_code=403, detail="该策略模板未上架")
+        return ApiResponse(success=True, data=template)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get marketplace template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/marketplace/{template_id}/adopt")
+async def adopt_template(template_id: str, current_user: dict = Depends(get_current_user)):
+    """将策略模板加入我的策略"""
+    try:
+        from app.services.personal_investment.marketplace_service import marketplace_service
+        result = await marketplace_service.adopt_template(template_id, current_user["id"])
+        return ApiResponse(success=True, data=result, message="策略已加入你的策略列表")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to adopt template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

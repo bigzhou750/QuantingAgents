@@ -8,10 +8,10 @@ export interface SidebarEntry {
 
 export const investmentAssistantEntries: SidebarEntry[] = [
   { path: '/investment', label: '个人投资助手' },
+  { path: '/investment/home', label: '新手首页' },
   { path: '/investment/profile', label: '投资画像' },
   { path: '/investment/strategies', label: '策略管理' },
-  { path: '/investment/screening', label: '选股结果' },
-  { path: '/investment/checkup', label: '体检结果' },
+  { path: '/investment/marketplace', label: '策略广场' },
 ]
 
 export const evaluationPlatformEntries: SidebarEntry[] = [
@@ -22,6 +22,13 @@ export const evaluationPlatformEntries: SidebarEntry[] = [
   { path: '/evaluation/trends', label: '质量趋势' },
   { path: '/evaluation/review', label: '人工复核' },
   { path: '/evaluation/bad-cases', label: 'Bad Case 池' },
+]
+
+export const selfEvolutionEntries: SidebarEntry[] = [
+  { path: '/evolution', label: '自进化' },
+  { path: '/evolution/proposals', label: '候选提案' },
+  { path: '/evolution/artifacts', label: 'Artifact 管理' },
+  { path: '/evolution/receipts', label: '进化回执' },
 ]
 
 /**

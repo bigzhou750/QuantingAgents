@@ -1389,8 +1389,19 @@ async def trigger_regression_task(task_id: str):
         }
 
         from app.services.eval.runner_service import runner_service
-        run = await runner_service.create_run(run_config)
+        run = await runner_service.create_run(
+            dataset_id=run_config["dataset_id"],
+            num_trials=run_config.get("num_trials_per_case", 1),
+            config={
+                "agent_name": run_config.get("agent_name", ""),
+                "scorer_names": run_config.get("scorer_names", []),
+            },
+            created_by="regression_task",
+        )
         run_id = run.get("run_id", "")
+
+        # 启动运行
+        await runner_service.start_run(run_id)
 
         # 更新最后运行信息
         await db["eval_regression_tasks"].update_one(

@@ -1,5 +1,12 @@
 <template>
   <div class="checkup-results">
+    <!-- 返回入口 -->
+    <div style="margin-bottom: 12px;">
+      <el-button link @click="$router.push('/investment/home')">← 回到首页</el-button>
+      <el-divider direction="vertical" />
+      <el-button link @click="$router.push('/investment/strategies')">我的策略</el-button>
+    </div>
+
     <el-card v-if="loading" v-loading="true" />
 
     <template v-else-if="result">

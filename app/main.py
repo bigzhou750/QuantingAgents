@@ -240,6 +240,11 @@ async def lifespan(app: FastAPI):
         await profile_service.initialize()
         await strategy_service.initialize()
         await task_service.initialize()
+
+        from app.services.personal_investment.marketplace_service import marketplace_service
+        await marketplace_service.initialize()
+        await marketplace_service.seed_builtin_templates()
+
         logger.info("✅ 个人投资助手服务已初始化")
     except Exception as e:
         logger.warning(f"个人投资助手初始化失败: {e}")
@@ -265,6 +270,26 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Agent 评测平台服务已初始化")
         except Exception as e:
             logger.warning(f"Agent 评测平台初始化失败: {e}")
+
+    # 初始化 Agent 自进化服务（仅当启用时）
+    if settings.EVOLUTION_ENABLED:
+        try:
+            from app.services.evolution.artifact_registry import artifact_registry
+            from app.services.evolution.trigger_service import trigger_service
+            from app.services.evolution.proposal_service import proposal_service
+            from app.services.evolution.verification_service import verification_service
+            from app.services.evolution.approval_service import approval_service
+            from app.services.evolution.receipt_service import receipt_service
+
+            await artifact_registry.initialize()
+            await trigger_service.initialize()
+            await proposal_service.initialize()
+            await verification_service.initialize()
+            await approval_service.initialize()
+            await receipt_service.initialize()
+            logger.info("✅ Agent 自进化服务已初始化")
+        except Exception as e:
+            logger.warning(f"Agent 自进化服务初始化失败: {e}")
 
     #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
     try:
@@ -773,6 +798,11 @@ app.include_router(internal_messages.router, tags=["internal-messages"])
 if settings.EVAL_PLATFORM_ENABLED:
     from app.routers import eval as eval_router
     app.include_router(eval_router.router, prefix="/api/eval", tags=["evaluation"])
+
+# Agent 自进化闭环（仅当 EVOLUTION_ENABLED=True 时启用）
+if settings.EVOLUTION_ENABLED:
+    from app.routers import evolution as evolution_router
+    app.include_router(evolution_router.router, prefix="/api/evolution", tags=["evolution"])
 
 
 @app.get("/")

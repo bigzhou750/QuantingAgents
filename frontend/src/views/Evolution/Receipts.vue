@@ -1,0 +1,65 @@
+<template>
+  <div class="evolution-receipts">
+    <el-page-header title="自进化回执" @back="$router.push('/evolution/proposals')" />
+
+    <el-card style="margin-top: 16px;" v-loading="loading">
+      <el-table :data="receipts" stripe>
+        <el-table-column prop="receipt_id" label="回执 ID" width="160" />
+        <el-table-column prop="proposal_id" label="提案 ID" width="160">
+          <template #default="{ row }">
+            <router-link v-if="row.proposal_id" :to="`/evolution/proposals/${row.proposal_id}`" class="link">
+              {{ row.proposal_id }}
+            </router-link>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="final_action" label="最终动作" width="120">
+          <template #default="{ row }">
+            <el-tag size="small" :type="actionTagType(row.final_action)">{{ actionLabel(row.final_action) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="promoted_version" label="发布版本" width="120" />
+        <el-table-column prop="stop_reason" label="停止原因" width="150">
+          <template #default="{ row }">{{ row.stop_reason || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="180">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="审批记录数" width="100">
+          <template #default="{ row }">{{ row.approval_records?.length || 0 }}</template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!receipts.length && !loading" description="暂无回执记录" />
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { evolutionApi } from '@/api/evolutionClient'
+
+const loading = ref(false)
+const receipts = ref<any[]>([])
+
+const loadReceipts = async () => {
+  loading.value = true
+  try {
+    const res = await evolutionApi.getReceipts()
+    receipts.value = res.data?.data?.items || []
+  } catch (e) {
+    console.error('Failed to load receipts', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+const actionTagType = (a: string) => ({ promoted: 'success', rejected: 'danger', stopped: 'warning', rollback: 'info' }[a] || '')
+const actionLabel = (a: string) => ({ promoted: '已发布', rejected: '已拒绝', stopped: '已停止', rollback: '已回滚' }[a] || a)
+const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+
+onMounted(loadReceipts)
+</script>
+
+<style scoped>
+.link { color: #409eff; text-decoration: none; }
+</style>

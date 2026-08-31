@@ -230,8 +230,17 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       transition: 'slide-up'
     },
-    redirect: '/investment/profile',
+    redirect: '/investment/home',
     children: [
+      {
+        path: 'home',
+        name: 'InvestmentHome',
+        component: () => import('@/views/PersonalInvestment/Home.vue'),
+        meta: {
+          title: '新手首页',
+          requiresAuth: true
+        }
+      },
       {
         path: 'profile',
         name: 'InvestmentProfile',
@@ -251,12 +260,22 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'marketplace',
+        name: 'StrategyMarketplace',
+        component: () => import('@/views/PersonalInvestment/Marketplace.vue'),
+        meta: {
+          title: '策略广场',
+          requiresAuth: true
+        }
+      },
+      {
         path: 'screening/:taskId?',
         name: 'ScreeningResults',
         component: () => import('@/views/PersonalInvestment/ScreeningResults.vue'),
         meta: {
           title: '选股结果',
-          requiresAuth: true
+          requiresAuth: true,
+          hideInMenu: true
         }
       },
       {
@@ -265,7 +284,8 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/PersonalInvestment/CheckupResults.vue'),
         meta: {
           title: '体检结果',
-          requiresAuth: true
+          requiresAuth: true,
+          hideInMenu: true
         }
       }
     ]
@@ -585,6 +605,69 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/Trends.vue'),
         meta: {
           title: '质量趋势',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
+        }
+      }
+    ]
+  },
+
+  // Agent 自进化闭环
+  {
+    path: '/evolution',
+    name: 'Evolution',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '自进化',
+      icon: 'MagicStick',
+      requiresAuth: true,
+      requiresAdmin: true,
+      requiresEvalPlatform: true,
+      transition: 'fade'
+    },
+    redirect: '/evolution/proposals',
+    children: [
+      {
+        path: 'proposals',
+        name: 'EvolutionProposals',
+        component: () => import('@/views/Evolution/Proposals.vue'),
+        meta: {
+          title: '候选提案',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
+        }
+      },
+      {
+        path: 'proposals/:id',
+        name: 'EvolutionProposalDetail',
+        component: () => import('@/views/Evolution/ProposalDetail.vue'),
+        meta: {
+          title: '提案详情',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
+          hideInMenu: true
+        }
+      },
+      {
+        path: 'artifacts',
+        name: 'EvolutionArtifacts',
+        component: () => import('@/views/Evolution/Artifacts.vue'),
+        meta: {
+          title: 'Artifact 管理',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
+        }
+      },
+      {
+        path: 'receipts',
+        name: 'EvolutionReceipts',
+        component: () => import('@/views/Evolution/Receipts.vue'),
+        meta: {
+          title: '进化回执',
           requiresAuth: true,
           requiresAdmin: true,
           requiresEvalPlatform: true

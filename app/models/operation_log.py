@@ -111,6 +111,10 @@ class ActionType:
     SCREENING = "screening"
     REPORT_GENERATION = "report_generation"
     AGENT_RESEARCH = "agent_research"
+    EVOLUTION_PROPOSAL = "evolution_proposal"
+    EVOLUTION_APPROVAL = "evolution_approval"
+    EVOLUTION_PROMOTE = "evolution_promote"
+    EVOLUTION_ROLLBACK = "evolution_rollback"
 
 
 # 操作类型映射
@@ -128,6 +132,10 @@ ACTION_TYPE_NAMES = {
     ActionType.SCREENING: "股票筛选",
     ActionType.REPORT_GENERATION: "报告生成",
     ActionType.AGENT_RESEARCH: "自然语言研究",
+    ActionType.EVOLUTION_PROPOSAL: "自进化提案",
+    ActionType.EVOLUTION_APPROVAL: "自进化审批",
+    ActionType.EVOLUTION_PROMOTE: "自进化发布",
+    ActionType.EVOLUTION_ROLLBACK: "自进化回滚",
 }
 
 
