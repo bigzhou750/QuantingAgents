@@ -13,6 +13,12 @@
 | [configuration_management.md](configuration_management.md) | 配置管理系统设计 | ✅ 完成 |
 | [timezone-strategy.md](timezone-strategy.md) | 时区处理策略设计 | ✅ 完成 |
 
+### 🧭 产品需求设计
+
+| 文档 | 描述 | 状态 |
+|------|------|------|
+| [personal-investment-beginner-strategy-marketplace-requirements.md](personal-investment-beginner-strategy-marketplace-requirements.md) | 个人投资助手新手闭环、策略广场与股票数据自动更新需求设计 | 📝 待拆分 |
+
 ### 📊 数据模型设计
 
 | 文档 | 描述 | 状态 |

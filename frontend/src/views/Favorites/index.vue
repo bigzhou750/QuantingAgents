@@ -519,6 +519,7 @@ import {
 import { favoritesApi } from '@/api/favorites'
 import { tagsApi } from '@/api/tags'
 import { stockSyncApi } from '@/api/stockSync'
+import { newsWatchApi } from '@/api/newsWatch'
 import { normalizeMarketForAnalysis } from '@/utils/market'
 import { ApiClient } from '@/api/request'
 
@@ -993,8 +994,7 @@ const editFavorite = (row: any) => {
 // 加入关注工作台（仅收集用于研究，不构成投资建议）
 const collectToWatch = async (row: any) => {
   try {
-    const axios = (await import('axios')).default
-    await axios.post('/api/news-watch/collect', {
+    await newsWatchApi.collect({
       item_type: 'stock',
       symbol: row.stock_code,
       source_page: 'favorites',

@@ -230,6 +230,11 @@
                 <div class="right">{{ formatNewsTime(n.time) }}</div>
               </div>
               <div class="meta">{{ n.source || '-' }} · {{ newsSource || '-' }}</div>
+              <div class="news-actions">
+                <el-button size="small" link type="primary" @click="collectNewsToWatch(n)">
+                  收集新闻
+                </el-button>
+              </div>
             </div>
           </div>
         </el-card>
@@ -367,6 +372,7 @@ import { analysisApi } from '@/api/analysis'
 import { ApiClient } from '@/api/request'
 import { stockSyncApi } from '@/api/stockSync'
 import { clearAllCache } from '@/api/cache'
+import { newsWatchApi } from '@/api/newsWatch'
 import { use as echartsUse } from 'echarts/core'
 import { CandlestickChart } from 'echarts/charts'
 
@@ -375,7 +381,6 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 import { favoritesApi } from '@/api/favorites'
-import axios from 'axios'
 
 
 echartsUse([CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent, CanvasRenderer])
@@ -910,7 +915,7 @@ function onAnalyze() {
 // 加入关注工作台（仅收集用于研究，不构成投资建议）
 async function collectToWatch() {
   try {
-    await axios.post('/api/news-watch/collect', {
+    await newsWatchApi.collect({
       item_type: 'stock',
       symbol: code.value,
       source_page: 'stock_detail',
@@ -919,6 +924,21 @@ async function collectToWatch() {
     ElMessage.success('已加入关注工作台')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '加入关注失败')
+  }
+}
+
+async function collectNewsToWatch(news: any) {
+  try {
+    await newsWatchApi.collect({
+      item_type: 'news',
+      symbol: code.value,
+      news_id: news.url || news.title,
+      source_page: 'stock_detail',
+      title: news.title || '',
+    })
+    ElMessage.success('新闻已收集')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '收集新闻失败')
   }
 }
 

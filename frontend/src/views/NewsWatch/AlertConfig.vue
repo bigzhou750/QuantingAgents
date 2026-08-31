@@ -129,7 +129,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { newsWatchApi, type NewsWatchImpactLevel } from '@/api/newsWatch'
 
 const threshold = ref('medium')
 const simulating = ref(false)
@@ -139,8 +139,8 @@ const alertsLoading = ref(false)
 
 const loadConfig = async () => {
   try {
-    const res = await axios.get('/api/news-watch/alerts/config')
-    threshold.value = res.data?.data?.threshold || 'medium'
+    const res = await newsWatchApi.getAlertConfig()
+    threshold.value = res.data?.threshold || 'medium'
   } catch {
     // use default
   }
@@ -149,7 +149,7 @@ const loadConfig = async () => {
 const saveThreshold = async (val: string | number | boolean | undefined) => {
   if (typeof val !== 'string') return
   try {
-    await axios.put('/api/news-watch/alerts/config', { threshold: val })
+    await newsWatchApi.updateAlertConfig(val as NewsWatchImpactLevel)
     ElMessage.success('告警阈值已更新')
   } catch {
     ElMessage.error('保存失败')
@@ -160,10 +160,8 @@ const simulateAlerts = async () => {
   simulating.value = true
   simulateResult.value = null
   try {
-    const res = await axios.post('/api/news-watch/alerts/simulate', null, {
-      params: { hours_back: 72 },
-    })
-    simulateResult.value = res.data?.data
+    const res = await newsWatchApi.simulateAlerts({ hours_back: 72 })
+    simulateResult.value = res.data
     loadAlerts()
   } catch {
     ElMessage.error('模拟检测失败')
@@ -175,8 +173,8 @@ const simulateAlerts = async () => {
 const loadAlerts = async () => {
   alertsLoading.value = true
   try {
-    const res = await axios.get('/api/news-watch/alerts', { params: { limit: 100 } })
-    alerts.value = res.data?.data?.records || []
+    const res = await newsWatchApi.listAlerts({ limit: 100 })
+    alerts.value = res.data?.records || []
   } catch {
     ElMessage.error('加载告警记录失败')
   } finally {

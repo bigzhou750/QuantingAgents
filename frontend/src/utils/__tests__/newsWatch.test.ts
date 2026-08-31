@@ -25,6 +25,11 @@ const sidebarSource = readFileSync(
   'utf-8'
 )
 
+const apiSource = readFileSync(
+  resolve(__dirname, '../../api/newsWatch.ts'),
+  'utf-8'
+)
+
 describe('NewsWatch Workbench', () => {
   it('shows empty state with guidance when no items collected', () => {
     expect(workbenchSource).toContain('还没有收集任何关注对象')
@@ -34,7 +39,16 @@ describe('NewsWatch Workbench', () => {
   })
 
   it('calls the news-watch collect API for removal', () => {
-    expect(workbenchSource).toContain('/api/news-watch/collected')
+    expect(apiSource).toContain('/api/news-watch/collected')
+    expect(workbenchSource).toContain('newsWatchApi.listCollected')
+    expect(workbenchSource).toContain('newsWatchApi.removeCollected')
+  })
+
+  it('shows a related news stream with market-news fallback', () => {
+    expect(workbenchSource).toContain('相关新闻流')
+    expect(workbenchSource).toContain('暂无关注对象，展示近期市场新闻')
+    expect(workbenchSource).toContain('newsWatchApi.getLatestNews')
+    expect(workbenchSource).toContain('newsWatchApi.queryStockNews')
   })
 
   it('uses research-oriented copy, not trading language', () => {
@@ -45,7 +59,8 @@ describe('NewsWatch Workbench', () => {
 
 describe('NewsWatch ImpactAnalysis', () => {
   it('calls the impact-analysis API endpoint', () => {
-    expect(impactSource).toContain('/api/news-watch/impact-analysis')
+    expect(apiSource).toContain('/api/news-watch/impact-analysis')
+    expect(impactSource).toContain('newsWatchApi.analyzeImpact')
   })
 
   it('displays three-level impact severity tags', () => {
@@ -80,8 +95,17 @@ describe('NewsWatch AlertConfig', () => {
   })
 
   it('calls the simulate and config APIs', () => {
-    expect(alertSource).toContain('/api/news-watch/alerts/simulate')
-    expect(alertSource).toContain('/api/news-watch/alerts/config')
+    expect(apiSource).toContain('/api/news-watch/alerts/simulate')
+    expect(apiSource).toContain('/api/news-watch/alerts/config')
+    expect(alertSource).toContain('newsWatchApi.simulateAlerts')
+    expect(alertSource).toContain('newsWatchApi.getAlertConfig')
+  })
+
+  it('uses the shared authenticated API client', () => {
+    expect(apiSource).toContain("import { ApiClient } from './request'")
+    expect(workbenchSource).not.toContain("import axios from 'axios'")
+    expect(impactSource).not.toContain("import axios from 'axios'")
+    expect(alertSource).not.toContain("import axios from 'axios'")
   })
 })
 
