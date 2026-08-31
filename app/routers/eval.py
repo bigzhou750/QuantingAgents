@@ -18,6 +18,7 @@ from app.services.eval.runner_service import runner_service
 from app.services.eval.trace_adapter import trace_adapter
 from app.services.eval.scorer_hub import scorer_hub
 from app.services.eval.metrics_service import metrics_service
+from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,12 @@ class RunCreateRequest(BaseModel):
     dataset_version: Optional[str] = None
     num_trials: int = 1
     config: dict = {}
+    scorer_names: Optional[List[str]] = None
+    judge_model: Optional[str] = None
+    rubric_version: Optional[str] = None
+    low_confidence_threshold: Optional[float] = None
+    review_strategy: Optional[str] = None
+    data_window: Optional[dict] = None
 
 
 # ==================== 权限检查 ====================
@@ -341,17 +348,121 @@ async def delete_case(case_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Golden Set 导入 & 批量操作 API ====================
+
+
+@router.post("/datasets/{dataset_id}/import-golden", dependencies=[Depends(verify_eval_access)])
+async def import_golden_cases(dataset_id: str):
+    """将内置 Golden Set 用例导入到指定评测集（幂等）"""
+    try:
+        result = await dataset_service.import_golden_cases(dataset_id=dataset_id)
+        return ApiResponse(
+            success=True,
+            data=result,
+            message=f"Golden cases 导入完成：{result['imported']} 条新增，{result['skipped']} 条跳过",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to import golden cases: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class BatchImportCasesRequest(BaseModel):
+    cases: List[CaseCreateRequest]
+
+
+@router.post("/datasets/{dataset_id}/cases/batch-import", dependencies=[Depends(verify_eval_access)])
+async def batch_import_cases(dataset_id: str, request: BatchImportCasesRequest):
+    """批量导入用例到评测集"""
+    imported = 0
+    failed = 0
+    errors = []
+
+    for idx, case in enumerate(request.cases):
+        try:
+            await dataset_service.add_case(
+                dataset_id=dataset_id,
+                name=case.name,
+                input_data=case.input,
+                expected_output=case.expected_output,
+                scoring_criteria=case.scoring_criteria,
+                tags=case.tags,
+                difficulty=case.difficulty,
+                category=case.category,
+                description=case.description,
+            )
+            imported += 1
+        except Exception as e:
+            failed += 1
+            errors.append({
+                "index": idx,
+                "name": case.name,
+                "error": str(e),
+            })
+
+    return ApiResponse(
+        success=True,
+        data={"imported": imported, "failed": failed, "errors": errors},
+        message=f"批量导入完成：{imported} 条成功，{failed} 条失败",
+    )
+
+
+class BatchUpdateCasesRequest(BaseModel):
+    case_ids: List[str]
+    tags: Optional[List[str]] = None
+    category: Optional[str] = None
+    difficulty: Optional[str] = None
+    scoring_criteria: Optional[dict] = None
+
+
+@router.put("/datasets/{dataset_id}/cases/batch-update", dependencies=[Depends(verify_eval_access)])
+async def batch_update_cases(dataset_id: str, request: BatchUpdateCasesRequest):
+    """批量更新评测用例的公共字段"""
+    try:
+        result = await dataset_service.batch_update_cases(
+            case_ids=request.case_ids,
+            tags=request.tags,
+            category=request.category,
+            difficulty=request.difficulty,
+            scoring_criteria=request.scoring_criteria,
+        )
+        return ApiResponse(
+            success=True,
+            data=result,
+            message=f"批量更新完成：{result['updated']} 条用例已更新",
+        )
+    except Exception as e:
+        logger.error(f"Failed to batch update cases: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 评测运行 API ====================
 
 @router.post("/runs", dependencies=[Depends(verify_eval_access)])
 async def create_run(request: RunCreateRequest):
     """创建评测运行"""
     try:
+        # 合并显式配置字段到 config dict
+        config = dict(request.config)
+        if request.scorer_names is not None:
+            config["scorer_names"] = request.scorer_names
+        if request.judge_model is not None:
+            config["judge_model"] = request.judge_model
+        if request.rubric_version is not None:
+            config["rubric_version"] = request.rubric_version
+        if request.low_confidence_threshold is not None:
+            config["low_confidence_threshold"] = request.low_confidence_threshold
+        if request.review_strategy is not None:
+            config["review_strategy"] = request.review_strategy
+        if request.data_window is not None:
+            config["data_window"] = request.data_window
+
         result = await runner_service.create_run(
             dataset_id=request.dataset_id,
             dataset_version=request.dataset_version,
             num_trials=request.num_trials,
-            config=request.config,
+            config=config,
         )
         return ApiResponse(success=True, data=result, message="评测运行创建成功")
     except ValueError as e:
@@ -530,6 +641,8 @@ class HumanReviewRequest(BaseModel):
     score_id: str
     new_score: float
     comment: str = ""
+    action: str = "adjust_score"  # approve / reject / adjust_score / add_bad_case / reflow
+    target_dataset_id: Optional[str] = None  # for reflow action
 
 
 @router.post("/scores/human-review", dependencies=[Depends(verify_eval_access)])
@@ -543,7 +656,6 @@ async def submit_human_review(
     """
     try:
         from app.core.database import get_mongo_db
-        from app.utils.timezone import now_tz
 
         db = get_mongo_db()
 
@@ -555,21 +667,66 @@ async def submit_human_review(
         # 保留原始分数（如果已经被复核过，保留最初的原始分数）
         original_score = score_doc.get("original_score", score_doc.get("score"))
 
+        clamped_score = max(0.0, min(1.0, request.new_score))
+        new_status = "passed" if clamped_score >= 0.6 else "failed"
+
         # 更新评分
         await db["eval_scores"].update_one(
             {"score_id": request.score_id},
             {
                 "$set": {
-                    "score": max(0.0, min(1.0, request.new_score)),
-                    "passed": request.new_score >= 0.6,
+                    "score": clamped_score,
+                    "passed": clamped_score >= 0.6,
+                    "status": new_status,
+                    "review_action": request.action,
                     "human_reviewed": True,
                     "reviewer": current_user.get("username", "unknown"),
                     "review_comment": request.comment,
                     "original_score": original_score,
                     "updated_at": now_tz(),
-                }
+                },
+                "$push": {
+                    "review_audit_trail": {
+                        "reviewer": current_user.get("username", "unknown"),
+                        "action": request.action,
+                        "old_score": original_score,
+                        "new_score": clamped_score,
+                        "comment": request.comment,
+                        "timestamp": now_tz(),
+                    }
+                },
             }
         )
+
+        # add_bad_case action: create a bad case from the trial
+        if request.action == "add_bad_case":
+            trial_id = score_doc.get("trial_id")
+            if trial_id:
+                try:
+                    await bad_case_service.create_from_failed_trial(trial_id)
+                except Exception as e:
+                    logger.warning(f"Failed to create bad case from trial {trial_id}: {e}")
+
+        # reflow action: convert bad case to dataset case
+        if request.action == "reflow" and request.target_dataset_id:
+            trial_id = score_doc.get("trial_id")
+            if trial_id:
+                try:
+                    # Find existing bad case for this trial, or create one first
+                    # Bad cases store the reference as source_trial_id
+                    bad_case_doc = await db["eval_bad_cases"].find_one({"source_trial_id": trial_id})
+                    if bad_case_doc:
+                        bc_id = bad_case_doc.get("bad_case_id", str(bad_case_doc.get("_id", "")))
+                    else:
+                        created = await bad_case_service.create_from_failed_trial(trial_id)
+                        bc_id = created.get("bad_case_id") if created else None
+                    if bc_id:
+                        await bad_case_service.convert_to_case(
+                            bad_case_id=str(bc_id),
+                            dataset_id=request.target_dataset_id,
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to reflow bad case for trial {trial_id}: {e}")
 
         return ApiResponse(success=True, message="人工复核已提交")
     except HTTPException:
@@ -584,10 +741,16 @@ async def list_pending_reviews(
     skip: int = 0,
     limit: int = 20,
     low_confidence_threshold: float = 0.7,
+    run_id: Optional[str] = None,
+    dataset_id: Optional[str] = None,
+    source: Optional[str] = None,
+    min_confidence: Optional[float] = None,
+    max_confidence: Optional[float] = None,
 ):
     """列出待人工复核的评分
 
     返回低置信度或高风险的评分记录，供复核人处理。
+    支持按 run_id、dataset_id、source 和置信度范围过滤。
     """
     try:
         from app.core.database import get_mongo_db
@@ -596,11 +759,43 @@ async def list_pending_reviews(
 
         query = {
             "human_reviewed": {"$ne": True},
+            # 排除非真实评分状态，避免未启用/出错的评分器进入待复核队列
+            "status": {"$nin": ["skipped", "not_configured", "error"]},
             "$or": [
                 {"confidence": {"$lt": low_confidence_threshold}},
                 {"score": {"$lt": 0.5}},
             ],
         }
+
+        # Filter by source (scorer name)
+        if source is not None:
+            query["scorer_name"] = source
+
+        # Filter by confidence range
+        if min_confidence is not None or max_confidence is not None:
+            confidence_filter = {}
+            if min_confidence is not None:
+                confidence_filter["$gte"] = min_confidence
+            if max_confidence is not None:
+                confidence_filter["$lte"] = max_confidence
+            query["confidence"] = confidence_filter
+
+        # Filter by run_id or dataset_id via trial subquery
+        if run_id is not None or dataset_id is not None:
+            trial_query = {}
+            if run_id is not None:
+                trial_query["run_id"] = run_id
+            if dataset_id is not None:
+                trial_query["dataset_id"] = dataset_id
+
+            matching_trial_ids = []
+            trial_cursor = db["eval_trials"].find(trial_query, {"trial_id": 1})
+            async for t in trial_cursor:
+                tid = t.get("trial_id")
+                if tid:
+                    matching_trial_ids.append(tid)
+
+            query["trial_id"] = {"$in": matching_trial_ids}
 
         cursor = db["eval_scores"].find(query).sort("created_at", -1).skip(skip).limit(limit)
         results = []
@@ -626,9 +821,11 @@ async def get_run_metrics(run_id: str, k: int = 3):
         base_metrics = await metrics_service.compute_run_metrics(run_id)
         pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k)
         score_agg = await metrics_service.get_score_aggregation(run_id)
+        claim_summary = await metrics_service.get_claim_summary(run_id)
 
         combined = {**base_metrics, **pass_metrics}
         combined["score_aggregation"] = score_agg.get("scores", {})
+        combined["claim_summary"] = claim_summary
 
         return ApiResponse(success=True, data=combined)
     except Exception as e:
@@ -1033,28 +1230,181 @@ async def get_quality_trends(
                 },
             })
 
-        # 失败聚类：按错误类型分组统计
-        failure_clusters = {}
+        # 失败聚类 (6.2)：按错误类型、评分维度、数据源多维聚类
+        failure_clusters_by_error = {}
+        failure_clusters_by_scorer = {}
+        failure_clusters_by_source = {}
+
+        all_failed_trial_ids = []
         for run in runs:
             run_id = run.get("run_id")
             trials_cursor = db["eval_trials"].find({"run_id": run_id, "status": "failed"})
             async for trial in trials_cursor:
+                trial_id = trial.get("trial_id")
+                all_failed_trial_ids.append(trial_id)
                 error_msg = trial.get("error_message", "unknown")
-                # 简化错误消息作为聚类 key
                 cluster_key = error_msg[:80] if len(error_msg) > 80 else error_msg
-                if cluster_key not in failure_clusters:
-                    failure_clusters[cluster_key] = {"count": 0, "sample_run_ids": []}
-                failure_clusters[cluster_key]["count"] += 1
-                if len(failure_clusters[cluster_key]["sample_run_ids"]) < 3:
-                    failure_clusters[cluster_key]["sample_run_ids"].append(run_id)
+                if cluster_key not in failure_clusters_by_error:
+                    failure_clusters_by_error[cluster_key] = {"count": 0, "sample_run_ids": [], "sample_trial_ids": []}
+                failure_clusters_by_error[cluster_key]["count"] += 1
+                if len(failure_clusters_by_error[cluster_key]["sample_run_ids"]) < 3:
+                    failure_clusters_by_error[cluster_key]["sample_run_ids"].append(run_id)
+                    failure_clusters_by_error[cluster_key]["sample_trial_ids"].append(trial_id)
+
+        # 按评分维度聚类：查找 failed trial 中 score < 0.5 的评分器
+        if all_failed_trial_ids:
+            scores_cursor = db["eval_scores"].find({
+                "trial_id": {"$in": all_failed_trial_ids},
+                "score": {"$lt": 0.5},
+            })
+            async for score_doc in scores_cursor:
+                scorer_name = score_doc.get("score_name", "unknown")
+                source = score_doc.get("source", "unknown")
+                trial_id = score_doc.get("trial_id", "")
+
+                # 按评分器聚类
+                if scorer_name not in failure_clusters_by_scorer:
+                    failure_clusters_by_scorer[scorer_name] = {"count": 0, "sample_trial_ids": []}
+                failure_clusters_by_scorer[scorer_name]["count"] += 1
+                if len(failure_clusters_by_scorer[scorer_name]["sample_trial_ids"]) < 3:
+                    failure_clusters_by_scorer[scorer_name]["sample_trial_ids"].append(trial_id)
+
+                # 按来源聚类
+                if source not in failure_clusters_by_source:
+                    failure_clusters_by_source[source] = {"count": 0, "sample_trial_ids": []}
+                failure_clusters_by_source[source]["count"] += 1
+                if len(failure_clusters_by_source[source]["sample_trial_ids"]) < 3:
+                    failure_clusters_by_source[source]["sample_trial_ids"].append(trial_id)
 
         return ApiResponse(success=True, data={
             "trends": trends,
             "failure_clusters": [
                 {"pattern": k, **v}
-                for k, v in sorted(failure_clusters.items(), key=lambda x: -x[1]["count"])
+                for k, v in sorted(failure_clusters_by_error.items(), key=lambda x: -x[1]["count"])
+            ],
+            "failure_by_scorer": [
+                {"scorer": k, **v}
+                for k, v in sorted(failure_clusters_by_scorer.items(), key=lambda x: -x[1]["count"])
+            ],
+            "failure_by_source": [
+                {"source": k, **v}
+                for k, v in sorted(failure_clusters_by_source.items(), key=lambda x: -x[1]["count"])
             ],
         })
     except Exception as e:
         logger.error(f"Failed to get quality trends: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 定时回归任务 (6.4) ====================
+
+class RegressionTaskConfig(BaseModel):
+    """定时回归任务配置"""
+    task_id: str = ""
+    name: str = ""
+    dataset_id: str = ""
+    agent_name: str = ""
+    num_trials_per_case: int = 1
+    scorer_names: List[str] = []
+    schedule_cron: str = ""  # cron 表达式，空表示不自动执行
+    enabled: bool = False
+    created_at: Optional[str] = None
+    last_run_id: Optional[str] = None
+    last_run_at: Optional[str] = None
+
+
+@router.get("/regression-tasks", dependencies=[Depends(verify_eval_access)])
+async def list_regression_tasks():
+    """列出所有回归任务配置"""
+    try:
+        db = get_mongo_db()
+        cursor = db["eval_regression_tasks"].find().sort("created_at", -1)
+        items = []
+        async for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))
+            items.append(doc)
+        return ApiResponse(success=True, data={"items": items})
+    except Exception as e:
+        logger.error(f"Failed to list regression tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/regression-tasks", dependencies=[Depends(verify_eval_access)])
+async def create_regression_task(config: RegressionTaskConfig):
+    """创建回归任务配置（默认禁用）"""
+    import uuid
+    try:
+        db = get_mongo_db()
+        task_id = config.task_id or f"reg_{uuid.uuid4().hex[:8]}"
+        doc = config.model_dump()
+        doc["task_id"] = task_id
+        doc["enabled"] = False  # 默认禁用，需手动启用
+        doc["created_at"] = now_tz().isoformat()
+
+        await db["eval_regression_tasks"].update_one(
+            {"task_id": task_id},
+            {"$set": doc},
+            upsert=True,
+        )
+        return ApiResponse(success=True, data=doc, message="回归任务已创建（默认禁用）")
+    except Exception as e:
+        logger.error(f"Failed to create regression task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/regression-tasks/{task_id}/toggle", dependencies=[Depends(verify_eval_access)])
+async def toggle_regression_task(task_id: str, enabled: bool = True):
+    """启用/禁用回归任务"""
+    try:
+        db = get_mongo_db()
+        result = await db["eval_regression_tasks"].update_one(
+            {"task_id": task_id},
+            {"$set": {"enabled": enabled}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return ApiResponse(success=True, message=f"任务已{'启用' if enabled else '禁用'}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to toggle regression task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/regression-tasks/{task_id}/trigger", dependencies=[Depends(verify_eval_access)])
+async def trigger_regression_task(task_id: str):
+    """手动触发一次回归运行"""
+    try:
+        db = get_mongo_db()
+        task_doc = await db["eval_regression_tasks"].find_one({"task_id": task_id})
+        if not task_doc:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # 创建评测运行
+        run_config = {
+            "dataset_id": task_doc.get("dataset_id"),
+            "agent_name": task_doc.get("agent_name", ""),
+            "num_trials_per_case": task_doc.get("num_trials_per_case", 1),
+            "scorer_names": task_doc.get("scorer_names", []),
+        }
+
+        from app.services.eval.runner_service import runner_service
+        run = await runner_service.create_run(run_config)
+        run_id = run.get("run_id", "")
+
+        # 更新最后运行信息
+        await db["eval_regression_tasks"].update_one(
+            {"task_id": task_id},
+            {"$set": {"last_run_id": run_id, "last_run_at": now_tz().isoformat()}},
+        )
+
+        return ApiResponse(success=True, data={"run_id": run_id}, message="回归运行已触发")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to trigger regression task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 注：POST /bad-cases/from-trial/{trial_id} 已在上方 L906 定义（create_bad_case_from_trial）
+# POST /online-sample 已在上方 L968 定义

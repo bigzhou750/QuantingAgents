@@ -234,6 +234,53 @@ class MetricsService:
             "total_score_dimensions": len(score_stats),
         }
 
+    async def get_claim_summary(self, run_id: str) -> Dict[str, Any]:
+        """聚合某个 run 下所有 trial 的 claim-evidence 统计 (5.3)
+
+        从 eval_scores 文档中的 claims 数组提取 verdict 分布。
+        """
+        db = get_mongo_db()
+
+        # 获取该 run 的所有 trial ID
+        trial_cursor = db["eval_trials"].find({"run_id": run_id}, {"trial_id": 1})
+        trial_ids = []
+        async for doc in trial_cursor:
+            trial_ids.append(doc["trial_id"])
+
+        if not trial_ids:
+            return {
+                "total_claims": 0,
+                "supported": 0,
+                "weakly_supported": 0,
+                "unsupported": 0,
+                "contradicted": 0,
+            }
+
+        # 使用 aggregation 展开 claims 数组并按 verdict 分组
+        pipeline = [
+            {"$match": {"trial_id": {"$in": trial_ids}, "claims": {"$ne": None, "$not": {"$size": 0}}}},
+            {"$unwind": "$claims"},
+            {"$group": {
+                "_id": "$claims.verdict",
+                "count": {"$sum": 1},
+            }},
+        ]
+
+        verdict_counts: Dict[str, int] = {}
+        async for doc in db["eval_scores"].aggregate(pipeline):
+            verdict = doc["_id"] or "unknown"
+            verdict_counts[verdict] = doc["count"]
+
+        total = sum(verdict_counts.values())
+
+        return {
+            "total_claims": total,
+            "supported": verdict_counts.get("supported", 0),
+            "weakly_supported": verdict_counts.get("weakly_supported", 0),
+            "unsupported": verdict_counts.get("unsupported", 0),
+            "contradicted": verdict_counts.get("contradicted", 0),
+        }
+
     @staticmethod
     def _stddev(values: List[float]) -> float:
         """计算标准差"""

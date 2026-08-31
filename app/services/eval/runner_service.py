@@ -14,7 +14,7 @@ from datetime import datetime
 from app.core.database import get_mongo_db
 from app.core.config import settings
 from app.models.eval import (
-    EvalRun, EvalTrial, RunStatus, TrialStatus, EvalRunConfig,
+    EvalRun, EvalTrial, RunStatus, TrialStatus, EvalRunConfig, RunSnapshot,
 )
 from app.services.eval.dataset_service import dataset_service
 from app.utils.timezone import now_tz
@@ -144,6 +144,51 @@ class EvalRunnerService:
                 f"EVAL_TRIAL_TIMEOUT_SECONDS {settings.EVAL_TRIAL_TIMEOUT_SECONDS}"
             )
 
+        # 构建运行快照：固化 case 内容、scorer/judge 配置和数据窗口
+        case_contents = {}
+        for c in cases:
+            case_contents[c["case_id"]] = {
+                "name": c.get("name", ""),
+                "input": c.get("input", {}),
+                "expected_output": c.get("expected_output"),
+                "scoring_criteria": c.get("scoring_criteria", {}),
+                "tags": c.get("tags", []),
+                "difficulty": c.get("difficulty", "medium"),
+                "category": c.get("category", "general"),
+            }
+
+        # 获取 scorer 配置快照
+        scorer_config_snapshot = []
+        try:
+            from app.services.eval.scorer_hub import scorer_hub
+            all_scorers = scorer_hub.list_scorers()
+            selected_names = run_config.scorer_names or [s["name"] for s in all_scorers]
+            scorer_config_snapshot = [
+                {"name": s["name"], "source": s["source"], "version": s["version"], "status": s.get("status", "available")}
+                for s in all_scorers
+                if s["name"] in selected_names
+            ]
+        except Exception:
+            logger.warning("Failed to snapshot scorer config", exc_info=True)
+
+        # Judge 配置快照
+        judge_config_snapshot = {}
+        if run_config.judge_model:
+            judge_config_snapshot = {
+                "model": run_config.judge_model,
+                "rubric_version": run_config.rubric_version,
+                "low_confidence_threshold": run_config.low_confidence_threshold,
+                "review_strategy": run_config.review_strategy,
+            }
+
+        snapshot = RunSnapshot(
+            dataset_version=version,
+            case_contents=case_contents,
+            scorer_config=scorer_config_snapshot,
+            judge_config=judge_config_snapshot,
+            data_window=run_config.data_window,
+        )
+
         run = EvalRun(
             run_id=run_id,
             dataset_id=dataset_id,
@@ -152,13 +197,14 @@ class EvalRunnerService:
             config=run_config,
             num_trials_per_case=num_trials,
             total_cases=len(cases),
+            snapshot=snapshot,
             created_by=created_by,
         )
 
         doc = run.model_dump(by_alias=True, exclude={"id"})
         await db[self.COLLECTION_RUNS].insert_one(doc)
 
-        logger.info(f"Created eval run {run_id} for dataset {dataset_id} v{version}")
+        logger.info(f"Created eval run {run_id} for dataset {dataset_id} v{version} with snapshot")
         return {"run_id": run_id, "total_cases": len(cases), "num_trials_per_case": num_trials}
 
     async def start_run(self, run_id: str) -> bool:
@@ -212,7 +258,16 @@ class EvalRunnerService:
                 for trial_idx in range(num_trials):
                     trial_id = f"{run_id}_{case_id}_t{trial_idx}"
 
-                    # 创建 trial
+                    # 创建 trial，附带 case 内容快照
+                    case_snap = {
+                        "name": case.get("name", ""),
+                        "input": case.get("input", {}),
+                        "expected_output": case.get("expected_output"),
+                        "scoring_criteria": case.get("scoring_criteria", {}),
+                        "tags": case.get("tags", []),
+                        "difficulty": case.get("difficulty", "medium"),
+                        "category": case.get("category", "general"),
+                    }
                     trial = EvalTrial(
                         trial_id=trial_id,
                         run_id=run_id,
@@ -220,6 +275,7 @@ class EvalRunnerService:
                         trial_index=trial_idx,
                         status=TrialStatus.PENDING,
                         input_data=case.get("input", {}),
+                        case_snapshot=case_snap,
                     )
 
                     trial_doc = trial.model_dump(by_alias=True, exclude={"id"})

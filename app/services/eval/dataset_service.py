@@ -4,7 +4,9 @@
 负责评测集、评测用例的版本化管理和 CRUD 操作。
 """
 
+import json
 import logging
+import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
@@ -362,6 +364,129 @@ class EvalDatasetService:
         cases = await self.list_cases(dataset_id, limit=1000, version=version)
         dataset["cases_detail"] = cases
         return dataset
+
+    async def import_golden_cases(
+        self,
+        dataset_id: str,
+    ) -> Dict[str, Any]:
+        """导入内置 Golden Set 用例到指定评测集
+
+        幂等操作：如果同名 case 已存在于数据集中则跳过，不创建重复记录。
+
+        Returns:
+            {"imported": N, "skipped": N, "total": N}
+        """
+        db = get_mongo_db()
+
+        # 检查数据集是否存在
+        dataset = await self.get_dataset(dataset_id)
+        if not dataset:
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        # 加载 golden_cases.json
+        golden_path = os.path.join(
+            os.path.dirname(__file__), "data", "golden_cases.json"
+        )
+        with open(golden_path, "r", encoding="utf-8") as f:
+            golden_data = json.load(f)
+
+        cases_to_import = golden_data.get("cases", [])
+
+        # 获取当前数据集中已有的 case name 集合，用于去重
+        existing_cursor = db[self.COLLECTION_CASES].find(
+            {"dataset_id": dataset_id}, {"name": 1}
+        )
+        existing_names = set()
+        async for doc in existing_cursor:
+            existing_names.add(doc.get("name"))
+
+        imported = 0
+        skipped = 0
+
+        for case_data in cases_to_import:
+            case_name = case_data.get("name", "")
+            if case_name in existing_names:
+                skipped += 1
+                continue
+
+            await self.add_case(
+                dataset_id=dataset_id,
+                name=case_name,
+                input_data=case_data.get("input", {}),
+                expected_output=case_data.get("expected_output"),
+                scoring_criteria=case_data.get("scoring_criteria"),
+                tags=case_data.get("tags", []),
+                difficulty=case_data.get("difficulty", "medium"),
+                category=case_data.get("category", "general"),
+                description=case_data.get("description", ""),
+            )
+            imported += 1
+
+        logger.info(
+            f"Imported golden cases into dataset {dataset_id}: "
+            f"{imported} imported, {skipped} skipped"
+        )
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "total": len(cases_to_import),
+        }
+
+    async def batch_update_cases(
+        self,
+        case_ids: List[str],
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        difficulty: Optional[str] = None,
+        scoring_criteria: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """批量更新多个用例的公共字段
+
+        Returns:
+            {"updated": N}
+        """
+        db = get_mongo_db()
+
+        update_fields = {"updated_at": now_tz()}
+        if tags is not None:
+            update_fields["tags"] = tags
+        if category is not None:
+            update_fields["category"] = category
+        if difficulty is not None:
+            update_fields["difficulty"] = difficulty
+        if scoring_criteria is not None:
+            update_fields["scoring_criteria"] = scoring_criteria
+
+        if len(update_fields) <= 1:
+            # 只有 updated_at，没有实际更新字段
+            return {"updated": 0}
+
+        result = await db[self.COLLECTION_CASES].update_many(
+            {"case_id": {"$in": case_ids}},
+            {"$set": update_fields},
+        )
+
+        # 收集受影响的 dataset_id 并递增版本
+        affected_datasets = set()
+        cursor = db[self.COLLECTION_CASES].find(
+            {"case_id": {"$in": case_ids}}, {"dataset_id": 1}
+        )
+        async for doc in cursor:
+            ds_id = doc.get("dataset_id")
+            if ds_id:
+                affected_datasets.add(ds_id)
+
+        for ds_id in affected_datasets:
+            dataset = await self.get_dataset(ds_id)
+            if dataset:
+                new_version = _bump_patch_version(dataset.get("version", "1.0.0"))
+                await db[self.COLLECTION_DATASETS].update_one(
+                    {"dataset_id": ds_id},
+                    {"$set": {"version": new_version, "updated_at": now_tz()}},
+                )
+
+        logger.info(f"Batch updated {result.modified_count} cases")
+        return {"updated": result.modified_count}
 
     async def publish_version(
         self,

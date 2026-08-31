@@ -312,3 +312,60 @@ app/services/eval/data/golden_cases.json
 6. 将未安装/未启用的第三方评分器从待复核失败项中剔除，改为 skipped 状态。
 
 完成 P0 后，这个平台才算是能由管理员在后台闭环使用，而不是研发半脚本半页面操作。
+
+---
+
+## 生产工作台升级说明（二期完成）
+
+以下功能已在二期迭代中全部实现，覆盖数据集管理、运行详情/报告、评分/复核、Claim-Evidence grounding、趋势治理和测试验证。
+
+### 数据集与 Case 管理
+
+- **Case 编辑/删除**：数据集详情页支持单条 Case 编辑和删除（带确认弹窗）。
+- **批量导入**：支持 JSON 数组批量导入 Case，逐条报告成功/失败。
+- **Golden Set 导入**：一键从内置 golden set 导入标准评测用例（按名称去重）。
+- **批量编辑**：多选 Case 后批量修改标签、分类、难度和评分标准。
+- **版本发布**：数据集支持版本号管理和发布。
+- **空状态引导**：空数据集页面展示四种操作入口按钮。
+
+### 运行详情与报告
+
+- **指标摘要**：成功率、失败率、pass@k、pass^k、平均延迟、总成本。
+- **Trial 详情抽屉**：Final Output 突出展示，输入数据、错误信息、Token 用量、评分表格。
+- **自动刷新**：运行中/等待中时 5 秒轮询更新进度。
+- **评测报告页**：独立报告视图，支持 JSON/CSV 导出（CSV 含 BOM 兼容 Excel）。
+- **运行对比**：选择 2-4 个运行进行指标并列对比。
+- **Run Snapshot**：创建运行时锁定 case 内容、scorer 配置、judge 配置和数据窗口，确保可复现。
+
+### 评分、Judge 与人工复核
+
+- **ScoreStatus 枚举**：passed / failed / skipped / not_configured / error，避免未启用评分器污染复核队列。
+- **Scorer 可用性检查**：外部库适配器（deepeval/ragas）未安装时显示 not_configured 而非报错。
+- **人工复核增强**：75% 宽度对话框，左右对照 Case 输入和 Agent 输出，Judge 维度理由表格，历史评分参考。
+- **复核动作**：approve / reject / adjust_score / add_bad_case / reflow（回流到指定数据集）。
+- **复核审计轨迹**：每次复核操作记录 reviewer、action、old/new score、comment、timestamp。
+- **筛选条件**：按 Run ID、评分来源、置信度阈值过滤待复核列表。
+
+### Claim-Evidence Grounding
+
+- **Claim 抽取**：evidence_scorer v2.0 从 Final Output 按句子分割提取可验证 claim。
+- **Evidence 映射**：使用 n-gram 重叠算法将 claim 匹配到 trace 中的 evidence/retrieval/citation 事件。
+- **Verdict 判定**：supported / weakly_supported / unsupported / contradicted，附置信度和理由。
+- **前端展示**：人工复核对话框中显示 Claim-Evidence 表格；报告页显示 verdict 分布汇总和覆盖率进度条。
+- **Trace 分组增强**：按 LLM/Tool/Skill/Swarm/Evidence 类型分组展示，带图标标签。
+
+### 趋势、治理与观测
+
+- **质量趋势增强**：双柱图（成功率 + pass@k/pass^k 切换），阈值参考线（发布门禁/告警），口径说明面板，趋势点下钻到运行详情。
+- **多维失败聚类**：除错误消息外，增加按评分维度和数据来源的失败分布统计。
+- **Release Gate 配置**：可视化配置页面，支持启用/禁用、设置成功率/pass@3/失败率阈值、必须通过的评分器列表。
+- **告警检查**：一键检查当前告警状态，展示触发的告警规则和当前值。
+- **回归任务**：CRUD API 支持定时回归配置（默认禁用），手动触发运行并记录 last_run_id。
+- **线上抽样入池**：Bad Case 池新增"线上抽样入池"入口，支持填写 input/output/failure_reason/session_id。
+- **Trial 转 Bad Case**：API 端点支持将失败 trial 直接转换为 Bad Case。
+
+### 测试与验证
+
+- **后端测试**：83 个评测相关测试全部通过，覆盖数据模型、scorer、metrics、路由。
+- **前端类型检查**：`vue-tsc --noEmit` 零错误通过。
+- **向后兼容**：所有新增字段有默认值，旧数据无需迁移即可正常读取。

@@ -510,11 +510,35 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'runs/compare',
+        name: 'EvalRunCompare',
+        component: () => import('@/views/Evaluation/RunCompare.vue'),
+        meta: {
+          title: '运行对比',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
+          hideInMenu: true
+        }
+      },
+      {
         path: 'runs/:id',
         name: 'EvalRunDetail',
         component: () => import('@/views/Evaluation/RunDetail.vue'),
         meta: {
           title: '评测运行详情',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
+          hideInMenu: true
+        }
+      },
+      {
+        path: 'runs/:id/report',
+        name: 'EvalRunReport',
+        component: () => import('@/views/Evaluation/RunReport.vue'),
+        meta: {
+          title: '评测报告',
           requiresAuth: true,
           requiresAdmin: true,
           requiresEvalPlatform: true,

@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 
 from app.core.database import get_mongo_db
-from app.models.eval import ScoreSource, EvalScore
+from app.models.eval import ScoreSource, ScoreStatus, EvalScore
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -154,15 +154,31 @@ class ScorerHub:
         return self._scorers.get(key)
 
     def list_scorers(self) -> List[Dict[str, Any]]:
-        """列出所有评分器"""
-        return [
-            {
+        """列出所有评分器及其可用状态
+
+        返回每个评分器的 name、source、version 和 status。
+        status 为 'available' 表示已注册且可用；
+        'not_configured' 表示依赖未安装或未启用。
+        """
+        result = []
+        for s in self._scorers.values():
+            # 检查适配器是否有 availability 标志（外部库适配器）
+            is_available = True
+            if hasattr(s, '_available'):
+                is_available = bool(s._available)
+            elif hasattr(s, 'is_available'):
+                try:
+                    is_available = bool(s.is_available)
+                except Exception:
+                    is_available = False
+
+            result.append({
                 "name": s.name,
                 "source": s.source.value,
                 "version": s.version,
-            }
-            for s in self._scorers.values()
-        ]
+                "status": "available" if is_available else "not_configured",
+            })
+        return result
 
     async def score_trial(
         self,
@@ -191,8 +207,75 @@ class ScorerHub:
         db = get_mongo_db()
 
         for key, scorer in self._scorers.items():
-            # 如果指定了评分器列表，只运行指定的
+            # 如果指定了评分器列表，只运行指定的 → skipped
             if scorer_names and scorer.name not in scorer_names:
+                score_id = f"score_{uuid.uuid4().hex[:12]}"
+                skipped_doc = EvalScore(
+                    score_id=score_id,
+                    trial_id=trial_id,
+                    score_name=scorer.name,
+                    score=0.0,
+                    passed=False,
+                    status=ScoreStatus.SKIPPED,
+                    reason="Scorer not selected for this run",
+                    confidence=0.0,
+                    source=scorer.source,
+                    scorer_version=scorer.version,
+                )
+                await db[self.COLLECTION_SCORES].insert_one(
+                    skipped_doc.model_dump(by_alias=True, exclude={"id"})
+                )
+                results.append({
+                    "score_id": score_id,
+                    "score_name": scorer.name,
+                    "score": 0.0,
+                    "passed": False,
+                    "status": ScoreStatus.SKIPPED.value,
+                    "reason": "Scorer not selected for this run",
+                    "confidence": 0.0,
+                    "source": scorer.source.value,
+                    "version": scorer.version,
+                })
+                continue
+
+            # 检查外部库适配器是否可用 → not_configured
+            is_available = True
+            if hasattr(scorer, '_available'):
+                is_available = bool(scorer._available)
+            elif hasattr(scorer, 'is_available'):
+                try:
+                    is_available = bool(scorer.is_available)
+                except Exception:
+                    is_available = False
+
+            if not is_available:
+                score_id = f"score_{uuid.uuid4().hex[:12]}"
+                nc_doc = EvalScore(
+                    score_id=score_id,
+                    trial_id=trial_id,
+                    score_name=scorer.name,
+                    score=0.0,
+                    passed=False,
+                    status=ScoreStatus.NOT_CONFIGURED,
+                    reason=f"Scorer dependency not installed or not enabled",
+                    confidence=0.0,
+                    source=scorer.source,
+                    scorer_version=scorer.version,
+                )
+                await db[self.COLLECTION_SCORES].insert_one(
+                    nc_doc.model_dump(by_alias=True, exclude={"id"})
+                )
+                results.append({
+                    "score_id": score_id,
+                    "score_name": scorer.name,
+                    "score": 0.0,
+                    "passed": False,
+                    "status": ScoreStatus.NOT_CONFIGURED.value,
+                    "reason": f"Scorer dependency not installed or not enabled",
+                    "confidence": 0.0,
+                    "source": scorer.source.value,
+                    "version": scorer.version,
+                })
                 continue
 
             try:
@@ -207,6 +290,23 @@ class ScorerHub:
                 # 生成评分 ID
                 score_id = f"score_{uuid.uuid4().hex[:12]}"
 
+                # 根据分数和通过状态确定 score status
+                score_status = ScoreStatus.PASSED if result_dict.get("passed", False) else ScoreStatus.FAILED
+
+                # 解析 claims（如果评分器返回了 claim-evidence 结构）
+                from app.models.eval import ClaimEvidence
+                claims_data = result_dict.get("claims", [])
+                claims = []
+                if claims_data:
+                    for c in claims_data:
+                        if isinstance(c, dict):
+                            try:
+                                claims.append(ClaimEvidence(**c))
+                            except Exception:
+                                pass
+                        elif isinstance(c, ClaimEvidence):
+                            claims.append(c)
+
                 # 保存到数据库
                 score_doc = EvalScore(
                     score_id=score_id,
@@ -214,11 +314,13 @@ class ScorerHub:
                     score_name=result_dict["score_name"],
                     score=result_dict["score"],
                     passed=result_dict["passed"],
+                    status=score_status,
                     reason=result_dict["reason"],
                     confidence=result_dict.get("confidence", 1.0),
                     source=ScoreSource(result_dict["source"]),
                     scorer_version=result_dict.get("version", "1.0.0"),
                     evidence_refs=result_dict.get("evidence_refs", []),
+                    claims=claims,
                     raw_output=result_dict.get("raw_output"),
                 )
 
@@ -227,16 +329,36 @@ class ScorerHub:
                 )
 
                 result_dict["score_id"] = score_id
+                result_dict["status"] = score_status.value
                 results.append(result_dict)
 
                 logger.debug(f"Scored trial {trial_id} with {scorer.name}: {result_dict['score']:.2f}")
 
             except Exception as e:
                 logger.error(f"Scorer {key} failed for trial {trial_id}: {e}")
+                # 评分器执行出错 → error 状态，持久化到数据库
+                score_id = f"score_{uuid.uuid4().hex[:12]}"
+                error_doc = EvalScore(
+                    score_id=score_id,
+                    trial_id=trial_id,
+                    score_name=scorer.name,
+                    score=0.0,
+                    passed=False,
+                    status=ScoreStatus.ERROR,
+                    reason=f"Scorer error: {str(e)}",
+                    confidence=0.0,
+                    source=scorer.source,
+                    scorer_version=scorer.version,
+                )
+                await db[self.COLLECTION_SCORES].insert_one(
+                    error_doc.model_dump(by_alias=True, exclude={"id"})
+                )
                 results.append({
+                    "score_id": score_id,
                     "score_name": scorer.name,
                     "score": 0.0,
                     "passed": False,
+                    "status": ScoreStatus.ERROR.value,
                     "reason": f"Scorer error: {str(e)}",
                     "confidence": 0.0,
                     "source": scorer.source.value,
@@ -257,30 +379,63 @@ class ScorerHub:
         return results
 
     async def get_score_summary(self, trial_id: str) -> Dict[str, Any]:
-        """获取某个 trial 的评分摘要"""
+        """获取某个 trial 的评分摘要
+
+        区分真实评分（passed/failed）和非真实评分（skipped/not_configured/error），
+        避免未启用的评分器被误当成真实低分。
+        """
         scores = await self.get_trial_scores(trial_id)
 
         if not scores:
-            return {"total_scores": 0, "average_score": 0.0, "passed_count": 0}
+            return {
+                "total_scores": 0,
+                "effective_scores": 0,
+                "average_score": 0.0,
+                "passed_count": 0,
+                "failed_count": 0,
+                "skipped_count": 0,
+                "not_configured_count": 0,
+                "error_count": 0,
+            }
 
-        total_score = sum(s["score"] for s in scores)
-        passed_count = sum(1 for s in scores if s["passed"])
+        # 按状态分类
+        real_statuses = {ScoreStatus.PASSED.value, ScoreStatus.FAILED.value}
+        effective_scores = [s for s in scores if s.get("status") in real_statuses]
+        skipped_scores = [s for s in scores if s.get("status") == ScoreStatus.SKIPPED.value]
+        nc_scores = [s for s in scores if s.get("status") == ScoreStatus.NOT_CONFIGURED.value]
+        error_scores = [s for s in scores if s.get("status") == ScoreStatus.ERROR.value]
+
+        # 旧数据可能没有 status 字段，兼容处理
+        no_status_scores = [s for s in scores if "status" not in s or s.get("status") is None]
+        if no_status_scores:
+            effective_scores.extend(no_status_scores)
+
+        passed_count = sum(1 for s in effective_scores if s.get("passed", False))
+        failed_count = len(effective_scores) - passed_count
+
+        avg_score = 0.0
+        if effective_scores:
+            avg_score = round(sum(s["score"] for s in effective_scores) / len(effective_scores), 4)
 
         return {
             "total_scores": len(scores),
-            "average_score": round(total_score / len(scores), 4),
+            "effective_scores": len(effective_scores),
+            "average_score": avg_score,
             "passed_count": passed_count,
-            "failed_count": len(scores) - passed_count,
+            "failed_count": failed_count,
+            "skipped_count": len(skipped_scores),
+            "not_configured_count": len(nc_scores),
+            "error_count": len(error_scores),
             "by_source": {
                 source: {
-                    "count": len([s for s in scores if s["source"] == source]),
+                    "count": len([s for s in effective_scores if s["source"] == source]),
                     "avg_score": round(
-                        sum(s["score"] for s in scores if s["source"] == source) /
-                        max(1, len([s for s in scores if s["source"] == source])),
+                        sum(s["score"] for s in effective_scores if s["source"] == source) /
+                        max(1, len([s for s in effective_scores if s["source"] == source])),
                         4
                     ),
                 }
-                for source in set(s["source"] for s in scores)
+                for source in set(s["source"] for s in effective_scores)
             },
         }
 

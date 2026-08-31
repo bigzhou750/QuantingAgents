@@ -5,7 +5,13 @@
         <el-icon><Warning /></el-icon>
         Bad Case 池
       </h1>
-      <el-button @click="$router.push('/evaluation/dashboard')">返回概览</el-button>
+      <div class="header-actions">
+        <el-button type="primary" @click="onlineSampleDialogVisible = true">
+          <el-icon><Upload /></el-icon>
+          线上抽样入池
+        </el-button>
+        <el-button @click="$router.push('/evaluation/dashboard')">返回概览</el-button>
+      </div>
     </div>
 
     <!-- 统计卡片 -->
@@ -45,6 +51,7 @@
             <el-option label="人工复核" value="human_review" />
             <el-option label="安全拦截" value="safety_intercept" />
             <el-option label="用户反馈" value="user_feedback" />
+            <el-option label="线上抽样" value="online_sampling" />
           </el-select>
         </el-form-item>
         <el-form-item label="风险级别">
@@ -135,13 +142,49 @@
         <el-button type="primary" :loading="converting" @click="doConvert">确认回流</el-button>
       </template>
     </el-dialog>
+    <!-- 线上抽样入池对话框 (6.5) -->
+    <el-dialog v-model="onlineSampleDialogVisible" title="线上抽样入池" width="600px">
+      <el-form :model="onlineSampleForm" label-width="100px">
+        <el-form-item label="来源">
+          <el-select v-model="onlineSampleForm.source" style="width: 100%">
+            <el-option label="线上抽样" value="online_sampling" />
+            <el-option label="用户反馈" value="user_feedback" />
+            <el-option label="安全拦截" value="safety_intercept" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="风险级别">
+          <el-select v-model="onlineSampleForm.risk_level" style="width: 100%">
+            <el-option label="低" value="low" />
+            <el-option label="中" value="medium" />
+            <el-option label="高" value="high" />
+            <el-option label="严重" value="critical" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="输入数据">
+          <el-input v-model="onlineSampleForm.input_data_json" type="textarea" :rows="4" placeholder='JSON 格式，如 {"query": "帮我分析贵州茅台"}' />
+        </el-form-item>
+        <el-form-item label="输出数据">
+          <el-input v-model="onlineSampleForm.output_data_json" type="textarea" :rows="3" placeholder="可选，Agent 的实际输出" />
+        </el-form-item>
+        <el-form-item label="失败原因">
+          <el-input v-model="onlineSampleForm.failure_reason" placeholder="描述问题所在" />
+        </el-form-item>
+        <el-form-item label="Session ID">
+          <el-input v-model="onlineSampleForm.session_id" placeholder="可选，关联的会话ID" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="onlineSampleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingSample" @click="submitOnlineSample">提交入池</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, Upload } from '@element-plus/icons-vue'
 import { evalApiClient as axios } from '@/api/evalClient'
 
 const badCases = ref<any[]>([])
@@ -213,8 +256,78 @@ const doConvert = async () => {
   }
 }
 
+// 线上抽样入池 (6.5)
+const onlineSampleDialogVisible = ref(false)
+const submittingSample = ref(false)
+const onlineSampleForm = ref({
+  source: 'online_sampling',
+  risk_level: 'medium',
+  input_data_json: '',
+  output_data_json: '',
+  failure_reason: '',
+  session_id: '',
+})
+
+const submitOnlineSample = async () => {
+  submittingSample.value = true
+  try {
+    let input_data: any = {}
+    try {
+      input_data = JSON.parse(onlineSampleForm.value.input_data_json || '{}')
+    } catch {
+      ElMessage.error('输入数据格式不正确，请使用 JSON 格式')
+      submittingSample.value = false
+      return
+    }
+
+    let output_data: any = undefined
+    if (onlineSampleForm.value.output_data_json.trim()) {
+      try {
+        output_data = JSON.parse(onlineSampleForm.value.output_data_json)
+      } catch {
+        ElMessage.error('输出数据格式不正确，请使用 JSON 格式')
+        submittingSample.value = false
+        return
+      }
+    }
+
+    const payload: any = {
+      source: onlineSampleForm.value.source,
+      input_data,
+      output_data,
+      failure_reason: onlineSampleForm.value.failure_reason,
+      risk_level: onlineSampleForm.value.risk_level,
+      tags: [],
+    }
+    if (onlineSampleForm.value.session_id) {
+      payload.session_id = onlineSampleForm.value.session_id
+    }
+
+    await axios.post('/api/eval/online-sample', payload)
+    ElMessage.success('样本已入池')
+    onlineSampleDialogVisible.value = false
+    // Reset form
+    onlineSampleForm.value = {
+      source: 'online_sampling',
+      risk_level: 'medium',
+      input_data_json: '',
+      output_data_json: '',
+      failure_reason: '',
+      session_id: '',
+    }
+    await loadBadCases()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '提交失败')
+  } finally {
+    submittingSample.value = false
+  }
+}
+
 const getSourceType = (source: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { trial_failure: 'danger', human_review: 'warning', safety_intercept: 'danger', user_feedback: 'info' }
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
+    trial_failure: 'danger', human_review: 'warning', safety_intercept: 'danger',
+    user_feedback: 'info', online_sampling: 'primary',
+  }
   return map[source] || 'info'
 }
 
@@ -241,6 +354,7 @@ onMounted(() => {
 <style scoped>
 .bad-cases-page { padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header-actions { display: flex; gap: 8px; }
 .page-title { font-size: 24px; font-weight: 600; display: flex; align-items: center; gap: 12px; margin: 0; }
 .stat-card { text-align: center; height: 100px; display: flex; flex-direction: column; justify-content: center; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--el-color-primary); }

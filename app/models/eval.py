@@ -77,6 +77,62 @@ class ScoreSource(str, Enum):
     HUMAN_REVIEW = "human_review"
 
 
+class ScoreStatus(str, Enum):
+    """评分状态
+
+    区分真实评分结果与跳过/未配置/错误状态，
+    避免未启用的第三方评分器被误当成真实低分。
+    """
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"               # 评分器已注册但本次运行未选择
+    NOT_CONFIGURED = "not_configured"   # 评分器依赖未安装或未启用
+    ERROR = "error"                     # 评分器执行出错
+
+
+class ClaimVerdict(str, Enum):
+    """Claim 证据判定结果"""
+    SUPPORTED = "supported"
+    WEAKLY_SUPPORTED = "weakly_supported"
+    UNSUPPORTED = "unsupported"
+    CONTRADICTED = "contradicted"
+
+
+# ==================== Claim-Evidence 结构 ====================
+
+class ClaimEvidence(BaseModel):
+    """单条 claim 及其证据映射
+
+    用于 grounding scorer 输出，把最终输出拆解为可验证的 claim，
+    并为每条 claim 记录证据引用、证据片段、来源、trace 事件、判定结果和理由。
+    """
+    claim_id: str = Field(..., description="Claim 唯一标识")
+    claim_text: str = Field(..., description="Claim 原文")
+    verdict: ClaimVerdict = Field(default=ClaimVerdict.UNSUPPORTED, description="判定结果")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="置信度")
+    reason: str = Field(default="", description="判定理由")
+    evidence_snippet: Optional[str] = Field(default=None, description="证据片段原文")
+    evidence_source: Optional[str] = Field(default=None, description="证据来源（如检索工具名、文档ID）")
+    trace_event_id: Optional[str] = Field(default=None, description="关联的 trace 事件 ID")
+    conflicting_evidence: Optional[str] = Field(default=None, description="冲突证据（仅 contradicted 时）")
+
+
+# ==================== 运行快照结构 ====================
+
+class RunSnapshot(BaseModel):
+    """运行快照
+
+    创建 run 时固化 dataset version、case 内容、scorer 配置、judge 配置和数据窗口，
+    确保金融行情、新闻、财报等时变数据下复盘可靠。
+    """
+    dataset_version: str = Field(..., description="数据集版本")
+    case_contents: Dict[str, Any] = Field(default_factory=dict, description="case_id -> case 内容快照")
+    scorer_config: List[Dict[str, Any]] = Field(default_factory=list, description="评分器配置快照")
+    judge_config: Dict[str, Any] = Field(default_factory=dict, description="Judge 配置快照")
+    data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
+    created_at: datetime = Field(default_factory=now_tz, description="快照创建时间")
+
+
 # ==================== 评测集模型 ====================
 
 class EvalCase(BaseModel):
@@ -123,6 +179,11 @@ class EvalRunConfig(BaseModel):
     timeout_seconds: int = Field(default=600, description="单个 trial 超时时间")
     max_retries: int = Field(default=0, description="最大重试次数")
     scorer_names: List[str] = Field(default_factory=list, description="指定评分器")
+    judge_model: str = Field(default="", description="Judge 使用的模型")
+    rubric_version: str = Field(default="", description="Rubric 版本")
+    low_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0, description="低置信度阈值")
+    review_strategy: str = Field(default="auto", description="复核策略: auto/manual/all")
+    data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
     extra: Dict[str, Any] = Field(default_factory=dict, description="额外配置")
 
 
@@ -140,6 +201,7 @@ class EvalRun(BaseModel):
     failed_trials: int = Field(default=0, description="失败的 trial 数")
     started_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
+    snapshot: Optional[RunSnapshot] = Field(default=None, description="运行快照（case/scorer/judge/data_window）")
     created_by: str = Field(default="", description="创建者")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
@@ -160,6 +222,7 @@ class EvalTrial(BaseModel):
     status: TrialStatus = Field(default=TrialStatus.PENDING)
     input_data: Dict[str, Any] = Field(default_factory=dict, description="实际输入")
     output_data: Optional[Dict[str, Any]] = Field(default=None, description="实际输出")
+    case_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="运行时 case 内容快照")
     trace_ref: Optional[str] = Field(default=None, description="Trace 引用 ID")
     token_usage: Dict[str, int] = Field(default_factory=dict, description="Token 使用情况")
     latency_ms: int = Field(default=0, description="耗时（毫秒）")
@@ -192,6 +255,16 @@ class TraceEventDoc(BaseModel):
 
 # ==================== 评分结果模型 ====================
 
+class ReviewAuditEntry(BaseModel):
+    """复核审计条目"""
+    reviewer: str = Field(..., description="复核人")
+    action: str = Field(..., description="动作: approve/reject/adjust_score/add_bad_case/reflow")
+    old_score: Optional[float] = Field(default=None, description="变更前分数")
+    new_score: Optional[float] = Field(default=None, description="变更后分数")
+    comment: str = Field(default="", description="复核意见")
+    timestamp: datetime = Field(default_factory=now_tz, description="操作时间")
+
+
 class EvalScore(BaseModel):
     """评分结果"""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
@@ -200,16 +273,21 @@ class EvalScore(BaseModel):
     score_name: str = Field(..., description="评分维度名称")
     score: float = Field(..., ge=0.0, le=1.0, description="分数（0-1）")
     passed: bool = Field(default=False, description="是否通过")
+    status: ScoreStatus = Field(default=ScoreStatus.PASSED, description="评分状态")
     reason: str = Field(default="", description="评分原因")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="置信度")
     source: ScoreSource = Field(..., description="评分来源")
     scorer_version: str = Field(default="1.0.0", description="评分器版本")
     evidence_refs: List[str] = Field(default_factory=list, description="证据引用")
+    claims: List[ClaimEvidence] = Field(default_factory=list, description="Claim-Evidence 结构")
     raw_output: Optional[Dict[str, Any]] = Field(default=None, description="原始输出（LLM judge 等）")
     human_reviewed: bool = Field(default=False, description="是否经过人工复核")
     reviewer: Optional[str] = Field(default=None, description="复核人")
     review_comment: Optional[str] = Field(default=None, description="复核意见")
+    review_action: Optional[str] = Field(default=None, description="复核动作: approve/reject/adjust_score/add_bad_case/reflow")
+    review_audit_trail: List[ReviewAuditEntry] = Field(default_factory=list, description="复核审计轨迹")
     original_score: Optional[float] = Field(default=None, description="原始分数（被覆盖时保留）")
+    export_metadata: Optional[Dict[str, Any]] = Field(default=None, description="导出元数据")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
 
