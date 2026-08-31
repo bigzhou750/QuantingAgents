@@ -87,9 +87,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="340" fixed="right">
+        <el-table-column label="操作" width="420" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.source_template_id" size="small" type="primary" plain @click="viewSourceTemplate(row)">查看模板</el-button>
+            <el-button size="small" type="success" plain @click="openObservationDialog(row)">加入观察</el-button>
             <el-button size="small" @click="editStrategy(row)">编辑</el-button>
             <el-button
               size="small"
@@ -331,6 +332,30 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 策略上下文加入观察 -->
+    <el-dialog v-model="showObservationDialog" title="从策略加入观察" width="480px">
+      <el-form label-width="90px">
+        <el-form-item label="策略">
+          <el-input :model-value="observationStrategy?.name" disabled />
+        </el-form-item>
+        <el-form-item label="股票代码" required>
+          <el-input v-model="observationStockCode" placeholder="如 000001" />
+        </el-form-item>
+        <el-form-item label="观察原因">
+          <el-input
+            v-model="observationNotes"
+            type="textarea"
+            :rows="2"
+            placeholder="为什么关注这只标的？"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showObservationDialog = false">取消</el-button>
+        <el-button type="primary" :loading="observationLoading" @click="submitObservation">加入观察</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -341,6 +366,7 @@ import { ElMessage } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { investmentApi } from '@/api/investment'
+import { observationApi } from '@/api/observation'
 import { getStrategyGuideRecommendation } from '@/utils/strategyGuide'
 
 const router = useRouter()
@@ -540,6 +566,13 @@ const taskWizardUseProfile = ref(true)
 const creatingTask = ref(false)
 const currentProfileId = ref<string | null>(null)
 
+// 从策略上下文手动加入观察
+const showObservationDialog = ref(false)
+const observationStrategy = ref<any>(null)
+const observationStockCode = ref('')
+const observationNotes = ref('')
+const observationLoading = ref(false)
+
 const loadCurrentProfileId = async () => {
   try {
     const response = await investmentApi.getProfile()
@@ -589,6 +622,36 @@ const confirmTaskWizard = async () => {
     ElMessage.error(error.response?.data?.detail || '创建任务失败')
   } finally {
     creatingTask.value = false
+  }
+}
+
+const openObservationDialog = (strategy: any) => {
+  observationStrategy.value = strategy
+  observationStockCode.value = ''
+  observationNotes.value = ''
+  showObservationDialog.value = true
+}
+
+const submitObservation = async () => {
+  const stockCode = observationStockCode.value.trim()
+  if (!stockCode) {
+    ElMessage.warning('请输入股票代码')
+    return
+  }
+  observationLoading.value = true
+  try {
+    await observationApi.add({
+      stock_code: stockCode,
+      source_type: 'screening',
+      source_strategy_id: observationStrategy.value?.strategy_id,
+      user_notes: observationNotes.value,
+    })
+    ElMessage.success('已加入观察列表')
+    showObservationDialog.value = false
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.detail || '加入观察失败')
+  } finally {
+    observationLoading.value = false
   }
 }
 

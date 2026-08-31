@@ -5,7 +5,7 @@
 支持复盘备注和学习闭环追踪。
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Any
 from enum import Enum
 
@@ -56,6 +56,8 @@ class ObservationRecord(BaseModel):
 
     # 用户备注
     user_notes: str = ""
+    review_interval_days: int = Field(default=7, ge=1, le=365)
+    next_review_at: Optional[datetime] = None
 
     # 新闻闭环扩展字段（可选）
     news_event_id: Optional[str] = None
@@ -108,12 +110,15 @@ class AddObservationRequest(BaseModel):
     match_reasons: List[str] = Field(default_factory=list)
     risk_warnings: List[str] = Field(default_factory=list)
     user_notes: str = ""
+    data_as_of: Optional[datetime] = None
+    review_interval_days: int = Field(default=7, ge=1, le=365)
 
 
 class UpdateObservationRequest(BaseModel):
     """更新观察标的请求"""
     user_notes: Optional[str] = None
     status: Optional[str] = None
+    review_interval_days: Optional[int] = Field(default=None, ge=1, le=365)
 
 
 class AddReviewNoteRequest(BaseModel):

@@ -624,6 +624,8 @@ async def add_observation(body: AddObservationRequest, current_user: dict = Depe
             match_reasons=body.match_reasons,
             risk_warnings=body.risk_warnings,
             user_notes=body.user_notes,
+            data_as_of=body.data_as_of,
+            review_interval_days=body.review_interval_days,
         )
         result = await observation_service.add_observation(current_user["id"], record)
         return ApiResponse(success=True, data=result, message="已加入观察")

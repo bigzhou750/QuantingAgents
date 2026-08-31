@@ -189,6 +189,59 @@ class NewsWatchService:
             ),
         }
 
+    async def analyze_stock_impact(
+        self,
+        user_id: str,
+        stock_code: str,
+        hours_back: int = 72,
+    ) -> Dict[str, Any]:
+        """分析单个观察标的的新闻影响，并保留用户画像上下文。"""
+        db = await self._get_db()
+        profile_doc = await db["investment_profiles"].find_one({"user_id": user_id})
+        stock_doc = await db["stock_basic_info"].find_one({
+            "$or": [{"code": stock_code}, {"symbol": stock_code}]
+        })
+
+        holding = {
+            "stock_code": stock_code,
+            "stock_name": (stock_doc or {}).get("name") or stock_code,
+            "profile_risk_preference": (profile_doc or {}).get("risk_preference"),
+        }
+
+        from app.services.news_data_service import get_news_data_service, NewsQueryParams
+        news_service = await get_news_data_service()
+        start_time = datetime.utcnow() - timedelta(hours=hours_back)
+        params = NewsQueryParams(
+            symbol=stock_code,
+            start_time=start_time,
+            limit=20,
+            sort_by="publish_time",
+            sort_order=-1,
+        )
+        news_list = await news_service.query_news(params)
+        impact_level, evidence_note = self._evaluate_impact(news_list, holding)
+
+        return {
+            "has_holdings": True,
+            "holdings_count": 1,
+            "hours_back": hours_back,
+            "symbol": stock_code,
+            "impacts": [{
+                "stock_code": stock_code,
+                "stock_name": holding["stock_name"],
+                "news_count": len(news_list),
+                "impact_level": impact_level,
+                "evidence_note": evidence_note,
+                "latest_news_time": news_list[0].get("publish_time", "") if news_list else "",
+                "sample_headlines": [n.get("title", "")[:80] for n in news_list[:3]],
+            }],
+            "data_sufficient": len(news_list) >= 3,
+            "boundary_note": (
+                "分析基于近期新闻的规则匹配，并结合你的投资画像上下文，不构成交易建议。"
+                + ("新闻覆盖不足，结论仅供参考。" if len(news_list) < 3 else "")
+            ),
+        }
+
     @staticmethod
     def _evaluate_impact(
         news_list: List[Dict[str, Any]],

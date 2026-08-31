@@ -37,6 +37,7 @@ class TestObservationModels:
         assert record.market == "CN"
         assert record.match_reasons == []
         assert record.risk_warnings == []
+        assert record.review_interval_days == 7
 
     def test_observation_record_to_doc(self):
         record = ObservationRecord(
@@ -106,6 +107,7 @@ class TestObservationService:
 
         assert result["stock_code"] == "000001"
         assert result["stock_name"] == "平安银行"
+        assert result["next_review_at"] is not None
         mock_coll.insert_one.assert_called_once()
 
     @pytest.mark.asyncio
@@ -288,3 +290,83 @@ class TestObservationService:
         assert result["source_task_id"] == "task_xyz"
         assert len(result["match_reasons"]) == 2
         assert len(result["risk_warnings"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_update_observation_user_isolation_and_review_cycle(self, service):
+        """更新观察必须带用户过滤，且会重算下一次复盘时间"""
+        mock_db, mock_coll, _ = self._make_mock_db()
+        mock_coll.update_one = AsyncMock(return_value=MagicMock(modified_count=1))
+        mock_coll.find_one = AsyncMock(return_value={
+            "observation_id": "obs_123",
+            "user_id": "u1",
+            "stock_code": "000001",
+            "review_interval_days": 14,
+            "next_review_at": "2026-09-01T00:00:00Z",
+        })
+
+        with patch("app.services.personal_investment.observation_service.get_mongo_db", return_value=mock_db):
+            await service.update_observation(
+                observation_id="obs_123",
+                user_id="u1",
+                review_interval_days=14,
+            )
+
+        call_args = mock_coll.update_one.call_args
+        assert call_args[0][0] == {"observation_id": "obs_123", "user_id": "u1"}
+        assert "next_review_at" in call_args[0][1]["$set"]
+
+    @pytest.mark.asyncio
+    async def test_get_pending_reviews_uses_review_cycle(self, service):
+        """待复盘必须达到 next_review_at，而不是所有无备注观察"""
+        mock_db, mock_coll_obs, mock_coll_notes = self._make_mock_db()
+
+        class AsyncItems:
+            def __init__(self, items):
+                self.items = items
+                self._iterator = iter(items)
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._iterator)
+                except StopIteration:
+                    raise StopAsyncIteration
+
+        due_docs = [{
+            "observation_id": "obs_due",
+            "user_id": "u1",
+            "stock_code": "000002",
+            "status": "active",
+        }]
+        active_docs = [{
+            "observation_id": "obs_not_due",
+            "user_id": "u1",
+            "stock_code": "000001",
+            "status": "active",
+        }]
+
+        def make_detail_cursor(items):
+            detail_cursor = MagicMock()
+            detail_cursor.sort = MagicMock(return_value=detail_cursor)
+            detail_cursor.limit = MagicMock(return_value=AsyncItems(items))
+            return detail_cursor
+
+        def fake_obs_find(query, *args, **kwargs):
+            if "next_review_at" in query:
+                return AsyncItems(due_docs)
+            if "observation_id" in query:
+                return make_detail_cursor(due_docs)
+            return AsyncItems(active_docs)
+
+        mock_coll_obs.find = MagicMock(side_effect=fake_obs_find)
+        mock_coll_notes.find = MagicMock(return_value=MagicMock(
+            distinct=AsyncMock(return_value=[])
+        ))
+
+        with patch("app.services.personal_investment.observation_service.get_mongo_db", return_value=mock_db):
+            result = await service.get_pending_reviews("u1")
+
+        assert result["count"] == 1
+        assert result["items"][0]["observation_id"] == "obs_due"

@@ -257,7 +257,12 @@ const riskLabel = (r: string) => ({ conservative: '稳健型', balanced: '平衡
 const styleLabel = (s: string) => ({ long_term: '长期持有', swing: '波段操作', day_trading: '日内交易' }[s] || s || '未知')
 const taskTypeLabel = (t: string) => ({ strategy_screening: '选股', strategy_checkup: '体检' }[t] || t)
 const taskStatusLabel = (s: string) => ({ pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[s] || s)
-const taskStatusType = (s: string) => ({ pending: 'info', running: '', completed: 'success', failed: 'danger' }[s] || '')
+const taskStatusType = (s: string): 'info' | 'success' | 'danger' => {
+  const types: Record<string, 'info' | 'success' | 'danger'> = {
+    pending: 'info', running: 'info', completed: 'success', failed: 'danger'
+  }
+  return types[s] || 'info'
+}
 const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('zh-CN') : '-'
 const formatNumber = (n: number) => n != null ? n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'
 const sourceLabel = (type: string) => ({ screening: '策略选股', manual: '手动添加', favorites: '自选股导入', news: '新闻关注' }[type] || type || '')

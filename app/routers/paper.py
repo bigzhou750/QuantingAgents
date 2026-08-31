@@ -5,6 +5,8 @@ from datetime import datetime
 import logging
 import re
 
+from bson import ObjectId
+
 from app.routers.auth_db import get_current_user
 from app.core.database import get_mongo_db
 from app.core.response import ok
@@ -32,6 +34,31 @@ class PlaceOrderRequest(BaseModel):
     source_type: Optional[str] = Field(None, description="来源类型 (observation/screening/manual)")
     source_observation_id: Optional[str] = Field(None, description="关联的观察标的ID")
     source_strategy_id: Optional[str] = Field(None, description="关联的策略ID")
+    source_task_id: Optional[str] = Field(None, description="关联的筛选任务ID")
+    source_candidate: Optional[Dict[str, Any]] = Field(None, description="来源候选上下文")
+
+
+class AddPaperPositionReviewRequest(BaseModel):
+    """给模拟持仓添加复盘备注"""
+    content: str = Field(..., min_length=1)
+
+
+SOURCE_TRACKING_FIELDS = (
+    "source_type",
+    "source_observation_id",
+    "source_strategy_id",
+    "source_task_id",
+    "source_candidate",
+)
+
+
+def _payload_source_fields(payload: PlaceOrderRequest) -> Dict[str, Any]:
+    """提取可选来源追踪字段，旧请求不传时保持为空。"""
+    return {
+        field: getattr(payload, field)
+        for field in SOURCE_TRACKING_FIELDS
+        if getattr(payload, field, None) is not None
+    }
 
 
 def _detect_market_and_code(code: str) -> Tuple[str, str]:
@@ -301,6 +328,7 @@ async def get_account(current_user: dict = Depends(get_current_user)):
         positions_value_by_currency[currency] += mkt_value
 
         detailed_positions.append({
+            "position_id": str(p.get("_id")),
             "code": code,
             "market": market,
             "currency": currency,
@@ -512,6 +540,7 @@ async def place_order(payload: PlaceOrderRequest, current_user: dict = Depends(g
     }
     if analysis_id:
         order_doc["analysis_id"] = analysis_id
+    order_doc.update(_payload_source_fields(payload))
     await db["paper_orders"].insert_one(order_doc)
 
     trade_doc = {
@@ -529,6 +558,7 @@ async def place_order(payload: PlaceOrderRequest, current_user: dict = Depends(g
     }
     if analysis_id:
         trade_doc["analysis_id"] = analysis_id
+    trade_doc.update(_payload_source_fields(payload))
     await db["paper_trades"].insert_one(trade_doc)
 
     return ok({"order": {k: v for k, v in order_doc.items() if k != "_id"}})
@@ -551,6 +581,7 @@ async def list_positions(current_user: dict = Depends(get_current_user)):
         last = await _get_last_price(code, market)
         mkt = round((last or 0.0) * qty, 2)
         enriched.append({
+            "position_id": str(p.get("_id")),
             "code": code,
             "market": market,
             "currency": currency,
@@ -562,6 +593,66 @@ async def list_positions(current_user: dict = Depends(get_current_user)):
             "unrealized_pnl": None if last is None else round((last - avg_cost) * qty, 2)
         })
     return ok({"items": enriched})
+
+
+@router.post("/positions/{position_id}/review", response_model=dict)
+async def add_position_review_note(
+    position_id: str,
+    body: AddPaperPositionReviewRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """为当前用户的模拟持仓添加复盘备注。"""
+    db = get_mongo_db()
+    try:
+        position_oid = ObjectId(position_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="无效的持仓 ID") from exc
+
+    position = await db["paper_positions"].find_one({
+        "_id": position_oid,
+        "user_id": current_user["id"],
+    })
+    if not position:
+        raise HTTPException(status_code=404, detail="持仓不存在")
+
+    from app.models.observation import ReviewTargetType
+    from app.services.personal_investment.observation_service import observation_service
+    result = await observation_service.add_review_note(
+        user_id=current_user["id"],
+        target_id=position_id,
+        content=body.content,
+        target_type=ReviewTargetType.PAPER_POSITION.value,
+    )
+    return ok(data=result, message="复盘备注已保存")
+
+
+@router.get("/positions/{position_id}/review-notes", response_model=dict)
+async def list_position_review_notes(
+    position_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """列出模拟持仓的复盘备注。"""
+    db = get_mongo_db()
+    try:
+        position_oid = ObjectId(position_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="无效的持仓 ID") from exc
+
+    position = await db["paper_positions"].find_one({
+        "_id": position_oid,
+        "user_id": current_user["id"],
+    })
+    if not position:
+        raise HTTPException(status_code=404, detail="持仓不存在")
+
+    from app.models.observation import ReviewTargetType
+    from app.services.personal_investment.observation_service import observation_service
+    items = await observation_service.list_review_notes(
+        user_id=current_user["id"],
+        target_id=position_id,
+        target_type=ReviewTargetType.PAPER_POSITION.value,
+    )
+    return ok(data={"items": items})
 
 
 @router.get("/orders", response_model=dict)

@@ -10,6 +10,7 @@ export interface AddObservationPayload {
   match_reasons?: string[]
   risk_warnings?: string[]
   user_notes?: string
+  data_as_of?: string
 }
 
 export const observationApi = {

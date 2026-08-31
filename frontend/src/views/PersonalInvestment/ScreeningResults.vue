@@ -159,13 +159,16 @@ const addToWatchlist = async (row: any) => {
   watchlistLoading.value = row.stock_code
   try {
     const taskId = route.params.taskId as string
+    const strategyId = String(route.query.strategyId || route.query.strategy_id || result.value?.strategy_id || '')
     await observationApi.add({
       stock_code: row.stock_code,
       stock_name: row.stock_name,
       source_type: 'screening',
       source_task_id: taskId || undefined,
+      source_strategy_id: strategyId || undefined,
       match_reasons: row.match_reasons || [],
       risk_warnings: row.risk_warnings || [],
+      data_as_of: result.value?.data_as_of || undefined,
     })
     ElMessage.success(`${row.stock_name || row.stock_code} 已加入观察`)
   } catch (error: any) {
