@@ -284,6 +284,11 @@ async def get_screening_result(task_id: str, current_user: dict = Depends(get_cu
         result = await task_service.get_screening_result(task_id)
         if not result:
             return ApiResponse(success=True, data={}, message="结果尚未生成")
+        result["strategy_id"] = task.get("strategy_id")
+        result["profile_id"] = task.get("profile_id")
+        result["data_sources"] = task.get("data_sources", [])
+        result["data_as_of"] = task.get("data_as_of")
+        result["task_status"] = task.get("status")
         return ApiResponse(success=True, data=result)
     except HTTPException:
         raise
@@ -330,6 +335,11 @@ async def get_checkup_result(task_id: str, current_user: dict = Depends(get_curr
         result = await task_service.get_checkup_result(task_id)
         if not result:
             return ApiResponse(success=True, data={}, message="结果尚未生成")
+        result["strategy_id"] = task.get("strategy_id")
+        result["profile_id"] = task.get("profile_id")
+        result["data_sources"] = task.get("data_sources", [])
+        result["data_as_of"] = task.get("data_as_of")
+        result["task_status"] = task.get("status")
         return ApiResponse(success=True, data=result)
     except HTTPException:
         raise

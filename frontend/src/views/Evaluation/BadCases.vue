@@ -142,7 +142,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Warning } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const badCases = ref<any[]>([])
 const loading = ref(false)

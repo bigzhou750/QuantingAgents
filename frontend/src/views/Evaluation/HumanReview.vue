@@ -72,6 +72,45 @@
           </el-descriptions-item>
         </el-descriptions>
 
+        <el-divider content-position="left">证据链</el-divider>
+        <el-alert
+          :closable="false"
+          show-icon
+          type="info"
+          title="当前 judge 主要根据输入、输出和 rubric 做推断；如果要审计它为什么这么判，需要看维度理由和原始输出。"
+          style="margin-bottom: 12px"
+        />
+
+        <div v-if="evidenceRefs.length" style="margin-bottom: 12px">
+          <div class="section-label">证据引用</div>
+          <el-tag
+            v-for="ref in evidenceRefs"
+            :key="ref"
+            size="small"
+            style="margin-right: 4px; margin-bottom: 4px"
+          >
+            {{ ref }}
+          </el-tag>
+        </div>
+
+        <div v-if="judgeDimensions.length" style="margin-bottom: 12px">
+          <div class="section-label">维度理由</div>
+          <el-table :data="judgeDimensions" size="small" border>
+            <el-table-column prop="name" label="维度" width="160" />
+            <el-table-column label="分数" width="100">
+              <template #default="{ row }">
+                {{ (Number(row.score || 0) * 100).toFixed(1) }}%
+              </template>
+            </el-table-column>
+            <el-table-column prop="reason" label="理由" min-width="220" show-overflow-tooltip />
+          </el-table>
+        </div>
+
+        <div v-if="judgeRawOutput">
+          <div class="section-label">原始 judge 输出</div>
+          <pre class="json-block">{{ JSON.stringify(judgeRawOutput, null, 2) }}</pre>
+        </div>
+
         <el-form label-width="100px">
           <el-form-item label="新分数">
             <el-slider v-model="reviewForm.newScore" :min="0" :max="1" :step="0.05" show-input />
@@ -97,9 +136,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const pendingReviews = ref<any[]>([])
 const loading = ref(false)
@@ -108,6 +148,10 @@ const reviewDialogVisible = ref(false)
 const selectedScore = ref<any>(null)
 const submitting = ref(false)
 const reviewForm = ref({ newScore: 0.5, comment: '' })
+
+const judgeRawOutput = computed(() => selectedScore.value?.raw_output || null)
+const judgeDimensions = computed(() => judgeRawOutput.value?.parsed?.dimensions || [])
+const evidenceRefs = computed(() => selectedScore.value?.evidence_refs || [])
 
 const loadPending = async () => {
   loading.value = true
@@ -176,5 +220,25 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.section-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.json-block {
+  margin: 0;
+  padding: 12px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: monospace;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

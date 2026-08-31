@@ -23,10 +23,23 @@ export interface AuthState {
   redirectPath: string
 }
 
+const loadStoredUser = (): User | null => {
+  const raw = localStorage.getItem('user-info')
+  if (!raw) return null
+
+  try {
+    return JSON.parse(raw) as User
+  } catch {
+    localStorage.removeItem('user-info')
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => {
     const token = useStorage('auth-token', null).value || null
     const refreshToken = useStorage('refresh-token', null).value || null
+    const storedUser = loadStoredUser()
 
     // 验证token格式
     const isValidToken = (token: string | null): boolean => {
@@ -56,10 +69,12 @@ export const useAuthStore = defineStore('auth', {
       token: validToken,
       refreshToken: validRefreshToken,
 
-      user: validToken ? (useStorage('user-info', null).value || null) : null,
+      user: validToken ? storedUser : null,
 
-      permissions: [],
-      roles: [],
+      permissions: validToken && storedUser?.is_admin ? ['*'] : [],
+      roles: validToken
+        ? (storedUser?.is_admin ? ['admin'] : (storedUser?.roles || ['user']))
+        : [],
 
       loginLoading: false,
       redirectPath: '/'

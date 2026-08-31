@@ -185,11 +185,11 @@
 
     <!-- 持仓管理对话框 -->
     <el-dialog v-model="showHoldingsDialog" title="管理当前持仓" width="600px">
-      <el-table :data="profileForm.current_holdings" border>
-        <el-table-column prop="stock_code" label="代码" width="100" />
-        <el-table-column prop="stock_name" label="名称" width="120" />
-        <el-table-column prop="quantity" label="数量" width="100" />
-        <el-table-column prop="cost_price" label="成本价" width="100" />
+        <el-table :data="profileForm.current_holdings" border>
+          <el-table-column prop="stock_code" label="代码" width="100" />
+          <el-table-column prop="stock_name" label="名称" width="120" />
+          <el-table-column prop="quantity" label="数量" width="100" />
+          <el-table-column prop="cost_price" label="成本价" width="100" />
         <el-table-column label="操作" width="80">
           <template #default="{ $index }">
             <el-button type="danger" size="small" link @click="removeHolding($index)">
@@ -199,8 +199,29 @@
         </el-table-column>
       </el-table>
       <div style="margin-top: 16px;">
-        <el-button type="primary" @click="addHolding">添加持仓</el-button>
+        <el-button type="primary" @click="openHoldingDialog">添加持仓</el-button>
       </div>
+    </el-dialog>
+
+    <el-dialog v-model="showHoldingEditor" title="添加持仓" width="520px">
+      <el-form :model="holdingDraft" label-width="90px">
+        <el-form-item label="代码">
+          <el-input v-model="holdingDraft.stock_code" placeholder="如 600519" />
+        </el-form-item>
+        <el-form-item label="名称">
+          <el-input v-model="holdingDraft.stock_name" placeholder="如 贵州茅台" />
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number v-model="holdingDraft.quantity" :min="0" :step="100" />
+        </el-form-item>
+        <el-form-item label="成本价">
+          <el-input-number v-model="holdingDraft.cost_price" :min="0" :step="0.1" :precision="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showHoldingEditor = false">取消</el-button>
+        <el-button type="primary" @click="confirmHolding">保存</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -210,15 +231,22 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Umbrella, Coin, TrendCharts } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { investmentApi } from '@/api/investment'
 
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const contextInjectionEnabled = ref(true)
 const showHoldingsDialog = ref(false)
+const showHoldingEditor = ref(false)
 const isFirstTime = ref(false)
 const showTemplates = ref(false)
 const selectedTemplate = ref('')
+const holdingDraft = reactive({
+  stock_code: '',
+  stock_name: '',
+  quantity: 0,
+  cost_price: 0,
+})
 
 // 起步模板：仅用于预填表单，不构成投资建议
 const profileTemplates = [
@@ -312,9 +340,9 @@ const rules: FormRules = {
 // 加载画像数据
 const loadProfile = async () => {
   try {
-    const response = await axios.get('/api/investment/profile')
-    if (response.data.success && response.data.data && Object.keys(response.data.data).length > 0) {
-      Object.assign(profileForm, response.data.data)
+    const response = await investmentApi.getProfile()
+    if (response.success && response.data && Object.keys(response.data).length > 0) {
+      Object.assign(profileForm, response.data)
       contextInjectionEnabled.value = profileForm.context_injection_enabled ?? true
       isFirstTime.value = false
     } else {
@@ -338,16 +366,16 @@ const saveProfile = async () => {
 
     saving.value = true
     try {
-      const response = await axios.put('/api/investment/profile', {
+      const response = await investmentApi.updateProfile({
         ...profileForm,
         context_injection_enabled: contextInjectionEnabled.value,
       })
 
-      if (response.data.success) {
+      if (response.success) {
         ElMessage.success('画像保存成功')
         isFirstTime.value = false
       } else {
-        ElMessage.error(response.data.message || '保存失败')
+        ElMessage.error(response.message || '保存失败')
       }
     } catch (error: any) {
       ElMessage.error(error.response?.data?.detail || '保存失败')
@@ -379,8 +407,27 @@ const removeHolding = (index: number) => {
 }
 
 // 添加持仓（简化版，实际应该弹出表单）
-const addHolding = () => {
-  ElMessage.info('请通过其他方式添加持仓')
+const openHoldingDialog = () => {
+  holdingDraft.stock_code = ''
+  holdingDraft.stock_name = ''
+  holdingDraft.quantity = 0
+  holdingDraft.cost_price = 0
+  showHoldingEditor.value = true
+}
+
+const confirmHolding = () => {
+  if (!holdingDraft.stock_code || !holdingDraft.stock_name) {
+    ElMessage.warning('请输入持仓代码和名称')
+    return
+  }
+  profileForm.current_holdings.push({
+    stock_code: holdingDraft.stock_code,
+    stock_name: holdingDraft.stock_name,
+    quantity: holdingDraft.quantity,
+    cost_price: holdingDraft.cost_price,
+  })
+  showHoldingEditor.value = false
+  ElMessage.success('已添加到当前持仓，保存画像后生效')
 }
 
 onMounted(() => {

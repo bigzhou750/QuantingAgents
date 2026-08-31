@@ -73,7 +73,7 @@
       <el-menu-item index="/news-watch/alerts">告警配置</el-menu-item>
     </el-sub-menu>
 
-    <el-sub-menu index="/evaluation">
+    <el-sub-menu v-if="showEvaluationPlatform" index="/evaluation">
       <template #title>
         <el-icon><DataAnalysis /></el-icon>
         <span>Agent 评测</span>
@@ -140,6 +140,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import {
   Odometer,
   Reading,
@@ -158,8 +159,12 @@ import {
 
 const route = useRoute()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const activeMenu = computed(() => route.path)
+const showEvaluationPlatform = computed(() => {
+  return import.meta.env.VITE_EVAL_PLATFORM_ENABLED === 'true' && authStore.isAdmin
+})
 </script>
 
 <style lang="scss" scoped>

@@ -160,7 +160,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 // Icons used in template
-import axios from 'axios'
+import { investmentApi } from '@/api/investment'
 
 const route = useRoute()
 const router = useRouter()
@@ -210,16 +210,16 @@ const loadResult = async () => {
     const maxAttempts = 30
 
     while (attempts < maxAttempts) {
-      const response = await axios.get(`/api/investment/checkup-tasks/${taskId}/result`)
+      const response = await investmentApi.getTaskResult('checkup', taskId)
 
-      if (response.data.success && response.data.data && Object.keys(response.data.data).length > 0) {
-        result.value = response.data.data
+      if (response.success && response.data && Object.keys(response.data).length > 0) {
+        result.value = response.data
         break
       }
 
       // 检查任务状态
-      const taskResponse = await axios.get(`/api/investment/tasks/${taskId}`)
-      const status = taskResponse.data.data?.status
+      const taskResponse = await investmentApi.getTask(taskId)
+      const status = taskResponse.data?.status
 
       if (status === 'failed') {
         ElMessage.error('体检任务执行失败')
@@ -228,9 +228,9 @@ const loadResult = async () => {
 
       if (status === 'data_insufficient') {
         // 数据不足也是有效结果
-        const resultResponse = await axios.get(`/api/investment/checkup-tasks/${taskId}/result`)
-        if (resultResponse.data.data) {
-          result.value = resultResponse.data.data
+        const resultResponse = await investmentApi.getTaskResult('checkup', taskId)
+        if (resultResponse.data) {
+          result.value = resultResponse.data
         }
         break
       }

@@ -1010,6 +1010,10 @@ async def get_quality_trends(
             run_id = run.get("run_id")
             metrics = await metrics_service.compute_run_metrics(run_id)
             score_agg = await metrics_service.get_score_aggregation(run_id)
+            pass_metrics = await metrics_service.compute_pass_at_k(run_id)
+
+            latency = metrics.get("latency", {}) or {}
+            cost = metrics.get("cost", {}) or {}
 
             trends.append({
                 "run_id": run_id,
@@ -1018,10 +1022,13 @@ async def get_quality_trends(
                 "created_at": str(run.get("created_at", "")),
                 "success_rate": metrics.get("success_rate", 0),
                 "failure_rate": metrics.get("failure_rate", 0),
-                "avg_latency_ms": metrics.get("latency_stats", {}).get("mean_ms", 0),
-                "total_cost_usd": metrics.get("cost_stats", {}).get("total_cost_usd", 0),
+                "avg_latency_ms": latency.get("mean_ms", 0),
+                "total_cost_usd": cost.get("total_usd", 0),
+                "pass_at_k": pass_metrics.get("pass_at_k", 0),
+                "pass_pow_k": pass_metrics.get("pass_pow_k", 0),
+                "pass_k": pass_metrics.get("k", 3),
                 "score_summary": {
-                    name: data.get("avg", 0)
+                    name: data.get("avg_score", 0)
                     for name, data in score_agg.get("scores", {}).items()
                 },
             })

@@ -8,6 +8,13 @@ export interface StrategyGuideRecommendation {
   marketCondition: string
   evidenceLevel: string
   invalidation: string
+  screeningCriteria: {
+    pe_max?: number
+    roe_min?: number
+    rsi_min?: number
+    rsi_max?: number
+    ma_trend?: string
+  }
 }
 
 export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
@@ -18,6 +25,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '震荡或下行市场中相对抗跌，趋势市中弹性可能不足',
     evidenceLevel: '基于历史财务指标和估值回归假设，证据强度：中',
     invalidation: '若行业景气度持续恶化或分红能力下降，策略假设可能失效',
+    screeningCriteria: { pe_max: 25, roe_min: 8 },
   },
   conservative_dividend: {
     name: '红利稳健策略',
@@ -26,6 +34,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '适合大多数市场环境，趋势市中涨幅可能落后',
     evidenceLevel: '基于历史分红记录和财务稳健性，证据强度：中',
     invalidation: '若公司分红政策改变或盈利能力下滑，策略假设可能失效',
+    screeningCriteria: { pe_max: 30, roe_min: 8 },
   },
   balanced_value: {
     name: '均衡价值策略',
@@ -34,6 +43,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '适合大多数市场阶段，需要定期复核估值变化',
     evidenceLevel: '基于估值和盈利质量的综合规则匹配，证据强度：中',
     invalidation: '若市场持续单边下跌或标的基本面恶化，策略假设可能失效',
+    screeningCriteria: { pe_max: 30, roe_min: 8 },
   },
   balanced_growth: {
     name: '均衡成长策略',
@@ -42,6 +52,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '适合温和上升或结构性行情，剧烈波动市中需谨慎',
     evidenceLevel: '基于历史成长指标和趋势规则，证据强度：中',
     invalidation: '若业绩增速大幅放缓或估值过高，策略假设可能失效',
+    screeningCriteria: { pe_max: 45, roe_min: 10 },
   },
   aggressive_growth: {
     name: '成长趋势策略',
@@ -50,6 +61,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '适合结构性成长行情，下行市中波动可能明显放大',
     evidenceLevel: '基于历史成长和动量规则，证据强度：中偏低，需结合体检验证',
     invalidation: '若趋势反转或成长逻辑被证伪，策略假设可能快速失效',
+    screeningCriteria: { pe_max: 60, roe_min: 12, rsi_min: 40, rsi_max: 70, ma_trend: 'up' },
   },
   aggressive_momentum: {
     name: '趋势跟踪策略',
@@ -58,6 +70,7 @@ export const strategyGuideMap: Record<string, StrategyGuideRecommendation> = {
     marketCondition: '适合有明确趋势的市场，震荡市中信号可能失真',
     evidenceLevel: '基于历史价格趋势规则，证据强度：低，需持续跟踪验证',
     invalidation: '若趋势快速反转或波动率骤升，策略假设可能迅速失效',
+    screeningCriteria: { rsi_min: 40, rsi_max: 70, ma_trend: 'up' },
   },
 }
 

@@ -198,6 +198,10 @@ class Settings(BaseSettings):
     EVAL_TRIAL_TIMEOUT_SECONDS: int = Field(default=600, ge=60, le=3600, description="单个 trial 超时时间（秒）")
     EVAL_MAX_TRIALS_PER_CASE: int = Field(default=10, ge=1, le=50, description="每个 case 最大 trial 次数")
     EVAL_JUDGE_MODEL: str = Field(default="", description="LLM-as-judge 使用的模型（留空使用默认模型）")
+    EVAL_OBSERVABILITY_BACKEND: str = Field(default="none", description="评测观测后端: none/langfuse/phoenix")
+    EVAL_OBSERVABILITY_API_KEY: str = Field(default="", description="评测观测后端 API key")
+    EVAL_OBSERVABILITY_HOST: str = Field(default="", description="评测观测后端地址")
+    EVAL_OBSERVABILITY_PROJECT: str = Field(default="quantingagents-eval", description="评测观测项目名")
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)

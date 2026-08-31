@@ -80,7 +80,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VideoPlay, Plus } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const router = useRouter()
 
@@ -93,7 +93,8 @@ const datasetOptions = ref<{ label: string; value: string }[]>([])
 const loadDatasets = async () => {
   try {
     const res = await axios.get('/api/eval/datasets')
-    const datasets = res.data?.data || []
+    const data = res.data?.data || {}
+    const datasets = Array.isArray(data) ? data : (data.items || [])
     datasetOptions.value = datasets.map((ds: any) => ({
       label: ds.name || ds.dataset_id,
       value: ds.dataset_id,
@@ -111,7 +112,7 @@ const loadRuns = async () => {
     if (filterStatus.value) params.status = filterStatus.value
 
     const res = await axios.get('/api/eval/runs', { params })
-    const data = res.data?.data || []
+    const data = res.data?.data || {}
     runs.value = Array.isArray(data) ? data : (data.items || [])
   } catch (error) {
     console.error('Failed to load runs:', error)

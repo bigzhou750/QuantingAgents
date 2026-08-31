@@ -169,7 +169,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 // 筛选条件
 const filters = ref({
@@ -221,7 +221,8 @@ const latestMetrics = computed(() => {
 const loadDatasets = async () => {
   try {
     const res = await axios.get('/api/eval/datasets')
-    datasets.value = res.data?.data || []
+    const data = res.data?.data || {}
+    datasets.value = Array.isArray(data) ? data : (data.items || [])
   } catch (e) {
     // 静默处理
   }

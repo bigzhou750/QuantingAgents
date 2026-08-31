@@ -30,6 +30,25 @@ def _bump_patch_version(version: str) -> str:
         return version
 
 
+def _parse_semver(version: str) -> Optional[tuple[int, int, int]]:
+    parts = version.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        return int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
+
+
+def _version_lte(case_version: str, target_version: str) -> bool:
+    """Return whether case_version is included in a target dataset version."""
+    parsed_case = _parse_semver(case_version)
+    parsed_target = _parse_semver(target_version)
+    if not parsed_case or not parsed_target:
+        return case_version == target_version
+    return parsed_case <= parsed_target
+
+
 class EvalDatasetService:
     """评测集管理服务"""
 
@@ -240,19 +259,19 @@ class EvalDatasetService:
         db = get_mongo_db()
 
         query = {"dataset_id": dataset_id}
-        if version:
-            query["version"] = version
         if tags:
             query["tags"] = {"$in": tags}
         if category:
             query["category"] = category
 
-        cursor = db[self.COLLECTION_CASES].find(query).sort("created_at", -1).skip(skip).limit(limit)
+        cursor = db[self.COLLECTION_CASES].find(query).sort("created_at", -1)
         results = []
         async for doc in cursor:
+            if version and not _version_lte(str(doc.get("version", "")), version):
+                continue
             doc["id"] = str(doc.pop("_id"))
             results.append(doc)
-        return results
+        return results[skip:skip + limit]
 
     async def update_case(
         self,

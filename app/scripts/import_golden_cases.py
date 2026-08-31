@@ -14,7 +14,7 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.core.database import db_manager
+from app.core.database import init_database, close_database
 from app.services.eval.dataset_service import dataset_service
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +28,7 @@ async def import_golden_cases(
     """导入 golden cases"""
 
     # 初始化数据库
-    await db_manager.init_mongodb()
+    await init_database()
 
     # 初始化服务
     await dataset_service.initialize()
@@ -94,7 +94,7 @@ async def import_golden_cases(
     logger.info(f"Import completed: {imported_count}/{len(cases)} cases")
 
     # 关闭数据库连接
-    await db_manager.close_all()
+    await close_database()
 
 
 def main():

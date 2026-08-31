@@ -15,6 +15,9 @@
         </p>
       </div>
       <div>
+        <el-button @click="openCreateCaseDialog">
+          添加用例
+        </el-button>
         <el-button type="primary" @click="runEvaluation">
           <el-icon><VideoPlay /></el-icon>
           运行评测
@@ -99,6 +102,49 @@
         <pre v-if="selectedCase.scoring_criteria && Object.keys(selectedCase.scoring_criteria).length" class="json-block">{{ JSON.stringify(selectedCase.scoring_criteria, null, 2) }}</pre>
       </div>
     </el-dialog>
+
+    <!-- 创建 Case 对话框 -->
+    <el-dialog v-model="createCaseDialogVisible" title="添加评测用例" width="720px">
+      <el-form :model="caseForm" label-width="110px">
+        <el-form-item label="名称" required>
+          <el-input v-model="caseForm.name" placeholder="例如：A股基本面研究" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="caseForm.description" type="textarea" :rows="2" placeholder="说明这个用例要验证什么" />
+        </el-form-item>
+        <el-form-item label="类别">
+          <el-input v-model="caseForm.category" placeholder="financial_research / safety / tool_process" />
+        </el-form-item>
+        <el-form-item label="难度">
+          <el-select v-model="caseForm.difficulty" style="width: 180px">
+            <el-option label="easy" value="easy" />
+            <el-option label="medium" value="medium" />
+            <el-option label="hard" value="hard" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-select v-model="caseForm.tags" multiple filterable allow-create default-first-option placeholder="输入后回车添加标签" style="width: 100%">
+            <el-option label="golden" value="golden" />
+            <el-option label="regression" value="regression" />
+            <el-option label="safety" value="safety" />
+            <el-option label="evidence" value="evidence" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="输入 JSON" required>
+          <el-input v-model="caseForm.inputJson" type="textarea" :rows="4" />
+        </el-form-item>
+        <el-form-item label="期望输出 JSON">
+          <el-input v-model="caseForm.expectedOutputJson" type="textarea" :rows="4" />
+        </el-form-item>
+        <el-form-item label="评分标准 JSON">
+          <el-input v-model="caseForm.scoringCriteriaJson" type="textarea" :rows="4" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createCaseDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="creatingCase" @click="createCase">添加</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -107,7 +153,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Collection, VideoPlay } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +166,18 @@ const searchKeyword = ref('')
 
 const caseDialogVisible = ref(false)
 const selectedCase = ref<any>(null)
+const createCaseDialogVisible = ref(false)
+const creatingCase = ref(false)
+const caseForm = ref({
+  name: '',
+  description: '',
+  category: 'financial_research',
+  difficulty: 'medium',
+  tags: [] as string[],
+  inputJson: '{\n  "prompt": "请分析贵州茅台的基本面、估值和主要风险。"\n}',
+  expectedOutputJson: '{\n  "must_include": ["基本面", "估值", "风险"]\n}',
+  scoringCriteriaJson: '{\n  "min_output_length": 300\n}',
+})
 
 const filteredCases = computed(() => {
   if (!searchKeyword.value) return cases.value
@@ -161,6 +219,56 @@ const runEvaluation = () => {
 const viewCase = (caseData: any) => {
   selectedCase.value = caseData
   caseDialogVisible.value = true
+}
+
+const openCreateCaseDialog = () => {
+  createCaseDialogVisible.value = true
+}
+
+const parseJsonField = (value: string, label: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    throw new Error(`${label} 不是合法 JSON`)
+  }
+}
+
+const createCase = async () => {
+  if (!caseForm.value.name.trim()) {
+    ElMessage.warning('请输入用例名称')
+    return
+  }
+
+  creatingCase.value = true
+  try {
+    const input = parseJsonField(caseForm.value.inputJson, '输入 JSON')
+    if (!input) {
+      ElMessage.warning('请输入输入 JSON')
+      return
+    }
+
+    await axios.post(`/api/eval/datasets/${datasetId.value}/cases`, {
+      name: caseForm.value.name,
+      description: caseForm.value.description,
+      category: caseForm.value.category,
+      difficulty: caseForm.value.difficulty,
+      tags: caseForm.value.tags,
+      input,
+      expected_output: parseJsonField(caseForm.value.expectedOutputJson, '期望输出 JSON'),
+      scoring_criteria: parseJsonField(caseForm.value.scoringCriteriaJson, '评分标准 JSON') || {},
+    })
+
+    ElMessage.success('用例已添加')
+    createCaseDialogVisible.value = false
+    await Promise.all([loadDataset(), loadCases()])
+  } catch (error: any) {
+    ElMessage.error(error?.message || error?.response?.data?.detail || '添加用例失败')
+  } finally {
+    creatingCase.value = false
+  }
 }
 
 const filterCases = () => {

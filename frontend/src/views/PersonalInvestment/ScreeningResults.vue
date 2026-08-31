@@ -120,7 +120,8 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { investmentApi } from '@/api/investment'
+import { ApiClient } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -150,7 +151,7 @@ const getScoreColor = (score: number) => {
 const addToWatchlist = async (row: any) => {
   watchlistLoading.value = row.stock_code
   try {
-    await axios.post('/api/favorites/', {
+    await ApiClient.post('/api/favorites/', {
       stock_code: row.stock_code,
       stock_name: row.stock_name,
       tags: ['策略候选'],
@@ -185,16 +186,16 @@ const loadResult = async () => {
     const maxAttempts = 30 // 最多等待 30 秒
 
     while (attempts < maxAttempts) {
-      const response = await axios.get(`/api/investment/screening-tasks/${taskId}/result`)
+      const response = await investmentApi.getTaskResult('screening', taskId)
 
-      if (response.data.success && response.data.data && Object.keys(response.data.data).length > 0) {
-        result.value = response.data.data
+      if (response.success && response.data && Object.keys(response.data).length > 0) {
+        result.value = response.data
         break
       }
 
       // 检查任务状态
-      const taskResponse = await axios.get(`/api/investment/tasks/${taskId}`)
-      const status = taskResponse.data.data?.status
+      const taskResponse = await investmentApi.getTask(taskId)
+      const status = taskResponse.data?.status
 
       if (status === 'failed') {
         ElMessage.error('选股任务执行失败')

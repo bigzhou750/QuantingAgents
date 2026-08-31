@@ -89,6 +89,18 @@ class EvalRunnerService:
         await db[self.COLLECTION_TRIALS].create_index([("run_id", 1), ("case_id", 1)])
         await db[self.COLLECTION_TRIALS].create_index("status")
 
+        try:
+            from app.services.eval.observability_adapter import observability_adapter
+
+            observability_adapter.configure(
+                backend=settings.EVAL_OBSERVABILITY_BACKEND,
+                api_key=settings.EVAL_OBSERVABILITY_API_KEY or None,
+                host=settings.EVAL_OBSERVABILITY_HOST or None,
+                project=settings.EVAL_OBSERVABILITY_PROJECT,
+            )
+        except Exception:
+            logger.warning("Failed to configure eval observability adapter", exc_info=True)
+
         self._initialized = True
         logger.info("EvalRunnerService initialized with indexes")
 
@@ -102,6 +114,14 @@ class EvalRunnerService:
     ) -> Dict[str, Any]:
         """创建评测运行"""
         db = get_mongo_db()
+
+        if num_trials < 1:
+            raise ValueError("num_trials must be >= 1")
+        if num_trials > settings.EVAL_MAX_TRIALS_PER_CASE:
+            raise ValueError(
+                f"num_trials {num_trials} exceeds EVAL_MAX_TRIALS_PER_CASE "
+                f"{settings.EVAL_MAX_TRIALS_PER_CASE}"
+            )
 
         # 验证数据集存在
         dataset = await dataset_service.get_dataset(dataset_id)
@@ -118,6 +138,11 @@ class EvalRunnerService:
 
         run_id = f"run_{uuid.uuid4().hex[:12]}"
         run_config = EvalRunConfig(**(config or {}))
+        if run_config.timeout_seconds > settings.EVAL_TRIAL_TIMEOUT_SECONDS:
+            raise ValueError(
+                f"timeout_seconds {run_config.timeout_seconds} exceeds "
+                f"EVAL_TRIAL_TIMEOUT_SECONDS {settings.EVAL_TRIAL_TIMEOUT_SECONDS}"
+            )
 
         run = EvalRun(
             run_id=run_id,
@@ -377,6 +402,43 @@ class EvalRunnerService:
                     }
                 }
             )
+        finally:
+            await self._score_and_export_trial(trial_id, case)
+
+    async def _score_and_export_trial(self, trial_id: str, case: Dict[str, Any]) -> None:
+        """Run scorers and optional observability export for every terminal trial."""
+        try:
+            from app.services.eval.trace_adapter import trace_adapter
+            from app.services.eval.scorer_hub import scorer_hub
+            from app.services.eval.observability_adapter import observability_adapter
+
+            trial_data = await self.get_trial(trial_id)
+            if not trial_data:
+                return
+
+            trace_events = await trace_adapter.get_trace_events(trial_id, limit=1000)
+            case_config = case.get("scoring_criteria", {}) or {}
+            run_id = trial_data.get("run_id", "")
+            run_doc = await self.get_run(run_id) if run_id else None
+            scorer_names = []
+            if run_doc:
+                scorer_names = (run_doc.get("config") or {}).get("scorer_names") or []
+
+            scores = await scorer_hub.score_trial(
+                trial_id=trial_id,
+                trial_data=trial_data,
+                trace_events=trace_events,
+                scorer_names=scorer_names or None,
+                case_config=case_config,
+            )
+            await observability_adapter.export_trial(
+                trial_id=trial_id,
+                trial_data=trial_data,
+                trace_events=trace_events,
+                scores=scores,
+            )
+        except Exception:
+            logger.warning(f"Failed to score/export trial {trial_id}", exc_info=True)
 
     async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         """获取评测运行"""

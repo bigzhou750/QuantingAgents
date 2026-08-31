@@ -15,14 +15,14 @@
     <el-card shadow="never" style="margin-bottom: 24px">
       <el-form :inline="true">
         <el-form-item label="标签">
-          <el-select v-model="filterTags" multiple collapse-tags placeholder="选择标签" clearable>
+          <el-select v-model="filterTags" multiple collapse-tags placeholder="选择标签" clearable class="filter-select">
             <el-option label="golden" value="golden" />
             <el-option label="regression" value="regression" />
             <el-option label="security" value="security" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filterStatus" placeholder="全部状态" clearable>
+          <el-select v-model="filterStatus" placeholder="全部状态" clearable class="filter-select">
             <el-option label="全部" value="" />
             <el-option label="草稿" value="draft" />
             <el-option label="活跃" value="active" />
@@ -87,7 +87,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Collection, Plus } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const router = useRouter()
 
@@ -187,5 +187,9 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   margin: 0;
+}
+
+.filter-select {
+  width: 180px;
 }
 </style>

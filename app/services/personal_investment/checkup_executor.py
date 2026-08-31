@@ -276,7 +276,7 @@ class CheckupExecutor:
             "name": "筛选条件数",
             "value": len(criteria),
             "unit": "项",
-            "description": "策略包含的筛选条件数量",
+            "interpretation": "策略包含的筛选条件数量",
         })
 
         # 市场波动率（如果有数据）
@@ -286,7 +286,7 @@ class CheckupExecutor:
                 "name": "近30日波动率",
                 "value": sh_index["volatility"],
                 "unit": "%",
-                "description": "上证指数的价格波动程度",
+                "interpretation": "上证指数的价格波动程度",
             })
 
         # 市场涨跌幅
@@ -295,7 +295,7 @@ class CheckupExecutor:
                 "name": "近30日涨跌",
                 "value": sh_index["period_change_pct"],
                 "unit": "%",
-                "description": "上证指数的区间涨跌幅",
+                "interpretation": "上证指数的区间涨跌幅",
             })
 
         return metrics

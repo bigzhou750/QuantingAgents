@@ -135,7 +135,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, Collection, VideoPlay, Warning, TrendCharts } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { evalApiClient as axios } from '@/api/evalClient'
 
 const router = useRouter()
 
@@ -161,8 +161,10 @@ const loadData = async () => {
       axios.get('/api/eval/bad-cases').catch(() => ({ data: { data: [] } })),
     ])
 
-    const datasets = datasetsRes.data?.data || []
-    const runs = runsRes.data?.data || []
+    const datasetsData = datasetsRes.data?.data || {}
+    const runsData = runsRes.data?.data || {}
+    const datasets = Array.isArray(datasetsData) ? datasetsData : (datasetsData.items || [])
+    const runs = Array.isArray(runsData) ? runsData : (runsData.items || [])
     const badCases = badCasesRes.data?.data || []
 
     stats.value = {

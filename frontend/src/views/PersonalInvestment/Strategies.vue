@@ -68,7 +68,7 @@
               size="small"
               style="margin-right: 4px;"
             >
-              {{ tag }}
+              {{ tagLabel(tag) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -331,7 +331,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import axios from 'axios'
+import { investmentApi } from '@/api/investment'
 import { getStrategyGuideRecommendation } from '@/utils/strategyGuide'
 
 const router = useRouter()
@@ -391,6 +391,17 @@ const createFromTemplate = (tpl: typeof strategyTemplates[number]) => {
   showCreateDialog.value = true
 }
 
+const strategyTagLabels: Record<string, string> = {
+  balanced: '均衡',
+  value: '价值',
+  growth: '成长',
+  dividend: '红利',
+  momentum: '趋势',
+  conservative: '稳健',
+}
+
+const tagLabel = (tag: string) => strategyTagLabels[tag] || tag
+
 // 策略怎么选向导
 const showGuideDialog = ref(false)
 const guideStep = ref(1)
@@ -409,13 +420,7 @@ const applyGuideResult = () => {
     description: rec.description,
     applicable_markets: ['A股'],
     tags: [guideAnswers.risk, guideAnswers.style].filter(Boolean),
-    screening_criteria: {
-      pe_max: undefined,
-      roe_min: undefined,
-      rsi_min: undefined,
-      rsi_max: undefined,
-      ma_trend: guideAnswers.style === 'momentum' ? 'up' : undefined,
-    },
+    screening_criteria: { ...rec.screeningCriteria },
   })
   showGuideDialog.value = false
   showCreateDialog.value = true
@@ -452,9 +457,9 @@ const strategyRules: FormRules = {
 const loadStrategies = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/investment/strategies')
-    if (response.data.success) {
-      strategies.value = response.data.data.items || []
+    const response = await investmentApi.listStrategies()
+    if (response.success) {
+      strategies.value = response.data.items || []
     }
   } catch (error) {
     ElMessage.error('加载策略列表失败')
@@ -485,14 +490,11 @@ const saveStrategy = async () => {
 
     saving.value = true
     try {
-      const url = editingStrategy.value
-        ? `/api/investment/strategies/${editingStrategy.value.strategy_id}`
-        : '/api/investment/strategies'
-      const method = editingStrategy.value ? 'put' : 'post'
+      const response = editingStrategy.value
+        ? await investmentApi.updateStrategy(editingStrategy.value.strategy_id, strategyForm)
+        : await investmentApi.createStrategy(strategyForm)
 
-      const response = await axios[method](url, strategyForm)
-
-      if (response.data.success) {
+      if (response.success) {
         ElMessage.success(editingStrategy.value ? '策略更新成功' : '策略创建成功')
         showCreateDialog.value = false
         resetForm()
@@ -510,9 +512,9 @@ const saveStrategy = async () => {
 const toggleStatus = async (strategy: any) => {
   try {
     const action = strategy.status === 'active' ? 'disable' : 'enable'
-    const response = await axios.post(`/api/investment/strategies/${strategy.strategy_id}/${action}`)
+    const response = await investmentApi.toggleStrategy(strategy.strategy_id, action)
 
-    if (response.data.success) {
+    if (response.success) {
       ElMessage.success(`策略已${strategy.status === 'active' ? '停用' : '启用'}`)
       loadStrategies()
     }
@@ -531,8 +533,8 @@ const currentProfileId = ref<string | null>(null)
 
 const loadCurrentProfileId = async () => {
   try {
-    const response = await axios.get('/api/investment/profile')
-    currentProfileId.value = response.data?.data?.id || null
+    const response = await investmentApi.getProfile()
+    currentProfileId.value = response.data?.id || null
   } catch {
     currentProfileId.value = null
   }
@@ -561,14 +563,13 @@ const confirmTaskWizard = async () => {
 
   creatingTask.value = true
   try {
-    const endpoint = taskWizardType.value === 'screening' ? '/api/investment/screening-tasks' : '/api/investment/checkup-tasks'
-    const response = await axios.post(endpoint, {
+    const response = await investmentApi.createTask(taskWizardType.value, {
       strategy_id: strategy.strategy_id,
       profile_id: taskWizardUseProfile.value ? currentProfileId.value : null,
     })
 
-    if (response.data.success) {
-      const taskId = response.data.data.task_id
+    if (response.success) {
+      const taskId = response.data.task_id
       ElMessage.success(`${taskWizardType.value === 'screening' ? '选股' : '体检'}任务已创建`)
       showTaskWizard.value = false
 

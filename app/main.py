@@ -233,6 +233,18 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     try:
+        from app.services.personal_investment.profile_service import profile_service
+        from app.services.personal_investment.strategy_service import strategy_service
+        from app.services.personal_investment.task_service import task_service
+
+        await profile_service.initialize()
+        await strategy_service.initialize()
+        await task_service.initialize()
+        logger.info("✅ 个人投资助手服务已初始化")
+    except Exception as e:
+        logger.warning(f"个人投资助手初始化失败: {e}")
+
+    try:
         from app.services.vibe_agent.service import vibe_agent_service
         await vibe_agent_service.ensure_indexes()
     except Exception as e:

@@ -458,6 +458,8 @@ const routes: RouteRecordRaw[] = [
       title: 'Agent 评测',
       icon: 'DataAnalysis',
       requiresAuth: true,
+      requiresAdmin: true,
+      requiresEvalPlatform: true,
       transition: 'fade'
     },
     redirect: '/evaluation/dashboard',
@@ -468,7 +470,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/index.vue'),
         meta: {
           title: '评测概览',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       },
       {
@@ -477,7 +481,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/Datasets.vue'),
         meta: {
           title: '评测集管理',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       },
       {
@@ -486,7 +492,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/Runs.vue'),
         meta: {
           title: '评测运行',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       },
       {
@@ -496,6 +504,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '新建评测运行',
           requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
           hideInMenu: true
         }
       },
@@ -506,6 +516,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '评测运行详情',
           requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
           hideInMenu: true
         }
       },
@@ -516,6 +528,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '评测集详情',
           requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true,
           hideInMenu: true
         }
       },
@@ -525,7 +539,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/HumanReview.vue'),
         meta: {
           title: '人工复核',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       },
       {
@@ -534,7 +550,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/BadCases.vue'),
         meta: {
           title: 'Bad Case 池',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       },
       {
@@ -543,7 +561,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Evaluation/Trends.vue'),
         meta: {
           title: '质量趋势',
-          requiresAuth: true
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
         }
       }
     ]
@@ -652,6 +672,22 @@ router.beforeEach(async (to, _from, next) => {
     // 保存原始路径，登录后跳转
     authStore.setRedirectPath(to.fullPath)
     next('/login')
+    return
+  }
+
+  if (to.meta.requiresEvalPlatform && import.meta.env.VITE_EVAL_PLATFORM_ENABLED !== 'true') {
+    ElMessage.warning('Agent 评测平台未启用')
+    next('/dashboard')
+    return
+  }
+
+  if (to.meta.requiresAdmin && authStore.isAuthenticated && !authStore.isAdmin) {
+    await authStore.fetchUserPermissions()
+  }
+
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    ElMessage.warning('需要管理员权限')
+    next('/dashboard')
     return
   }
 
