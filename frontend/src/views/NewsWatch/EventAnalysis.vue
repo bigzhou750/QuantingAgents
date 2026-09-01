@@ -114,10 +114,10 @@ const runAnalysis = async () => {
 }
 
 const directionLabel = (d: string) => ({ positive: '正面', negative: '负面', neutral: '中性' }[d] || d || '—')
-const directionType = (d: string): '' | 'success' | 'danger' | 'info' => ({ positive: 'success', negative: 'danger', neutral: 'info' }[d] as any || '')
+const directionType = (d: string): 'success' | 'danger' | 'info' => ({ positive: 'success', negative: 'danger', neutral: 'info' }[d] as any || 'info')
 const horizonLabel = (h: string) => ({ short: '短期', medium: '中期', long: '长期' }[h] || h || '—')
 const evidenceLabel = (e: string) => ({ strong: '强', moderate: '中等', weak: '弱' }[e] || e || '—')
-const evidenceType = (e: string): '' | 'success' | 'warning' | 'danger' => ({ strong: 'success', moderate: 'warning', weak: 'danger' }[e] as any || '')
+const evidenceType = (e: string): 'success' | 'warning' | 'danger' => ({ strong: 'success', moderate: 'warning', weak: 'danger' }[e] as any || 'danger')
 </script>
 
 <style scoped>

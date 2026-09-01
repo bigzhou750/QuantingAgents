@@ -222,14 +222,14 @@ const sourceLabel = (type: string) => {
   return map[type] || type
 }
 
-const sourceTagType = (type: string): '' | 'success' | 'warning' | 'info' => {
-  const map: Record<string, '' | 'success' | 'warning' | 'info'> = {
+const sourceTagType = (type: string): 'primary' | 'success' | 'warning' | 'info' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info'> = {
     screening: 'success',
-    manual: '',
+    manual: 'primary',
     favorites: 'info',
     news: 'warning',
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const statusLabel = (status: string) => {
@@ -237,9 +237,9 @@ const statusLabel = (status: string) => {
   return map[status] || status
 }
 
-const statusTagType = (status: string): '' | 'success' | 'warning' | 'info' => {
-  const map: Record<string, '' | 'success' | 'warning' | 'info'> = { active: 'success', removed: 'info', reviewed: 'warning' }
-  return map[status] || ''
+const statusTagType = (status: string): 'success' | 'warning' | 'info' => {
+  const map: Record<string, 'success' | 'warning' | 'info'> = { active: 'success', removed: 'info', reviewed: 'warning' }
+  return map[status] || 'info'
 }
 
 // 加载数据

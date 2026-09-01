@@ -265,3 +265,83 @@ class TestDeduplication:
         ]
         result = service._deduplicate(news)
         assert len(result) == 2
+
+
+# ==================== 修复路径回归测试 ====================
+
+class TestRegressionFixedPaths:
+    """覆盖复测阶段修复的 6 个 bug 对应路径"""
+
+    @pytest.fixture
+    def agent_service(self):
+        from app.services.news_impact_agent_service import NewsImpactAgentService
+        return NewsImpactAgentService()
+
+    @pytest.fixture
+    def aggregator(self):
+        from app.services.news_aggregator_service import NewsAggregatorService
+        return NewsAggregatorService()
+
+    @pytest.mark.asyncio
+    async def test_fetch_news_builds_query_params(self, aggregator):
+        """_fetch_news 必须以 NewsQueryParams（datetime 窗口）调用 query_news"""
+        from datetime import timedelta
+        from app.services.news_data_service import NewsQueryParams
+
+        captured = {}
+
+        class FakeService:
+            async def query_news(self, params):
+                captured["params"] = params
+                return [{"title": "t", "url": "u", "publish_time": "2026-08-30"}]
+
+        with patch(
+            "app.services.news_data_service.NewsDataService", return_value=FakeService()
+        ):
+            news, status = await aggregator._fetch_news("000001", timedelta(hours=72))
+
+        assert news and status.status == "success"
+        p = captured["params"]
+        assert isinstance(p, NewsQueryParams)
+        assert p.symbol == "000001"
+        assert p.start_time is not None and p.end_time is not None
+
+    def test_compliance_filter_rewrites_advisory_text(self, agent_service):
+        """合规过滤应改写含交易建议措辞的文本而不抛异常"""
+        result = {
+            "event_summary": "建议立即买入该股票",
+            "market_confirmation": "市场已有反应",
+            "non_advisory_note": "",
+            "impact_paths": ["建议卖出以规避风险"],
+        }
+        filtered = agent_service._apply_compliance_filter(result)
+        # 不抛异常，且 non_advisory_note 始终存在
+        assert filtered.get("non_advisory_note")
+        # 原建议措辞应被改写
+        assert "买入" not in filtered["event_summary"] or filtered["event_summary"] != result["event_summary"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_windows_overwrite_not_accumulate(self, aggregator):
+        """72h 命中少量新闻时，7d 窗口结果应覆盖而非累加（嵌套窗口去重）"""
+        from datetime import timedelta
+
+        call_windows = []
+
+        async def fake_fetch(symbol, window):
+            call_windows.append(window)
+            if window == timedelta(hours=72):
+                return [{"title": "A", "url": "u1"}], MagicMock()
+            if window == timedelta(days=7):
+                # 7d 包含 72h 的 A + 新增 B
+                return [{"title": "A", "url": "u1"}, {"title": "B", "url": "u2"}], MagicMock()
+            return [], MagicMock()
+
+        aggregator._fetch_news = fake_fetch
+        aggregator._log_health = AsyncMock()
+
+        result = await aggregator.aggregate("000001")
+
+        # 直接新闻计数应 ≤ 2（非 1+2=3），去重后不重复计 A
+        assert result.direct_count <= 2
+        titles = [n["title"] for n in result.news_list]
+        assert titles.count("A") == 1

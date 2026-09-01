@@ -79,7 +79,12 @@ class NewsImpactAgentService:
         title = news_item.get("title", "")
         content = news_item.get("content", news_item.get("summary", ""))
         source = news_item.get("source", "")
-        published_at = news_item.get("published_at", news_item.get("pub_date", ""))
+        published_at = (
+            news_item.get("publish_time")
+            or news_item.get("published_at")
+            or news_item.get("pub_date")
+            or ""
+        )
         symbol = news_item.get("symbol", news_item.get("stock_code", ""))
 
         prompt = self._build_prompt(title, content, source, str(published_at), symbol)
@@ -294,16 +299,32 @@ class NewsImpactAgentService:
     def _apply_compliance_filter(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """非交易建议安全过滤"""
         try:
-            from app.services.personal_investment.terminology_filter import (
-                validate_compliance,
-            )
-            # 对 event_summary 和 non_advisory_note 做合规检查
-            for field in ("event_summary", "non_advisory_note"):
+            from app.services.personal_investment.terminology_filter import TerminologyFilter
+
+            # 对自由文本字段做合规改写（filter_text 返回 (改写后文本, 命中词列表)）
+            text_fields = ("event_summary", "market_confirmation", "non_advisory_note")
+            for field in text_fields:
                 text = result.get(field, "")
-                if text:
-                    compliant, replacements = validate_compliance(text)
-                    if not compliant and replacements:
-                        result[field] = replacements
+                if text and isinstance(text, str):
+                    filtered_text, hits = TerminologyFilter.filter_text(text)
+                    if hits:
+                        result[field] = filtered_text
+                        logger.info(f"Compliance rewrite in {field}: {hits}")
+
+            # 列表型字段逐项改写
+            list_fields = ("impact_paths", "watch_indicators", "uncertainties",
+                           "upstream_downstream_paths")
+            for field in list_fields:
+                items = result.get(field)
+                if isinstance(items, list):
+                    rewritten = []
+                    for item in items:
+                        if isinstance(item, str):
+                            filtered_item, hits = TerminologyFilter.filter_text(item)
+                            rewritten.append(filtered_item)
+                        else:
+                            rewritten.append(item)
+                    result[field] = rewritten
         except Exception as e:
             logger.warning(f"Compliance filter failed (non-blocking): {e}")
 

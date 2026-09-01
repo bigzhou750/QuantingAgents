@@ -90,12 +90,12 @@ import { newsWatchApi } from '@/api/newsWatch'
 const metricsLoading = ref(false)
 const metrics = ref<any>({})
 const metricCards = computed(() => [
-  { key: 'coverage', label: '新闻覆盖率', value: ((metrics.value.coverage_rate || 0) * 100).toFixed(1), suffix: '%' },
-  { key: 'analysis', label: '分析成功率', value: ((metrics.value.analysis_success_rate || 0) * 100).toFixed(1), suffix: '%' },
-  { key: 'alert_hit', label: '告警命中率', value: ((metrics.value.alert_hit_rate || 0) * 100).toFixed(1), suffix: '%' },
-  { key: 'task', label: '任务完成率', value: ((metrics.value.task_completion_rate || 0) * 100).toFixed(1), suffix: '%' },
-  { key: 'review', label: '复盘验证率', value: ((metrics.value.review_verification_rate || 0) * 100).toFixed(1), suffix: '%' },
-  { key: 'noise', label: '噪声率', value: ((metrics.value.noise_rate || 0) * 100).toFixed(1), suffix: '%' },
+  { key: 'coverage', label: '新闻覆盖率', value: (metrics.value.coverage_rate || 0) * 100, suffix: '%' },
+  { key: 'analysis', label: '分析成功率', value: (metrics.value.analysis_success_rate || 0) * 100, suffix: '%' },
+  { key: 'alert_hit', label: '告警命中率', value: (metrics.value.alert_hit_rate || 0) * 100, suffix: '%' },
+  { key: 'task', label: '任务完成率', value: (metrics.value.task_completion_rate || 0) * 100, suffix: '%' },
+  { key: 'review', label: '复盘验证率', value: (metrics.value.review_verification_rate || 0) * 100, suffix: '%' },
+  { key: 'noise', label: '噪声率', value: (metrics.value.noise_rate || 0) * 100, suffix: '%' },
 ])
 
 // 告警
@@ -161,12 +161,12 @@ const handleConvertToObservation = async (row: any) => {
 }
 
 // Labels
-const impactType = (l: string) => ({ high: 'danger', medium: 'warning', low: 'info' }[l] || '')
+const impactType = (l: string): 'success' | 'warning' | 'info' | 'danger' => ({ high: 'danger', medium: 'warning', low: 'info' }[l] as any || 'info')
 const alertStatusLabel = (s: string) => ({ pending: '待处理', simulated: '待处理', confirmed: '已确认', ignored: '已忽略', converted: '已转观察', reviewed: '已复盘' }[s] || s)
-const alertStatusType = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' => ({ pending: 'warning', simulated: 'warning', confirmed: 'success', ignored: 'info', converted: '', reviewed: 'success' }[s] as any || '')
+const alertStatusType = (s: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => ({ pending: 'warning', simulated: 'warning', confirmed: 'success', ignored: 'info', converted: 'primary', reviewed: 'success' }[s] as any || 'info')
 const verdictLabel = (v: string) => ({ verified: '已验证', unverified: '未验证', contradicted: '反向验证' }[v] || v)
-const verdictTagType = (v: string): '' | 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || '')
-const verdictTimelineType = (v: string): '' | 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || '')
+const verdictTagType = (v: string): 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || 'warning')
+const verdictTimelineType = (v: string): 'primary' | 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || 'primary')
 
 onMounted(() => {
   loadMetrics()
