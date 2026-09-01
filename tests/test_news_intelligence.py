@@ -394,3 +394,68 @@ class TestAutoHoldingsImpact:
         assert result["cached"] is False
         assert result["refresh_state"] == "current"
         cache.update_one.assert_awaited_once()
+
+
+# ==================== 修复路径回归测试 ====================
+
+class TestRegressionFixedPaths:
+    """覆盖复测阶段修复的 6 个 bug 对应路径"""
+
+    @pytest.fixture
+    def agent_service(self):
+        from app.services.news_impact_agent_service import NewsImpactAgentService
+        return NewsImpactAgentService()
+
+    @pytest.fixture
+    def aggregator(self):
+        from app.services.news_aggregator_service import NewsAggregatorService
+        return NewsAggregatorService()
+
+    @pytest.mark.asyncio
+    async def test_fetch_news_builds_query_params(self, aggregator):
+        from app.services.news_data_service import NewsQueryParams
+        captured = {}
+
+        class FakeService:
+            async def query_news(self, params):
+                captured["params"] = params
+                return [{"title": "t", "url": "u", "publish_time": "2026-08-30"}]
+
+        with patch("app.services.news_data_service.NewsDataService", return_value=FakeService()):
+            news, status = await aggregator._fetch_news("000001", timedelta(hours=72))
+
+        assert news and status.status == "success"
+        params = captured["params"]
+        assert isinstance(params, NewsQueryParams)
+        assert params.symbol == "000001"
+        assert params.start_time is not None and params.end_time is not None
+
+    def test_compliance_filter_rewrites_advisory_text(self, agent_service):
+        result = {
+            "event_summary": "建议立即买入该股票",
+            "market_confirmation": "市场已有反应",
+            "non_advisory_note": "",
+            "impact_paths": ["建议卖出以规避风险"],
+        }
+        filtered = agent_service._apply_compliance_filter(result)
+        assert filtered.get("non_advisory_note")
+        assert "买入" not in filtered["event_summary"] or filtered["event_summary"] != result["event_summary"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_windows_overwrite_not_accumulate(self, aggregator):
+        call_windows = []
+
+        async def fake_fetch(symbol, window):
+            call_windows.append(window)
+            if window == timedelta(hours=72):
+                return [{"title": "A", "url": "u1"}], MagicMock()
+            if window == timedelta(days=7):
+                return [{"title": "A", "url": "u1"}, {"title": "B", "url": "u2"}], MagicMock()
+            return [], MagicMock()
+
+        aggregator._fetch_news = fake_fetch
+        aggregator._log_health = AsyncMock()
+        result = await aggregator.aggregate("000001")
+        assert result.direct_count <= 2
+        titles = [news["title"] for news in result.news_list]
+        assert titles.count("A") == 1

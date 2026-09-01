@@ -48,23 +48,25 @@ class NewsAggregatorService:
         result = AggregatedNewsResult()
         all_news: List[Dict[str, Any]] = []
 
-        # Step 1-3: 直接查询，逐步扩大时间窗口
+        # Step 1-3: 直接查询，逐步扩大时间窗口。
+        # 每级窗口都包含上一级的结果（72h ⊂ 7d ⊂ 30d），所以只保留最后一次
+        # 命中的结果，不能累加，否则同一条新闻会被重复计入 direct_count。
+        direct_news: List[Dict[str, Any]] = []
         for window_name, window_delta in self.FALLBACK_WINDOWS:
-            step_name = f"direct_{symbol}_{window_name}"
             news, status = await self._fetch_news(symbol, window_delta)
-            result.source_statuses.append(status.__dict__ if hasattr(status, '__dict__') else {
-                "source_name": f"stock_news_{window_name}",
-                "status": status.status if isinstance(status, SourceStatusEntry) else str(status),
-                "count": len(news),
-            })
-            result.fallback_steps.append(step_name)
+            status.source_name = f"stock_news_{symbol}_{window_name}"
+            result.source_statuses.append(status.__dict__)
+            result.fallback_steps.append(f"direct_{symbol}_{window_name}")
 
             if news:
-                all_news.extend(news)
-                result.direct_count += len(news)
-                # 如果72h内有足够新闻，不再继续扩大窗口
-                if window_name == "72h" and len(news) >= 3:
+                direct_news = news  # 覆盖而非累加
+                # 已有足够新闻，无需继续放宽窗口
+                if len(news) >= 3:
                     break
+
+        if direct_news:
+            all_news.extend(direct_news)
+            result.direct_count = len(direct_news)
 
         # Step 4: 行业/概念新闻（间接）
         if len(all_news) < 3:
@@ -95,13 +97,14 @@ class NewsAggregatorService:
         result.news_list = deduped
         result.event_clusters = self.cluster_news_items(deduped)
 
-        # 新鲜度
+        # 新鲜度（stock_news 集合的时间字段为 publish_time）
         if deduped:
-            newest = max(
-                (n.get("published_at") or n.get("pub_date") or "")
-                for n in deduped
-            )
-            result.freshness = str(newest) if newest else None
+            times = []
+            for n in deduped:
+                pt = n.get("publish_time") or n.get("published_at") or n.get("pub_date")
+                if pt:
+                    times.append(pt.isoformat() if isinstance(pt, datetime) else str(pt))
+            result.freshness = max(times) if times else None
 
         # 失败摘要
         failed_sources = [
@@ -136,18 +139,18 @@ class NewsAggregatorService:
         start_time = time.monotonic()
 
         try:
-            from app.services.news_data_service import NewsDataService
+            from app.services.news_data_service import NewsDataService, NewsQueryParams
             service = NewsDataService()
 
-            end_date = now_tz()
-            start_date = end_date - window
+            end_time = now_tz()
+            start_time_dt = end_time - window
 
-            params = {
-                "symbol": symbol,
-                "start_date": start_date.strftime("%Y-%m-%d"),
-                "end_date": end_date.strftime("%Y-%m-%d"),
-                "limit": 50,
-            }
+            params = NewsQueryParams(
+                symbol=symbol,
+                start_time=start_time_dt,
+                end_time=end_time,
+                limit=50,
+            )
             news_list = await service.query_news(params)
             elapsed = int((time.monotonic() - start_time) * 1000)
 
@@ -199,7 +202,7 @@ class NewsAggregatorService:
             # 用行业关键词搜索新闻
             from app.services.news_data_service import NewsDataService
             service = NewsDataService()
-            results = await service.search_news(industry, limit=10)
+            results = await service.search_news(query_text=industry, limit=10)
             # 标记为间接
             for item in results:
                 item["_indirect"] = True
@@ -215,11 +218,12 @@ class NewsAggregatorService:
         """获取用户自选/持仓相关新闻"""
         try:
             db = get_mongo_db()
-            # 查自选股
-            user_doc = await db["users"].find_one({"_id": user_id}, projection={"favorites": 1})
             symbols = []
-            if user_doc and user_doc.get("favorites"):
-                for fav in user_doc["favorites"]:
+
+            # 查自选股（user_favorites 集合，favorites 数组）
+            fav_doc = await db["user_favorites"].find_one({"user_id": user_id})
+            if fav_doc:
+                for fav in fav_doc.get("favorites", []):
                     code = fav.get("stock_code", "")
                     if code and code != exclude_symbol:
                         symbols.append(code)

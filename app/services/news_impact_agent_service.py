@@ -79,7 +79,12 @@ class NewsImpactAgentService:
         title = news_item.get("title", "")
         content = news_item.get("content", news_item.get("summary", ""))
         source = news_item.get("source", "")
-        published_at = news_item.get("published_at", news_item.get("pub_date", ""))
+        published_at = (
+            news_item.get("publish_time")
+            or news_item.get("published_at")
+            or news_item.get("pub_date")
+            or ""
+        )
         symbol = news_item.get("symbol", news_item.get("stock_code", ""))
 
         prompt = self._build_prompt(title, content, source, str(published_at), symbol)
@@ -323,16 +328,18 @@ class NewsImpactAgentService:
     def _apply_compliance_filter(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """非交易建议安全过滤"""
         try:
-            from app.services.personal_investment.terminology_filter import (
-                TerminologyFilter,
-            )
+            from app.services.personal_investment.terminology_filter import TerminologyFilter
+
             for key, value in result.items():
                 if isinstance(value, str):
-                    result[key], _ = TerminologyFilter.filter_text(value)
+                    filtered_text, hits = TerminologyFilter.filter_text(value)
+                    result[key] = filtered_text
+                    if hits:
+                        logger.info(f"Compliance rewrite in {key}: {hits}")
                 elif isinstance(value, list):
                     result[key] = [
-                        TerminologyFilter.filter_text(v)[0] if isinstance(v, str) else v
-                        for v in value
+                        TerminologyFilter.filter_text(item)[0] if isinstance(item, str) else item
+                        for item in value
                     ]
         except Exception as e:
             logger.warning(f"Compliance filter failed (non-blocking): {e}")

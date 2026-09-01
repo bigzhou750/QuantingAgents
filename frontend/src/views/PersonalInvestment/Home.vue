@@ -271,22 +271,94 @@ onMounted(loadSummary)
 </script>
 
 <style scoped>
-.welcome-card { margin-bottom: 0; }
-.welcome-header h2 { margin: 0 0 4px 0; font-size: 22px; }
-.welcome-subtitle { color: #909399; margin: 0; }
-.primary-action { margin-top: 16px; }
-.action-card { display: flex; align-items: center; gap: 16px; padding: 12px; cursor: pointer; transition: all 0.2s; }
-.action-card:hover { transform: translateY(-2px); }
-.action-icon { font-size: 40px; }
-.action-content h3 { margin: 0 0 6px 0; font-size: 18px; }
-.action-content p { margin: 0 0 10px 0; color: #606266; }
-.status-card { height: 100%; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-.empty-hint { color: #909399; font-size: 13px; }
-.empty-hint p { margin: 0 0 8px 0; }
-.task-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
-.task-item:last-child { border-bottom: none; }
-.task-type { font-size: 13px; flex: 1; }
-.task-time { font-size: 12px; color: #c0c4cc; }
-.muted { color: #c0c4cc; font-size: 12px; }
+.welcome-card {
+  margin-bottom: 0;
+}
+
+.welcome-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+}
+
+.welcome-subtitle {
+  color: #909399;
+  margin: 0;
+}
+
+.primary-action {
+  margin-top: 16px;
+}
+
+.action-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+}
+
+.action-icon {
+  font-size: 40px;
+}
+
+.action-content h3 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+}
+
+.action-content p {
+  margin: 0 0 10px 0;
+  color: #606266;
+}
+
+.status-card {
+  height: 100%;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.empty-hint {
+  color: #909399;
+  font-size: 13px;
+}
+
+.empty-hint p {
+  margin: 0 0 8px 0;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+.task-type {
+  font-size: 13px;
+  flex: 1;
+}
+
+.task-time {
+  font-size: 12px;
+  color: #c0c4cc;
+}
+
+.muted {
+  color: #c0c4cc;
+  font-size: 12px;
+}
 </style>
