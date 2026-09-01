@@ -5,10 +5,16 @@
 """
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
-from app.routers.auth import get_current_user
+from app.routers.auth_db import get_current_user
 from app.services.data_readiness_service import get_data_readiness_service
-from app.models.common import ApiResponse
+
+
+class ApiResponse(BaseModel):
+    success: bool = True
+    data: dict = {}
+    message: str = ""
 
 router = APIRouter(tags=["data-readiness"])
 

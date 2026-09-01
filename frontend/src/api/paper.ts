@@ -15,8 +15,13 @@ export interface PaperAccountSummary {
 }
 
 export interface PaperPositionItem {
+  position_id?: string
   code: string
+  name?: string
+  market?: string
+  currency?: string
   quantity: number
+  available_qty?: number
   avg_cost: number
   last_price?: number | null
   market_value?: number
@@ -33,6 +38,11 @@ export interface PaperOrderItem {
   status: 'filled' | 'rejected' | string
   created_at: string
   filled_at?: string
+  source_type?: string
+  source_observation_id?: string
+  source_strategy_id?: string
+  source_task_id?: string
+  source_candidate?: Record<string, unknown>
 }
 
 export interface GetAccountResponse {
@@ -48,6 +58,8 @@ export interface PlaceOrderPayload {
   source_type?: string
   source_observation_id?: string
   source_strategy_id?: string
+  source_task_id?: string
+  source_candidate?: Record<string, unknown>
 }
 
 export const paperApi = {
@@ -59,6 +71,17 @@ export const paperApi = {
   },
   async getPositions() {
     return ApiClient.get<{ items: PaperPositionItem[] }>('/api/paper/positions')
+  },
+  async listPositionReviewNotes(positionId: string) {
+    return ApiClient.get<{ items: Array<{ note_id: string; content: string; created_at: string }> }>(
+      `/api/paper/positions/${positionId}/review-notes`
+    )
+  },
+  async addPositionReview(positionId: string, content: string) {
+    return ApiClient.post<{ note_id: string; content: string; created_at: string }>(
+      `/api/paper/positions/${positionId}/review`,
+      { content }
+    )
   },
   async getOrders(limit = 50) {
     return ApiClient.get<{ items: PaperOrderItem[] }>(`/api/paper/orders`, { limit })

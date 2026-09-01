@@ -5,6 +5,9 @@
         <div>
           <h2 style="margin: 0 0 4px 0;">持仓新闻影响分析</h2>
           <span class="subtitle">基于当前持仓和近期新闻，展示影响方向和证据强度</span>
+          <el-tag v-if="route.query.observation_id" type="warning" size="small" style="margin-top: 8px;">
+            当前观察：{{ route.query.symbol }}
+          </el-tag>
         </div>
         <el-button type="primary" @click="runAnalysis" :loading="loading">
           <el-icon><DataAnalysis /></el-icon>
@@ -121,6 +124,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
 import { newsWatchApi } from '@/api/newsWatch'
@@ -128,6 +132,7 @@ import { newsWatchApi } from '@/api/newsWatch'
 const loading = ref(false)
 const analyzed = ref(false)
 const result = ref<any>({})
+const route = useRoute()
 
 const highImpactCount = computed(() =>
   (result.value.impacts || []).filter((i: any) => i.impact_level === 'high').length
@@ -136,7 +141,8 @@ const highImpactCount = computed(() =>
 const runAnalysis = async () => {
   loading.value = true
   try {
-    const res = await newsWatchApi.analyzeImpact({ hours_back: 72 })
+    const symbol = String(route.query.symbol || '').trim()
+    const res = await newsWatchApi.analyzeImpact({ hours_back: 72, symbol: symbol || undefined })
     result.value = res.data || {}
     analyzed.value = true
   } catch {

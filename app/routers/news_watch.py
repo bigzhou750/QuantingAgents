@@ -135,6 +135,7 @@ async def remove_collected_item(
 @router.post("/impact-analysis", response_model=dict)
 async def analyze_holdings_impact(
     hours_back: int = Query(72, ge=1, le=720, description="回溯小时数"),
+    symbol: Optional[str] = Query(None, description="可选：只分析单个观察标的"),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -143,10 +144,17 @@ async def analyze_holdings_impact(
     """
     try:
         service = await get_news_watch_service()
-        result = await service.analyze_holdings_impact(
-            user_id=current_user["id"],
-            hours_back=hours_back,
-        )
+        if symbol:
+            result = await service.analyze_stock_impact(
+                user_id=current_user["id"],
+                stock_code=symbol,
+                hours_back=hours_back,
+            )
+        else:
+            result = await service.analyze_holdings_impact(
+                user_id=current_user["id"],
+                hours_back=hours_back,
+            )
         return ok(data=result)
     except Exception as e:
         logger.error(f"❌ 持仓影响分析失败: {e}")

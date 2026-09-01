@@ -143,8 +143,17 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200">
+            <el-table-column label="操作" width="240">
               <template #default="{ row }">
+                <el-button
+                  v-if="row.position_id"
+                  size="small"
+                  type="warning"
+                  link
+                  @click="openPositionReview(row)"
+                >
+                  复盘
+                </el-button>
                 <el-button size="small" type="primary" link @click="viewStockDetail(row.code)">详情</el-button>
                 <el-button size="small" type="success" link @click="goAnalysisWithCode(row.code)">分析</el-button>
                 <el-button size="small" type="danger" link @click="sellPosition(row)">卖出</el-button>
@@ -201,12 +210,34 @@
                 <span v-else style="color: #909399;">-</span>
               </template>
             </el-table-column>
+            <el-table-column label="来源" width="130">
+              <template #default="{ row }">
+                <el-tag v-if="row.source_type" size="small" :type="sourceTagType(row.source_type)">
+                  {{ sourceLabel(row.source_type) }}
+                </el-tag>
+                <span v-else-if="row.source_observation_id" style="color: #909399;">观察</span>
+                <span v-else style="color: #909399;">-</span>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
     </el-row>
 
     <el-dialog v-model="orderDialog" title="下市场单" width="480px">
+      <!-- 观察来源上下文 -->
+      <div v-if="hasObservationSource" class="analysis-context" style="margin-bottom:12px">
+        <el-alert :closable="false" type="warning" show-icon>
+          <template #title>
+            来自观察标的：<span style="font-family:monospace">{{ order.stock_name || order.code }}</span>
+          </template>
+          <div style="font-size:12px;color:#666">
+            <span v-if="order.source_type">来源：{{ sourceLabel(order.source_type) }}</span>
+            <span v-if="order.source_observation_id" style="margin-left:8px">观察：{{ order.source_observation_id }}</span>
+            <span v-if="order.source_strategy_id" style="margin-left:8px">策略：{{ order.source_strategy_id }}</span>
+          </div>
+        </el-alert>
+      </div>
       <!-- 分析上下文提示 -->
       <div v-if="(order as any).analysis_id" class="analysis-context" style="margin-bottom:12px">
         <el-alert :closable="false" type="info" show-icon>
@@ -253,6 +284,41 @@
         <el-button type="primary" @click="submitOrder">提交</el-button>
       </template>
     </el-dialog>
+
+    <!-- 模拟持仓复盘 -->
+    <el-dialog v-model="showPositionReviewDialog" title="持仓复盘" width="520px">
+      <el-descriptions v-if="reviewPosition" :column="2" border size="small">
+        <el-descriptions-item label="股票">{{ reviewPosition.code }} {{ reviewPosition.name }}</el-descriptions-item>
+        <el-descriptions-item label="持仓">{{ reviewPosition.quantity }} 股</el-descriptions-item>
+      </el-descriptions>
+
+      <div v-if="positionReviewNotes.length" style="margin-top: 12px;">
+        <h4 style="margin: 0 0 8px;">历史复盘</h4>
+        <div
+          v-for="note in positionReviewNotes"
+          :key="note.note_id"
+          class="review-note-item"
+        >
+          <div>{{ note.content }}</div>
+          <div class="review-note-time">{{ formatDateTime(note.created_at) }}</div>
+        </div>
+      </div>
+
+      <el-form style="margin-top: 16px;">
+        <el-form-item label="复盘内容">
+          <el-input
+            v-model="positionReviewContent"
+            type="textarea"
+            :rows="4"
+            placeholder="回顾这次模拟持仓的判断和结果"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showPositionReviewDialog = false">取消</el-button>
+        <el-button type="primary" :loading="positionReviewLoading" @click="submitPositionReview">保存复盘</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -277,9 +343,27 @@ const orders = ref<any[]>([])
 const loading = ref({ account: false, positions: false, orders: false })
 
 const orderDialog = ref(false)
-const order = ref({ side: 'buy', code: '', qty: 100 })
+const order = ref<{
+  side: 'buy' | 'sell'
+  code: string
+  qty: number
+  stock_name?: string
+  analysis_id?: string
+  source_type?: string
+  source_observation_id?: string
+  source_strategy_id?: string
+  source_task_id?: string
+  source_candidate?: Record<string, unknown>
+}>({ side: 'buy', code: '', qty: 100 })
 const detectedMarket = ref<string>('')
 const activeMarketTab = ref<string>('CN')
+
+// 复盘弹窗
+const showPositionReviewDialog = ref(false)
+const reviewPosition = ref<any>(null)
+const positionReviewNotes = ref<any[]>([])
+const positionReviewContent = ref('')
+const positionReviewLoading = ref(false)
 
 // 计算属性：根据当前市场标签页过滤持仓
 const filteredPositions = computed(() => {
@@ -302,6 +386,33 @@ const filteredOrders = computed(() => {
 // 分析上下文
 const analysisContext = ref<any | null>(null)
 const analysisLoading = ref(false)
+
+const hasObservationSource = computed(() => Boolean(
+  order.value.source_type ||
+  order.value.source_observation_id ||
+  order.value.source_strategy_id ||
+  order.value.source_task_id
+))
+
+const sourceLabel = (type?: string) => {
+  const map: Record<string, string> = {
+    observation: '观察闭环',
+    screening: '策略选股',
+    manual: '手动添加',
+    news: '新闻关注',
+  }
+  return (type && map[type]) || type || '观察'
+}
+
+const sourceTagType = (type?: string): 'success' | 'warning' | 'info' => {
+  const map: Record<string, 'success' | 'warning' | 'info'> = {
+    observation: 'warning',
+    screening: 'success',
+    manual: 'info',
+    news: 'info',
+  }
+  return (type && map[type]) || 'info'
+}
 
 // 方法
 function fmtPrice(n: number | null | undefined) {
@@ -428,13 +539,23 @@ async function fetchStockNames(items: any[]) {
 }
 
 function openOrderDialog() {
+  order.value = {
+    side: 'buy',
+    code: '',
+    qty: 100,
+  }
   orderDialog.value = true
 }
 
 async function submitOrder() {
   try {
     const payload: any = { side: order.value.side as 'buy' | 'sell', code: order.value.code, quantity: Number(order.value.qty) }
-    if ((order.value as any).analysis_id) payload.analysis_id = (order.value as any).analysis_id
+    if (order.value.analysis_id) payload.analysis_id = order.value.analysis_id
+    if (order.value.source_type) payload.source_type = order.value.source_type
+    if (order.value.source_observation_id) payload.source_observation_id = order.value.source_observation_id
+    if (order.value.source_strategy_id) payload.source_strategy_id = order.value.source_strategy_id
+    if (order.value.source_task_id) payload.source_task_id = order.value.source_task_id
+    if (order.value.source_candidate) payload.source_candidate = order.value.source_candidate
     const res = await paperApi.placeOrder(payload)
     if (res.success) {
       ElMessage.success('下单成功')
@@ -556,12 +677,59 @@ async function fetchAnalysisContext(analysisId: string) {
   }
 }
 
+async function openPositionReview(row: any) {
+  reviewPosition.value = row
+  positionReviewContent.value = ''
+  positionReviewNotes.value = []
+  showPositionReviewDialog.value = true
+
+  try {
+    const res = await paperApi.listPositionReviewNotes(row.position_id)
+    positionReviewNotes.value = res.data?.items || []
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载复盘备注失败')
+  }
+}
+
+async function submitPositionReview() {
+  const content = positionReviewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('请输入复盘内容')
+    return
+  }
+  if (!reviewPosition.value?.position_id) {
+    ElMessage.error('持仓 ID 不存在')
+    return
+  }
+
+  positionReviewLoading.value = true
+  try {
+    const res = await paperApi.addPositionReview(reviewPosition.value.position_id, content)
+    if (res.success) {
+      ElMessage.success('复盘备注已保存')
+      positionReviewContent.value = ''
+      const notesRes = await paperApi.listPositionReviewNotes(reviewPosition.value.position_id)
+      positionReviewNotes.value = notesRes.data?.items || []
+    } else {
+      ElMessage.error(res.message || '保存失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    positionReviewLoading.value = false
+  }
+}
+
 onMounted(() => {
   let hasPrefill = false
   const qCode = String(route.query.code || '').trim()
   if (qCode) {
     order.value.code = qCode
     hasPrefill = true
+  }
+  const qName = String(route.query.name || '').trim()
+  if (qName) {
+    order.value.stock_name = qName
   }
   const qSide = String(route.query.side || '').trim().toLowerCase()
   if (qSide === 'buy' || qSide === 'sell') {
@@ -577,8 +745,19 @@ onMounted(() => {
   const qAnalysisId = String(route.query.analysis_id || '').trim()
   if (qAnalysisId) {
     // 暂存于本地，等待提交订单时附带
-    ;(order as any).analysis_id = qAnalysisId
+    order.value.analysis_id = qAnalysisId
     fetchAnalysisContext(qAnalysisId)
+    hasPrefill = true
+  }
+  const qObservationId = String(route.query.observation_id || '').trim()
+  const qStrategyId = String(route.query.strategy_id || '').trim()
+  const qTaskId = String(route.query.task_id || '').trim()
+  const qSourceType = String(route.query.source_type || '').trim()
+  if (qObservationId || qStrategyId || qSourceType) {
+    order.value.source_type = qSourceType || (qObservationId ? 'observation' : 'screening')
+    order.value.source_observation_id = qObservationId || undefined
+    order.value.source_strategy_id = qStrategyId || undefined
+    order.value.source_task_id = qTaskId || undefined
     hasPrefill = true
   }
   if (hasPrefill) {
@@ -593,4 +772,6 @@ onMounted(() => {
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
 .title { display:flex; align-items:center; font-weight: 600; font-size: 16px; }
 .card-hd { font-weight: 600; }
+.review-note-item { padding: 8px 0; border-bottom: 1px solid #ebeef5; }
+.review-note-time { margin-top: 4px; font-size: 12px; color: #909399; }
 </style>

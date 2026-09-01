@@ -7,7 +7,7 @@
 
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.database import get_mongo_db
 from app.models.observation import (
@@ -62,6 +62,7 @@ class ObservationService:
         existing = await coll.find_one({
             "user_id": user_id,
             "stock_code": record.stock_code,
+            "status": {"$in": [ObservationStatus.ACTIVE.value, ObservationStatus.REVIEWED.value]},
         })
 
         if existing:
@@ -79,6 +80,8 @@ class ObservationService:
                 "match_reasons": record.match_reasons,
                 "risk_warnings": record.risk_warnings,
                 "data_as_of": record.data_as_of,
+                "review_interval_days": record.review_interval_days,
+                "next_review_at": now_tz() + timedelta(days=record.review_interval_days),
                 "updated_at": now_tz(),
             }
             if record.user_notes:
@@ -95,6 +98,8 @@ class ObservationService:
         # 新建记录
         doc = record.to_doc()
         doc["user_id"] = user_id
+        if not doc.get("next_review_at"):
+            doc["next_review_at"] = now_tz() + timedelta(days=record.review_interval_days)
         result = await coll.insert_one(doc)
         doc["_id"] = result.inserted_id
         doc.pop("_id", None)
@@ -154,6 +159,8 @@ class ObservationService:
         coll = db[self.OBSERVATIONS_COLLECTION]
 
         update_fields = {k: v for k, v in kwargs.items() if v is not None}
+        if "review_interval_days" in update_fields:
+            update_fields["next_review_at"] = now_tz() + timedelta(days=update_fields["review_interval_days"])
         if not update_fields:
             return await self.get_observation(observation_id, user_id)
 
@@ -257,10 +264,7 @@ class ObservationService:
         return items
 
     async def get_pending_reviews(self, user_id: str) -> Dict[str, Any]:
-        """获取待复盘汇总
-
-        待复盘 = ACTIVE 状态且尚未有复盘备注的观察标的
-        """
+        """获取达到复盘周期且尚未复盘的观察标的。"""
         db = get_mongo_db()
 
         # 获取所有 ACTIVE 观察
@@ -283,13 +287,28 @@ class ObservationService:
         }).distinct("target_id")
         reviewed_ids = set(await reviewed_cursor)
 
-        # 待复盘 = ACTIVE 但尚未复盘
-        pending_ids = [oid for oid in active_ids if oid not in reviewed_ids]
+        now = now_tz()
+        due_cursor = db[self.OBSERVATIONS_COLLECTION].find({
+            "user_id": user_id,
+            "status": ObservationStatus.ACTIVE.value,
+            "$or": [
+                {"next_review_at": {"$lte": now}},
+                {
+                    "next_review_at": {"$exists": False},
+                    "created_at": {"$lte": now - timedelta(days=7)},
+                },
+            ],
+        })
+        due_ids = []
+        async for doc in due_cursor:
+            due_ids.append(doc.get("observation_id"))
+        pending_ids = [oid for oid in due_ids if oid not in reviewed_ids]
 
         # 获取待复盘的详细信息
         items = []
         if pending_ids:
             cursor = db[self.OBSERVATIONS_COLLECTION].find({
+                "user_id": user_id,
                 "observation_id": {"$in": pending_ids},
             }).sort("created_at", 1).limit(10)
             async for doc in cursor:

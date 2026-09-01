@@ -72,7 +72,7 @@ export const newsWatchApi = {
   removeCollected: (itemId: string) =>
     ApiClient.delete('/api/news-watch/collected/' + itemId),
 
-  analyzeImpact: (params: { hours_back?: number } = {}) =>
+  analyzeImpact: (params: { hours_back?: number; symbol?: string } = {}) =>
     ApiClient.post<NewsWatchImpactAnalysisResult>('/api/news-watch/impact-analysis', null, { params }),
 
   getAlertConfig: () =>

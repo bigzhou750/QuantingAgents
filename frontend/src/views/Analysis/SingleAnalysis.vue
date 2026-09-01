@@ -957,6 +957,7 @@ const submitAnalysis = async () => {
         include_sentiment: analysisForm.includeSentiment,
         include_risk: analysisForm.includeRisk,
         language: analysisForm.language,
+        custom_prompt: qObservationContextPrompt(),
         quick_analysis_model: modelSettings.value.quickAnalysisModel,
         deep_analysis_model: modelSettings.value.deepAnalysisModel
       }
@@ -1027,6 +1028,12 @@ const submitAnalysis = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+function qObservationContextPrompt(): string | undefined {
+  const q = route.query as any
+  if (!q?.observation_id) return undefined
+  return `本次分析来自观察记录 ${q.observation_id}。来源策略：${q.strategy_id || '未知'}；来源任务：${q.task_id || '未知'}。请将该观察来源作为研究上下文说明，不将其视为交易建议。`
 }
 
 // 轮询任务状态
@@ -2254,6 +2261,14 @@ onMounted(async () => {
     }
   }
   if (q?.market) analysisForm.market = normalizeMarketForAnalysis(q.market) as MarketType
+
+  if (q?.observation_id) {
+    console.log('🔗 已携带观察上下文:', {
+      observation_id: q.observation_id,
+      strategy_id: q.strategy_id,
+      task_id: q.task_id,
+    })
+  }
 
   // 尝试恢复任务状态（仅当没有新股票代码时）
   if (!hasNewStock) {

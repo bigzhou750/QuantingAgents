@@ -67,6 +67,15 @@
             <span>{{ row.user_notes || '—' }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="风险提示" min-width="180">
+          <template #default="{ row }">
+            <el-tag v-for="(warning, idx) in (row.risk_warnings || []).slice(0, 2)" :key="idx" type="warning" size="small" style="margin: 2px;">{{ warning }}</el-tag>
+            <span v-if="!row.risk_warnings?.length" class="wizard-muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="数据截至" width="150">
+          <template #default="{ row }">{{ formatTime(row.data_as_of) }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">
@@ -222,10 +231,10 @@ const sourceLabel = (type: string) => {
   return map[type] || type
 }
 
-const sourceTagType = (type: string): 'primary' | 'success' | 'warning' | 'info' => {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info'> = {
+const sourceTagType = (type: string): 'success' | 'warning' | 'info' => {
+  const map: Record<string, 'success' | 'warning' | 'info'> = {
     screening: 'success',
-    manual: 'primary',
+    manual: 'info',
     favorites: 'info',
     news: 'warning',
   }
@@ -341,21 +350,33 @@ const submitReview = async () => {
 const goAnalysis = (row: any) => {
   router.push({
     path: '/analysis/single',
-    query: { stock: row.stock_code, observation_id: row.observation_id },
+    query: {
+      stock: row.stock_code,
+      observation_id: row.observation_id,
+      strategy_id: row.source_strategy_id || undefined,
+      task_id: row.source_task_id || undefined,
+    },
   })
 }
 
 const goNewsImpact = (row: any) => {
   router.push({
     path: '/news-watch/impact',
-    query: { symbol: row.stock_code },
+    query: {
+      symbol: row.stock_code,
+      observation_id: row.observation_id,
+      strategy_id: row.source_strategy_id || undefined,
+    },
   })
 }
 
 const goPaperTrade = (row: any) => {
   const query: Record<string, string> = { code: row.stock_code }
+  if (row.stock_name) query.name = row.stock_name
   if (row.observation_id) query.observation_id = row.observation_id
   if (row.source_strategy_id) query.strategy_id = row.source_strategy_id
+  if (row.source_task_id) query.task_id = row.source_task_id
+  query.source_type = 'observation'
   router.push({ path: '/paper', query })
 }
 
