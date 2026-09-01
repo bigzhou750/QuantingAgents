@@ -53,7 +53,7 @@ const loadReceipts = async () => {
   }
 }
 
-const actionTagType = (a: string) => ({ promoted: 'success', rejected: 'danger', stopped: 'warning', rollback: 'info' }[a] || '')
+const actionTagType = (a: string): any => ({ promoted: 'success', rejected: 'danger', stopped: 'warning', rollback: 'info' }[a] || '')
 const actionLabel = (a: string) => ({ promoted: '已发布', rejected: '已拒绝', stopped: '已停止', rollback: '已回滚' }[a] || a)
 const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 

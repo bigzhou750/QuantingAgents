@@ -216,8 +216,8 @@ const handleStop = async () => {
 
 // Labels & helpers
 const statusLabel = (s: string) => ({ draft: '草稿', pending_verify: '待验证', verifying: '验证中', verified: '已验证', approved: '已批准', rejected: '已拒绝', promoted: '已发布', stopped: '已停止' }[s] || s)
-const statusTagType = (s: string) => ({ draft: 'info', pending_verify: 'warning', verified: '', approved: 'success', rejected: 'danger', promoted: 'success', stopped: 'danger' }[s] || '')
-const riskTagType = (r: string) => ({ low: 'success', medium: 'warning', high: 'danger', critical: 'danger' }[r] || 'info')
+const statusTagType = (s: string): any => ({ draft: 'info', pending_verify: 'warning', verified: '', approved: 'success', rejected: 'danger', promoted: 'success', stopped: 'danger' }[s] || '')
+const riskTagType = (r: string): any => ({ low: 'success', medium: 'warning', high: 'danger', critical: 'danger' }[r] || 'info')
 const triggerTypeLabel = (t: string) => ({ run_completed: '运行完成', regression: '趋势回退', bad_case_threshold: 'Bad Case 阈值', scheduled: '定时触发' }[t] || t)
 const actionLabel = (a: string) => ({ approve: '批准', reject: '拒绝', comment: '评论' }[a] || a)
 const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'

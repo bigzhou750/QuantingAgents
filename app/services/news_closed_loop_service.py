@@ -126,6 +126,7 @@ class NewsClosedLoopService:
             source_type=ObservationSource.NEWS.value,
             user_notes=user_notes,
             news_event_id=news_event_id,
+            analysis_id=analysis_id,
             verification_indicators=verification_indicators or [],
         )
 
@@ -152,18 +153,30 @@ class NewsClosedLoopService:
 
         # 获取分析时的预测方向
         analysis_result = {}
-        if obs.get("news_event_id"):
-            db = get_mongo_db()
+        db = get_mongo_db()
+        analysis_id = obs.get("analysis_id") or obs.get("news_event_id")
+        if analysis_id:
             analysis_doc = await db["news_analysis_results"].find_one(
-                {"analysis_id": obs.get("news_event_id")},
+                {"analysis_id": analysis_id},
             )
             if analysis_doc:
                 analysis_result = analysis_doc.get("result", {})
+            elif obs.get("news_event_id"):
+                analysis_doc = await db["news_analysis_results"].find_one(
+                    {"news_ids": obs["news_event_id"]},
+                )
+                if analysis_doc:
+                    analysis_result = analysis_doc.get("result", {})
 
         predicted_direction = analysis_result.get("impact_direction", "neutral")
 
-        # 查询价格变化
+        # 查询价格、成交量和公告变化
         price_change = await self._get_price_change(stock_code, window_days)
+        volume_change = await self._get_volume_change(stock_code, window_days)
+        announcement_count = await self._get_announcement_count(
+            stock_code, window_days
+        )
+        industry_change = await self._get_industry_change(stock_code, window_days)
 
         # 判定
         verdict = self._compute_verdict(predicted_direction, price_change)
@@ -176,12 +189,15 @@ class NewsClosedLoopService:
             "window_days": window_days,
             "predicted_direction": predicted_direction,
             "actual_change_pct": price_change,
+            "volume_change_pct": volume_change,
+            "announcement_count": announcement_count,
+            "industry_change_pct": industry_change,
             "verdict": verdict,
             "analysis_summary": analysis_result.get("event_summary", ""),
+            "analysis_id": analysis_id,
             "created_at": now_tz(),
         }
 
-        db = get_mongo_db()
         await db[self.REVIEW_COLLECTION].insert_one(review_doc)
 
         # 添加复盘备注到观察记录
@@ -320,6 +336,61 @@ class NewsClosedLoopService:
         except Exception as e:
             logger.warning(f"Price change calc failed for {stock_code}: {e}")
             return 0.0
+
+    async def _get_volume_change(self, stock_code: str, days: int) -> float:
+        """获取复盘窗口成交量变化百分比"""
+        try:
+            db = get_mongo_db()
+            cursor = db["stock_daily_quotes"].find({
+                "symbol": stock_code,
+                "volume": {"$gt": 0},
+            }).sort("trade_date", -1).limit(days + 5)
+            volumes = []
+            async for doc in cursor:
+                volume = doc.get("volume") or doc.get("vol")
+                if volume:
+                    volumes.append(float(volume))
+            if len(volumes) >= 2 and volumes[-1] > 0:
+                return round((volumes[0] - volumes[-1]) / volumes[-1] * 100, 4)
+            return 0.0
+        except Exception as exc:
+            logger.warning("Volume change calc failed: %s", exc)
+            return 0.0
+
+    async def _get_announcement_count(
+        self, stock_code: str, days: int
+    ) -> int:
+        """统计复盘窗口内公告/公司新闻条数"""
+        try:
+            db = get_mongo_db()
+            since = now_tz() - timedelta(days=days)
+            return await db["stock_news"].count_documents({
+                "symbol": stock_code,
+                "$or": [
+                    {"category": {"$in": ["公告", "announcement"]}},
+                    {"news_type": "announcement"},
+                ],
+            })
+        except Exception as exc:
+            logger.warning("Announcement count failed: %s", exc)
+            return 0
+
+    async def _get_industry_change(
+        self, stock_code: str, days: int
+    ) -> Optional[float]:
+        """若行业指数未接入，返回 None 避免伪造行业表现。"""
+        try:
+            db = get_mongo_db()
+            stock = await db["stock_basic_info"].find_one({
+                "$or": [{"code": stock_code}, {"symbol": stock_code}],
+            })
+            industry = (stock or {}).get("industry", "")
+            if not industry:
+                return None
+            return None
+        except Exception as exc:
+            logger.warning("Industry change calc failed: %s", exc)
+            return None
 
     def _compute_verdict(
         self, predicted_direction: str, actual_change_pct: float

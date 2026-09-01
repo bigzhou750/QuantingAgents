@@ -110,6 +110,7 @@ class ObservationService:
         self,
         user_id: str,
         status: Optional[str] = None,
+        source_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Dict[str, Any]:
@@ -118,6 +119,8 @@ class ObservationService:
         coll = db[self.OBSERVATIONS_COLLECTION]
 
         query: Dict[str, Any] = {"user_id": user_id}
+        if source_type:
+            query["source_type"] = source_type
         if status:
             query["status"] = status
         else:

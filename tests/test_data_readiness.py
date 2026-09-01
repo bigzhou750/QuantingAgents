@@ -258,6 +258,90 @@ class TestDataReadinessService:
         assert "stock_pool" in failures[0]
 
     @pytest.mark.asyncio
+    async def test_schedule_replenishment_skips_when_ready(self, service):
+        """数据已就绪时不应启动后台补数任务"""
+        now = datetime.now(timezone.utc)
+        service._last_report = DataReadinessReport(
+            overall_ready=True,
+            checked_at=now,
+            gate_passed=True,
+            categories={
+                "stock_pool": {"freshness": "fresh", "record_count": 5000},
+            },
+        )
+
+        with patch("app.services.data_readiness_service.get_settings") as mock_settings:
+            mock_settings.return_value.DATA_READINESS_ENABLED = True
+            triggered = await service.schedule_replenishment([DataCategory.STOCK_POOL])
+
+        assert triggered is False
+        assert service._replenish_task is None
+
+    @pytest.mark.asyncio
+    async def test_schedule_replenishment_triggers_on_missing(self, service):
+        """缺少数据时应复用现有同步服务发起一次后台补数"""
+        now = datetime.now(timezone.utc)
+        service._last_report = DataReadinessReport(
+            overall_ready=False,
+            checked_at=now,
+            gate_passed=False,
+            categories={
+                "stock_pool": {"freshness": "missing", "record_count": 0},
+            },
+        )
+        mock_sync = MagicMock()
+        mock_sync.run_full_sync = AsyncMock(return_value={"status": "success"})
+
+        with patch("app.services.data_readiness_service.get_settings") as mock_settings:
+            mock_settings.return_value.DATA_READINESS_ENABLED = True
+            with patch(
+                "app.services.multi_source_basics_sync_service.get_multi_source_sync_service",
+                return_value=mock_sync,
+            ):
+                with patch.object(service, "refresh", AsyncMock()) as mock_refresh:
+                    triggered = await service.schedule_replenishment([DataCategory.STOCK_POOL])
+                    assert triggered is True
+                    assert service._replenish_task is not None
+                    await service._replenish_task
+
+        mock_sync.run_full_sync.assert_awaited_once()
+        mock_refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_schedule_replenishment_reuses_running_task(self, service):
+        """已有补数任务时应复用，不重复同步"""
+        now = datetime.now(timezone.utc)
+        service._last_report = DataReadinessReport(
+            overall_ready=False,
+            checked_at=now,
+            gate_passed=False,
+            categories={
+                "stock_pool": {"freshness": "error", "record_count": 1},
+            },
+        )
+
+        async def _never_done():
+            await asyncio.Event().wait()
+
+        import asyncio
+        pending = asyncio.create_task(_never_done())
+        service._replenish_task = pending
+
+        try:
+            with patch("app.services.data_readiness_service.get_settings") as mock_settings:
+                mock_settings.return_value.DATA_READINESS_ENABLED = True
+                triggered = await service.schedule_replenishment([DataCategory.STOCK_POOL])
+
+            assert triggered is True
+            assert service._replenish_task is pending
+        finally:
+            pending.cancel()
+            try:
+                await pending
+            except asyncio.CancelledError:
+                pass
+
+    @pytest.mark.asyncio
     async def test_compute_freshness_none(self, service):
         result = DataReadinessService._compute_freshness(None, timedelta(hours=1))
         assert result == FreshnessLevel.MISSING

@@ -27,8 +27,9 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="golden">导入内置 Golden Set</el-dropdown-item>
-              <el-dropdown-item command="json">JSON 批量导入</el-dropdown-item>
+            <el-dropdown-item command="golden">导入内置 Golden Set</el-dropdown-item>
+            <el-dropdown-item command="json">JSON 批量导入</el-dropdown-item>
+            <el-dropdown-item command="file">CSV / Excel 文件导入</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -71,6 +72,10 @@
           <el-button @click="openBatchImportDialog">
             <el-icon><Upload /></el-icon>
             JSON 批量导入
+          </el-button>
+          <el-button @click="openFileImport" :loading="importingFile">
+            <el-icon><Upload /></el-icon>
+            CSV / Excel 导入
           </el-button>
           <el-button @click="$router.push('/evaluation/bad-cases')">
             <el-icon><WarningFilled /></el-icon>
@@ -148,6 +153,14 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <input
+      ref="fileInput"
+      type="file"
+      accept=".json,.csv,.xlsx"
+      style="display: none"
+      @change="onFileSelected"
+    />
 
     <!-- Case 详情对话框 -->
     <el-dialog v-model="caseDialogVisible" title="用例详情" width="70%">
@@ -363,6 +376,8 @@ const publishVersionDialogVisible = ref(false)
 const publishingVersion = ref(false)
 const newVersion = ref('')
 const importingGolden = ref(false)
+const importingFile = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const caseForm = ref({
   name: '',
@@ -563,6 +578,7 @@ const batchUpdateCases = async () => {
 const handleImportCommand = (command: string) => {
   if (command === 'golden') importGoldenSet()
   else if (command === 'json') openBatchImportDialog()
+  else if (command === 'file') openFileImport()
 }
 
 // Golden Set import (2.2)
@@ -617,6 +633,31 @@ const batchImportCases = async () => {
     ElMessage.error(error?.message || error?.response?.data?.detail || '批量导入失败')
   } finally {
     batchImporting.value = false
+  }
+}
+
+const openFileImport = () => {
+  fileInput.value?.click()
+}
+
+const onFileSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const formData = new FormData()
+  formData.append('file', file)
+  importingFile.value = true
+  try {
+    const res = await axios.post(`/api/eval/datasets/${datasetId.value}/cases/upload`, formData)
+    const data = res.data?.data || {}
+    ElMessage.success(`导入完成：${data.imported || 0} 条成功，${data.failed || 0} 条失败`)
+    await Promise.all([loadDataset(), loadCases()])
+  } catch (error: any) {
+    ElMessage.error(error?.message || error?.response?.data?.detail || '文件导入失败')
+  } finally {
+    importingFile.value = false
+    input.value = ''
   }
 }
 

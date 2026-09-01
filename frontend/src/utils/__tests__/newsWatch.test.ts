@@ -51,6 +51,14 @@ describe('NewsWatch Workbench', () => {
     expect(workbenchSource).toContain('newsWatchApi.queryStockNews')
   })
 
+  it('provides analyze, collect, observe and ignore actions', () => {
+    expect(workbenchSource).toContain('newsWatchApi.analyzeNews')
+    expect(workbenchSource).toContain('newsWatchApi.analyzeBatch')
+    expect(workbenchSource).toContain('newsWatchApi.createObservationFromNews')
+    expect(workbenchSource).toContain('newsWatchApi.ignoreNews')
+    expect(workbenchSource).toContain('来源覆盖与事件聚类')
+  })
+
   it('uses research-oriented copy, not trading language', () => {
     expect(workbenchSource).not.toMatch(/买入|卖出|推荐/)
     expect(workbenchSource).toContain('不构成任何投资建议')
@@ -61,6 +69,19 @@ describe('NewsWatch ImpactAnalysis', () => {
   it('calls the impact-analysis API endpoint', () => {
     expect(apiSource).toContain('/api/news-watch/impact-analysis')
     expect(impactSource).toContain('newsWatchApi.analyzeImpact')
+  })
+
+  it('loads automatically and exposes refresh state', () => {
+    expect(apiSource).toContain('/api/news-watch/holdings-impact/auto')
+    expect(impactSource).toContain('newsWatchApi.holdingsImpactAuto')
+    expect(impactSource).toContain('后台刷新中')
+  })
+
+  it('renders multidimensional impact card fields', () => {
+    expect(impactSource).toContain('影响方向')
+    expect(impactSource).toContain('证据质量')
+    expect(impactSource).toContain('影响路径')
+    expect(impactSource).toContain('后续观察')
   })
 
   it('displays three-level impact severity tags', () => {
@@ -106,6 +127,19 @@ describe('NewsWatch AlertConfig', () => {
     expect(workbenchSource).not.toContain("import axios from 'axios'")
     expect(impactSource).not.toContain("import axios from 'axios'")
     expect(alertSource).not.toContain("import axios from 'axios'")
+  })
+})
+
+describe('NewsWatch ClosedLoop', () => {
+  const closedLoopSource = readFileSync(
+    resolve(__dirname, '../../views/NewsWatch/ClosedLoop.vue'),
+    'utf-8'
+  )
+
+  it('renders observation tasks and review action', () => {
+    expect(closedLoopSource).toContain('新闻观察任务')
+    expect(closedLoopSource).toContain('newsWatchApi.observationTasks')
+    expect(closedLoopSource).toContain('newsWatchApi.triggerReview')
   })
 })
 

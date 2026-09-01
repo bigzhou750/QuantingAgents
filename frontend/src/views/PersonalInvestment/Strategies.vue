@@ -658,7 +658,10 @@ const submitObservation = async () => {
 // 查看来源模板
 const viewSourceTemplate = (strategy: any) => {
   if (strategy.source_template_id) {
-    router.push('/investment/marketplace')
+    router.push({
+      name: 'MarketplaceDetail',
+      params: { templateId: strategy.source_template_id },
+    })
   }
 }
 

@@ -2,12 +2,14 @@
 新闻关注工作台服务
 提供关注收集、持仓影响分析和模拟告警能力
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
 
 from app.core.database import get_mongo_db
+from app.models.news_intelligence import HoldingImpactCard
 
 logger = logging.getLogger("webapi")
 
@@ -21,6 +23,8 @@ IMPACT_LEVELS = [IMPACT_LOW, IMPACT_MEDIUM, IMPACT_HIGH]
 ALERT_THRESHOLD_LOW = "low"       # 低/中/高都告警
 ALERT_THRESHOLD_MEDIUM = "medium" # 中/高告警
 ALERT_THRESHOLD_HIGH = "high"     # 仅高告警
+IMPACT_CACHE_COLLECTION = "news_holdings_impact_cache"
+IMPACT_CACHE_HOURS = 4
 
 
 class NewsWatchService:
@@ -28,6 +32,7 @@ class NewsWatchService:
 
     def __init__(self):
         self._db = None
+        self._background_tasks: set = set()
 
     async def _get_db(self):
         if self._db is None:
@@ -105,6 +110,29 @@ class NewsWatchService:
         })
         return result.deleted_count > 0
 
+    async def ignore_item(
+        self,
+        user_id: str,
+        symbol: Optional[str] = None,
+        news_id: Optional[str] = None,
+        title: str = "",
+        reason: str = "news_watch_ignore",
+    ) -> Dict[str, Any]:
+        """记录用户主动忽略的新闻，用于后续去重与噪声分析。"""
+        db = await self._get_db()
+        doc = {
+            "user_id": user_id,
+            "symbol": symbol,
+            "news_id": news_id,
+            "title": title,
+            "reason": reason,
+            "created_at": datetime.utcnow(),
+        }
+        result = await db["news_ignored_items"].insert_one(doc)
+        doc["_id"] = str(result.inserted_id)
+        logger.info("News ignored: user=%s, symbol=%s", user_id, symbol)
+        return doc
+
     # ════════════════════════════════════════════════════════════
     # 2. 持仓新闻影响分析
     # ════════════════════════════════════════════════════════════
@@ -135,45 +163,17 @@ class NewsWatchService:
                 "boundary_note": "当前没有持仓数据，无法进行持仓影响分析。你可以先在投资画像中设置当前持仓。",
             }
 
-        # 2) 对每只持仓查询近期新闻并评估影响
-        impacts = []
-        from app.services.news_data_service import get_news_data_service, NewsQueryParams
-
-        news_service = await get_news_data_service()
-        start_time = datetime.utcnow() - timedelta(hours=hours_back)
+        total_value = sum(
+            float(h.get("position_value") or h.get("market_value") or 0)
+            for h in holdings
+        )
 
         for holding in holdings:
-            stock_code = holding.get("stock_code") or holding.get("symbol", "")
-            stock_name = holding.get("stock_name", stock_code)
-
-            if not stock_code:
-                continue
-
-            params = NewsQueryParams(
-                symbol=stock_code,
-                start_time=start_time,
-                limit=20,
-                sort_by="publish_time",
-                sort_order=-1,
+            impact = await self._analyze_holding_impact(
+                user_id, holding, total_value, hours_back
             )
-            news_list = await news_service.query_news(params)
-
-            # 简单规则评估影响等级
-            impact_level, evidence_note = self._evaluate_impact(news_list, holding)
-
-            impacts.append({
-                "stock_code": stock_code,
-                "stock_name": stock_name,
-                "news_count": len(news_list),
-                "impact_level": impact_level,
-                "evidence_note": evidence_note,
-                "latest_news_time": (
-                    news_list[0].get("publish_time", "") if news_list else ""
-                ),
-                "sample_headlines": [
-                    n.get("title", "")[:80] for n in news_list[:3]
-                ],
-            })
+            if impact:
+                impacts.append(impact)
 
         data_sufficient = any(i["news_count"] >= 3 for i in impacts)
 
@@ -207,40 +207,222 @@ class NewsWatchService:
             "stock_name": (stock_doc or {}).get("name") or stock_code,
             "profile_risk_preference": (profile_doc or {}).get("risk_preference"),
         }
-
-        from app.services.news_data_service import get_news_data_service, NewsQueryParams
-        news_service = await get_news_data_service()
-        start_time = datetime.utcnow() - timedelta(hours=hours_back)
-        params = NewsQueryParams(
-            symbol=stock_code,
-            start_time=start_time,
-            limit=20,
-            sort_by="publish_time",
-            sort_order=-1,
+        impact = await self._analyze_holding_impact(
+            user_id, holding, 0, hours_back
         )
-        news_list = await news_service.query_news(params)
-        impact_level, evidence_note = self._evaluate_impact(news_list, holding)
 
         return {
             "has_holdings": True,
             "holdings_count": 1,
             "hours_back": hours_back,
             "symbol": stock_code,
-            "impacts": [{
-                "stock_code": stock_code,
-                "stock_name": holding["stock_name"],
-                "news_count": len(news_list),
-                "impact_level": impact_level,
-                "evidence_note": evidence_note,
-                "latest_news_time": news_list[0].get("publish_time", "") if news_list else "",
-                "sample_headlines": [n.get("title", "")[:80] for n in news_list[:3]],
-            }],
-            "data_sufficient": len(news_list) >= 3,
+            "impacts": [impact] if impact else [],
+            "data_sufficient": bool(impact and impact.get("news_count", 0) >= 3),
             "boundary_note": (
                 "分析基于近期新闻的规则匹配，并结合你的投资画像上下文，不构成交易建议。"
-                + ("新闻覆盖不足，结论仅供参考。" if len(news_list) < 3 else "")
+                + (
+                    "新闻覆盖不足，结论仅供参考。"
+                    if not impact or impact.get("news_count", 0) < 3
+                    else ""
+                )
             ),
         }
+
+    async def get_auto_holdings_impact(
+        self,
+        user_id: str,
+        hours_back: int = 72,
+    ) -> Dict[str, Any]:
+        """读取缓存；缺失时当场分析，过期时返回旧结果并后台刷新。"""
+        db = await self._get_db()
+        cache = db[IMPACT_CACHE_COLLECTION]
+        latest = await cache.find_one(
+            {"user_id": user_id}, sort=[("created_at", -1)]
+        )
+        now = datetime.utcnow()
+
+        if latest and latest.get("created_at"):
+            age = now - latest["created_at"]
+            if age.total_seconds() <= IMPACT_CACHE_HOURS * 3600:
+                result = latest.get("result") or {}
+                result.update({
+                    "cached": True,
+                    "refresh_state": "current",
+                    "cached_at": latest["created_at"].isoformat(),
+                })
+                return result
+
+            stale_result = dict(latest.get("result") or {})
+            stale_result.update({
+                "cached": True,
+                "refresh_state": "refreshing",
+                "cached_at": latest["created_at"].isoformat(),
+            })
+            self._schedule_background_refresh(user_id, hours_back)
+            return stale_result
+
+        result = await self.analyze_holdings_impact(
+            user_id=user_id, hours_back=hours_back
+        )
+        result.update({"cached": False, "refresh_state": "current"})
+        await self._persist_holdings_impact(user_id, result)
+        return result
+
+    async def _analyze_holding_impact(
+        self,
+        user_id: str,
+        holding: Dict[str, Any],
+        total_value: float,
+        hours_back: int,
+    ) -> Optional[Dict[str, Any]]:
+        """为单个持仓生成多维影响评分卡，并保留直接/间接覆盖信息。"""
+        stock_code = holding.get("stock_code") or holding.get("symbol", "")
+        stock_name = holding.get("stock_name", stock_code)
+        if not stock_code:
+            return None
+
+        news_list, direct_count, indirect_count, failure_summary = (
+            await self._fetch_holding_news(user_id, stock_code, hours_back)
+        )
+        impact_level, evidence_note = self._evaluate_impact(news_list, holding)
+        direction = self._infer_direction(news_list)
+        holding_value = float(holding.get("position_value") or holding.get("market_value") or 0)
+        exposure = round(holding_value / total_value, 4) if total_value > 0 else 0.0
+        evidence_quality = (
+            "weak"
+            if len(news_list) < 3
+            else "moderate" if len(news_list) < 5 else "strong"
+        )
+        impact_paths = [
+            n.get("_via") for n in news_list if n.get("_via")
+        ][:5]
+
+        card = HoldingImpactCard(
+            stock_code=stock_code,
+            stock_name=stock_name,
+            direction=direction,
+            strength=int(impact_level == IMPACT_HIGH) * 4 + int(impact_level == IMPACT_MEDIUM) * 3,
+            exposure=exposure,
+            news_count=len(news_list),
+            freshness=news_list[0].get("publish_time") if news_list else None,
+            evidence_quality=evidence_quality,
+            market_confirmation="未确认",
+            risk_category=holding.get("risk_category", "general"),
+            watch_indicators=["成交量", "公告", "行业指数"],
+            is_direct=direct_count > 0,
+            impact_paths=impact_paths,
+            refresh_state=(
+                "source_failure"
+                if failure_summary and not news_list
+                else "insufficient" if not news_list else "current"
+            ),
+            analysis_id=holding.get("analysis_id"),
+        ).to_dict()
+        card.update({
+            "impact_level": impact_level,
+            "evidence_note": evidence_note,
+            "latest_news_time": (
+                (
+                    news_list[0].get("publish_time")
+                    or news_list[0].get("published_at")
+                    or ""
+                ).strip()
+                if news_list else ""
+            ),
+            "sample_headlines": [
+                n.get("title", "")[:80] for n in news_list[:3]
+            ],
+            "direct_count": direct_count,
+            "indirect_count": indirect_count,
+            "failure_summary": failure_summary,
+        })
+        return card
+
+    async def _fetch_holding_news(
+        self, user_id: str, stock_code: str, hours_back: int
+    ) -> tuple:
+        """先查直接新闻，不足时用聚合服务补充行业/概念/自选/热门兜底。"""
+        direct_news = []
+        try:
+            from app.services.news_data_service import (
+                get_news_data_service,
+                NewsQueryParams,
+            )
+            news_service = await get_news_data_service()
+            params = NewsQueryParams(
+                symbol=stock_code,
+                start_time=datetime.utcnow() - timedelta(hours=hours_back),
+                limit=20,
+                sort_by="publish_time",
+                sort_order=-1,
+            )
+            direct_news = await news_service.query_news(params) or []
+        except Exception as exc:
+            logger.warning(f"Direct news fetch failed for {stock_code}: {exc}")
+
+        if len(direct_news) >= 3:
+            return direct_news, len(direct_news), 0, None
+
+        try:
+            from app.services.news_aggregator_service import get_news_aggregator_service
+            aggregator = await get_news_aggregator_service()
+            aggregated = await aggregator.aggregate(stock_code, user_id)
+            news_list = aggregated.news_list or []
+            if len(news_list) > len(direct_news):
+                return (
+                    news_list,
+                    aggregated.direct_count,
+                    aggregated.indirect_count,
+                    aggregated.failure_summary,
+                )
+        except Exception as exc:
+            logger.warning(f"Aggregated news fallback failed for {stock_code}: {exc}")
+
+        return direct_news, len(direct_news), 0, None
+
+    @staticmethod
+    def _infer_direction(news_list: List[Dict[str, Any]]) -> str:
+        positive = sum(1 for n in news_list if n.get("sentiment") == "positive")
+        negative = sum(1 for n in news_list if n.get("sentiment") == "negative")
+        if positive > negative:
+            return "positive"
+        if negative > positive:
+            return "negative"
+        return "neutral"
+
+    def _schedule_background_refresh(self, user_id: str, hours_back: int) -> None:
+        async def runner():
+            try:
+                await self._refresh_holdings_impact(user_id, hours_back)
+            except Exception as exc:
+                logger.warning("Background holdings impact refresh failed: %s", exc)
+
+        task = asyncio.create_task(runner())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _refresh_holdings_impact(
+        self, user_id: str, hours_back: int
+    ) -> None:
+        result = await self.analyze_holdings_impact(
+            user_id=user_id, hours_back=hours_back
+        )
+        result.update({"cached": False, "refresh_state": "current"})
+        await self._persist_holdings_impact(user_id, result)
+
+    async def _persist_holdings_impact(
+        self, user_id: str, result: Dict[str, Any]
+    ) -> None:
+        db = await self._get_db()
+        await db[IMPACT_CACHE_COLLECTION].update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "user_id": user_id,
+                "result": result,
+                "created_at": datetime.utcnow(),
+            }},
+            upsert=True,
+        )
 
     @staticmethod
     def _evaluate_impact(

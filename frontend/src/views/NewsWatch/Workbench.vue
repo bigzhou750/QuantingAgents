@@ -94,8 +94,13 @@
     <el-card class="related-news-card">
       <template #header>
         <div class="card-header">
-          <span>相关新闻流</span>
-          <span class="source-label">{{ relatedNewsLabel }}</span>
+          <div class="card-header-left">
+            <span>相关新闻流</span>
+            <span class="source-label">{{ relatedNewsLabel }}</span>
+          </div>
+          <el-button size="small" type="primary" plain :disabled="relatedNews.length === 0" @click="analyzeBatchNews">
+            批量分析
+          </el-button>
         </div>
       </template>
 
@@ -114,12 +119,65 @@
               <span>{{ formatTime(news.publish_time) }}</span>
             </div>
           </div>
-          <el-button size="small" link type="primary" @click="collectNews(news)">
-            收集
-          </el-button>
+          <div class="news-actions">
+            <el-button size="small" link type="primary" @click="analyzeOne(news)">分析</el-button>
+            <el-button size="small" link type="primary" @click="collectNews(news)">收集</el-button>
+            <el-button size="small" link type="warning" @click="observeNews(news)">转观察</el-button>
+            <el-button size="small" link type="info" @click="ignoreNews(news)">忽略</el-button>
+          </div>
         </div>
       </div>
     </el-card>
+
+    <!-- 来源覆盖与事件聚类 -->
+    <el-card v-if="coverageInfo" class="coverage-card">
+      <template #header><span>来源覆盖与事件聚类</span></template>
+      <el-descriptions :column="3" border>
+        <el-descriptions-item label="总条数">{{ coverageInfo.total_count || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="来源数量">{{ (coverageInfo.source_statuses || []).length }}</el-descriptions-item>
+        <el-descriptions-item label="失败原因">{{ coverageInfo.failure_summary || '无' }}</el-descriptions-item>
+      </el-descriptions>
+      <div v-if="eventClusters.length" class="cluster-list">
+        <div v-for="cluster in eventClusters" :key="cluster.cluster_id" class="cluster-item">
+          <strong>{{ cluster.title || '未命名事件' }}</strong>
+          <span>{{ cluster.count }} 条</span>
+          <span v-if="cluster.symbols?.length">标的：{{ cluster.symbols.join('、') }}</span>
+        </div>
+      </div>
+      <el-empty v-else-if="!eventClusters.length" description="暂无事件聚类" :image-size="48" />
+    </el-card>
+
+    <!-- 单条分析结果 -->
+    <el-dialog v-model="analysisDialogVisible" title="新闻影响分析" width="640px">
+      <template v-if="analysisResult">
+        <el-alert
+          v-if="analysisResult.degraded"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+        >
+          <template #title>规则降级分析：{{ analysisResult.failure_reason || 'AI分析失败' }}</template>
+        </el-alert>
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="事件摘要" :span="2">
+            {{ analysisResult.result?.event_summary || '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="影响方向">
+            {{ analysisResult.result?.impact_direction || 'neutral' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="证据强度">
+            {{ analysisResult.result?.evidence_strength || 'weak' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="影响路径" :span="2">
+            {{ (analysisResult.result?.impact_paths || []).join('；') || '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="观察指标" :span="2">
+            {{ (analysisResult.result?.watch_indicators || []).join('；') || '—' }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -136,6 +194,11 @@ const newsLoading = ref(false)
 const items = ref<any[]>([])
 const relatedNews = ref<any[]>([])
 const filterType = ref('')
+const coverageInfo = ref<any>(null)
+const eventClusters = ref<any[]>([])
+const analysisDialogVisible = ref(false)
+const analysisResult = ref<any>(null)
+const analysisLoading = ref(false)
 
 const refreshCollected = async () => {
   loading.value = true
@@ -175,6 +238,7 @@ const loadRelatedNews = async () => {
       const marketNews = res.data?.news || []
       if (marketNews.length > 0) {
         relatedNews.value = marketNews
+        await loadCoverageAndClusters()
         return
       }
 
@@ -192,6 +256,7 @@ const loadRelatedNews = async () => {
         url: item.url,
         data_source: fallback.data?.source,
       }))
+      await loadCoverageAndClusters()
       return
     }
 
@@ -206,8 +271,29 @@ const loadRelatedNews = async () => {
       .flat()
       .sort((a, b) => new Date(b.publish_time || 0).getTime() - new Date(a.publish_time || 0).getTime())
       .slice(0, 20)
+    await loadCoverageAndClusters(symbols[0])
   } finally {
     newsLoading.value = false
+  }
+}
+
+const loadCoverageAndClusters = async (symbol?: string) => {
+  try {
+    const coverage = await newsWatchApi.sourceCoverage()
+    coverageInfo.value = coverage.data || null
+  } catch {
+    coverageInfo.value = null
+  }
+
+  if (!symbol) {
+    eventClusters.value = []
+    return
+  }
+  try {
+    const aggregated = await newsWatchApi.aggregatedNews(symbol)
+    eventClusters.value = aggregated.data?.event_clusters || []
+  } catch {
+    eventClusters.value = []
   }
 }
 
@@ -224,6 +310,77 @@ const collectNews = async (news: any) => {
     refreshCollected()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '收集新闻失败')
+  }
+}
+
+const analyzeOne = async (news: any) => {
+  analysisLoading.value = true
+  try {
+    const res = await newsWatchApi.analyzeNews({
+      news_id: news.id || news._id || news.url || news.title,
+      title: news.title || '',
+      content: news.content || news.summary || '',
+      source: news.source || news.data_source || '',
+      published_at: news.publish_time || news.published_at || '',
+      symbol: news.symbol || '',
+    })
+    analysisResult.value = res.data || {}
+    analysisDialogVisible.value = true
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '分析失败')
+  } finally {
+    analysisLoading.value = false
+  }
+}
+
+const analyzeBatchNews = async () => {
+  const newsItems = relatedNews.value.slice(0, 10).map((news) => ({
+    news_id: news.id || news._id || news.url || news.title,
+    title: news.title || '',
+    content: news.content || news.summary || '',
+    source: news.source || news.data_source || '',
+    published_at: news.publish_time || news.published_at || '',
+    symbol: news.symbol || '',
+  }))
+  if (newsItems.length === 0) return
+  try {
+    const res = await newsWatchApi.analyzeBatch({
+      news_items: newsItems,
+      cluster_first: true,
+    })
+    ElMessage.success(`已聚合 ${res.data?.count ?? newsItems.length} 个事件并完成分析`)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '批量分析失败')
+  }
+}
+
+const observeNews = async (news: any) => {
+  try {
+    await newsWatchApi.createObservationFromNews({
+      stock_code: news.symbol || news.stock_code || '',
+      stock_name: news.stock_name || '',
+      news_event_id: news.id || news._id || news.url || news.title,
+      user_notes: `来自新闻: ${news.title || ''}`,
+    })
+    ElMessage.success('已转观察任务')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '转观察失败')
+  }
+}
+
+const ignoreNews = async (news: any) => {
+  try {
+    await newsWatchApi.ignoreNews({
+      symbol: news.symbol,
+      news_id: news.id || news._id || news.url || news.title,
+      title: news.title || '',
+    })
+    relatedNews.value = relatedNews.value.filter(
+      (item) => (item.id || item._id || item.url || item.title) !== (news.id || news._id || news.url || news.title)
+    )
+    ElMessage.success('已忽略')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '忽略失败')
   }
 }
 
@@ -315,6 +472,16 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+.coverage-card {
+  margin-top: 16px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .news-list {
   display: flex;
   flex-direction: column;
@@ -336,6 +503,28 @@ onMounted(() => {
 
 .news-main {
   min-width: 0;
+}
+
+.news-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.cluster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cluster-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #606266;
 }
 
 .news-title {

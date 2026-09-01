@@ -308,6 +308,74 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- 定时回归任务 (6.4) -->
+    <el-row :gutter="24" style="margin-top: 24px">
+      <el-col :span="12">
+        <el-card shadow="never">
+          <template #header><span>定时回归任务</span></template>
+          <el-form :inline="true" size="small" style="margin-bottom: 12px">
+            <el-input v-model="regressionForm.name" placeholder="任务名称" style="width: 150px" />
+            <el-select v-model="regressionForm.dataset_id" placeholder="数据集" style="width: 150px">
+              <el-option v-for="ds in datasets" :key="ds.dataset_id" :label="ds.name" :value="ds.dataset_id" />
+            </el-select>
+            <el-input v-model="regressionForm.schedule_cron" placeholder="Cron（可选）" style="width: 150px" />
+            <el-button type="primary" :loading="regressionSaving" @click="createRegressionTask">创建</el-button>
+          </el-form>
+          <el-table :data="regressionTasks" size="small" stripe empty-text="暂无回归任务">
+            <el-table-column prop="name" label="名称" min-width="130" />
+            <el-table-column prop="schedule_cron" label="Cron" width="120" />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-switch :model-value="row.enabled" @change="toggleRegressionTask(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="90">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="triggerRegressionTask(row)">立即运行</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+
+      <!-- 成本预算、告警和第三方观测配置 (6.6) -->
+      <el-col :span="12">
+        <el-card shadow="never">
+          <template #header><span>成本预算与观测配置</span></template>
+          <el-form :model="governanceConfig" label-width="120px" size="small">
+            <el-form-item label="每日成本预算">
+              <el-input-number v-model="governanceConfig.daily_cost_budget_usd" :min="0" :precision="4" />
+            </el-form-item>
+            <el-form-item label="告警订阅">
+              <el-switch v-model="governanceConfig.alert_enabled" />
+            </el-form-item>
+            <el-form-item label="告警 Webhook">
+              <el-input v-model="governanceConfig.alert_webhook" placeholder="可选" />
+            </el-form-item>
+            <el-form-item label="观测后端">
+              <el-select v-model="governanceConfig.observability_backend" style="width: 160px">
+                <el-option label="关闭" value="none" />
+                <el-option label="Langfuse" value="langfuse" />
+                <el-option label="Phoenix" value="phoenix" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="观测地址">
+              <el-input v-model="governanceConfig.observability_host" placeholder="可选" />
+            </el-form-item>
+            <el-form-item label="项目名">
+              <el-input v-model="governanceConfig.observability_project" />
+            </el-form-item>
+            <el-form-item label="API Key">
+              <el-input v-model="governanceConfig.observability_api_key" type="password" show-password />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="savingGovernance" @click="saveGovernanceConfig">保存配置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -345,6 +413,27 @@ const availableScorers = ref<any[]>([])
 // Alerts (6.6)
 const alerts = ref<any[]>([])
 const checkingAlerts = ref(false)
+
+const regressionTasks = ref<any[]>([])
+const regressionSaving = ref(false)
+const regressionForm = ref({
+  name: '',
+  dataset_id: '',
+  schedule_cron: '',
+  num_trials_per_case: 1,
+  scorer_names: [] as string[],
+})
+
+const savingGovernance = ref(false)
+const governanceConfig = ref({
+  daily_cost_budget_usd: 0,
+  alert_enabled: true,
+  alert_webhook: '',
+  observability_backend: 'none',
+  observability_api_key: '',
+  observability_host: '',
+  observability_project: 'quantingagents-eval',
+})
 
 // 阈值常量
 const releaseGateThreshold = computed(() => releaseGateConfig.value.enabled ? releaseGateConfig.value.min_success_rate : 0.9)
@@ -469,6 +558,72 @@ const loadScorers = async () => {
   } catch { /* ignore */ }
 }
 
+const loadRegressionTasks = async () => {
+  try {
+    const res = await axios.get('/api/eval/regression-tasks')
+    regressionTasks.value = res.data?.data?.items || []
+  } catch { /* ignore */ }
+}
+
+const createRegressionTask = async () => {
+  if (!regressionForm.value.name || !regressionForm.value.dataset_id) {
+    ElMessage.warning('请输入任务名称并选择数据集')
+    return
+  }
+  regressionSaving.value = true
+  try {
+    await axios.post('/api/eval/regression-tasks', regressionForm.value)
+    ElMessage.success('回归任务已创建，默认禁用')
+    regressionForm.value.name = ''
+    regressionForm.value.schedule_cron = ''
+    await loadRegressionTasks()
+  } catch {
+    ElMessage.error('创建回归任务失败')
+  } finally {
+    regressionSaving.value = false
+  }
+}
+
+const toggleRegressionTask = async (row: any) => {
+  try {
+    await axios.put(`/api/eval/regression-tasks/${row.task_id}/toggle`, undefined, {
+      params: { enabled: !row.enabled },
+    })
+    await loadRegressionTasks()
+  } catch {
+    ElMessage.error('更新回归任务状态失败')
+  }
+}
+
+const triggerRegressionTask = async (row: any) => {
+  try {
+    await axios.post(`/api/eval/regression-tasks/${row.task_id}/trigger`)
+    ElMessage.success('回归运行已触发')
+    await loadRegressionTasks()
+  } catch {
+    ElMessage.error('触发回归运行失败')
+  }
+}
+
+const loadGovernanceConfig = async () => {
+  try {
+    const res = await axios.get('/api/eval/governance/config')
+    governanceConfig.value = { ...governanceConfig.value, ...(res.data?.data || {}) }
+  } catch { /* use defaults */ }
+}
+
+const saveGovernanceConfig = async () => {
+  savingGovernance.value = true
+  try {
+    await axios.put('/api/eval/governance/config', governanceConfig.value)
+    ElMessage.success('评测治理配置已保存')
+  } catch {
+    ElMessage.error('保存评测治理配置失败')
+  } finally {
+    savingGovernance.value = false
+  }
+}
+
 const formatTime = (isoString: string) => {
   if (!isoString) return '-'
   return new Date(isoString).toLocaleString('zh-CN')
@@ -498,6 +653,8 @@ onMounted(() => {
   loadReleaseGateConfig()
   loadScorers()
   checkAlerts()
+  loadRegressionTasks()
+  loadGovernanceConfig()
 })
 </script>
 

@@ -160,7 +160,7 @@ app/services/eval/data/golden_cases.json
 
 ### 4. 后续批量导入
 
-生产环境通常还需要从 JSON、CSV、Excel 或标注平台批量导入 Case。当前后台暂未提供批量导入 UI。
+生产环境通常还需要从 JSON、CSV、Excel 或标注平台批量导入 Case。当前后台已提供 JSON、CSV 和 Excel 文件导入 UI；标注平台直连仍需单独接入。
 
 ## 当前已具备能力
 
@@ -180,14 +180,16 @@ app/services/eval/data/golden_cases.json
 - Langfuse/Phoenix 观测适配预留。
 - DeepEval/Ragas/Promptfoo 适配预留。
 
-## 当前缺口
+## 历史缺口记录
+
+以下内容保留用于说明早期版本的缺口，不代表当前生产工作台状态。当前状态以本文前面的“当前生产工作台入口”和实际 API 为准。
 
 ### P0：影响基本后台可用性
 
-- Case 编辑入口：后端已有 `PUT /api/eval/cases/{case_id}`，前端详情页还没有编辑按钮。
-- Case 删除入口：后端已有 `DELETE /api/eval/cases/{case_id}`，前端详情页还没有删除按钮。
-- 默认 Golden Set 导入入口：目前需要运行脚本，后台没有“一键导入内置 Golden Cases”。
-- 空数据引导：数据集为空时，页面应该提示添加 Case、导入 Golden Set 或从 Bad Case 回流。
+- Case 编辑入口：已补齐 `PUT /api/eval/cases/{case_id}` 和详情页编辑按钮。
+- Case 删除入口：已补齐 `DELETE /api/eval/cases/{case_id}` 和详情页删除按钮。
+- 默认 Golden Set 导入入口：已补齐后台一键导入和幂等处理。
+- 空数据引导：已补齐添加 Case、Golden Set、文件导入和 Bad Case 回流入口。
 - Trial 最终输出缺少独立入口：现在只能在 trace 里翻 `streaming` / `lifecycle` 事件，不方便直接对照评测结果查看 agent 最后说了什么。
 - 运行详情上下文不足：当前主要能看 trial 列表和 trace 抽屉，但缺少同屏展示输入、最终输出、错误原因、token/成本、各维度评分和人工复核状态。
 - 人工复核上下文仍不完整：已补上 judge 的原始输出、维度理由和证据引用，但复核人仍无法在同一视图里直接看到完整 Case 输入、Agent 输出、trace 证据和历史评分，难以彻底闭环。
@@ -302,7 +304,7 @@ app/services/eval/data/golden_cases.json
 
 ## 建议下一步
 
-优先补 P0：
+历史版本建议优先补 P0；当前版本已完成这些项目，后续重点转向：
 
 1. 在数据集详情页补 Case 编辑和删除。
 2. 增加“一键导入 Golden Set”接口和按钮。
@@ -318,6 +320,49 @@ app/services/eval/data/golden_cases.json
 ## 生产工作台升级说明（二期完成）
 
 以下功能已在二期迭代中全部实现，覆盖数据集管理、运行详情/报告、评分/复核、Claim-Evidence grounding、趋势治理和测试验证。
+
+## 当前生产工作台入口
+
+当前后台页面已经覆盖以下闭环：
+
+1. `评测集详情`：手工新增、编辑、删除 Case；导入 Golden Set；使用 JSON、CSV 或 Excel 文件批量导入；批量修改标签、类别、难度和评分标准；发布数据集版本。
+2. `新建评测运行`：选择数据集版本、Trial 数、超时、评分器、Judge 模型、Rubric 版本、低置信度阈值、复核策略和数据窗口。
+3. `运行详情`：查看每个 Trial 的输入、Final Output、错误、Token、成本、评分、复核状态和 Trace；Trace 按 LLM、Tool、Skill、Swarm、Evidence 分组。
+4. `评测报告`：查看成功率、失败率、`pass@k`、`pass^k`、评分聚合、延迟、成本和 Claim-Evidence 汇总，并导出 JSON/CSV。
+5. `人工复核`：查看 Case 输入、Agent 输出、Judge 原始结果、证据引用和历史评分，并执行调整分数、标记通过/失败、加入 Bad Case 或回流数据集。
+6. `质量趋势`：查看趋势、失败聚类、Release Gate、告警检查、定时回归任务和治理配置。
+
+## 文件导入格式
+
+JSON 文件是 Case 对象数组。CSV 和 Excel 第一行必须是字段名，至少包含 `name` 和 `input`。`input`、`expected_output`、`scoring_criteria` 可以是 JSON 对象，也可以是 JSON 字符串；`tags` 支持逗号分隔字符串。导入接口会逐行处理，返回 `imported`、`failed` 和 `errors`，部分错误不会回滚已成功的 Case。
+
+接口：
+
+```text
+POST /api/eval/datasets/{dataset_id}/cases/upload
+Content-Type: multipart/form-data
+```
+
+## 定时回归与治理
+
+回归任务通过 `POST /api/eval/regression-tasks` 创建，默认 `enabled=false`。管理员可以在质量趋势页启用/停用任务或点击“立即运行”。手动触发会创建普通评测 Run，并保留 `last_run_id` 和 `last_run_at`。
+
+成本预算、告警订阅和第三方观测配置通过以下接口保存，并只允许评测平台管理员访问：
+
+```text
+GET /api/eval/governance/config
+PUT /api/eval/governance/config
+```
+
+观测后端支持 `none`、`langfuse` 和 `phoenix`。API Key 只用于运行时配置，不应写入日志、报告或前端错误信息。Release Gate 未启用时不阻断运行；启用后可按成功率、`pass@3`、失败率和安全评分器结果阻断发布。
+
+## 验证命令
+
+```bash
+EVAL_PLATFORM_ENABLED=false pytest -q tests/test_eval_platform.py tests/test_eval_phase2.py tests/test_eval_phase3.py
+cd frontend && npm run test:unit && npm run type-check
+openspec validate complete-agent-evaluation-platform --strict
+```
 
 ### 数据集与 Case 管理
 

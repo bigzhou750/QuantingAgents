@@ -121,8 +121,37 @@ class NewsImpactAgentService:
     async def analyze_batch(
         self,
         news_items: List[Dict[str, Any]],
+        cluster_first: bool = True,
     ) -> List[NewsAnalysisRecord]:
-        """批量分析（逐条调用，后续可优化为聚类后统一分析）"""
+        """批量分析。cluster_first 时先按 URL/标题/时间窗口聚类，再统一分析。"""
+        if cluster_first and news_items:
+            from app.services.news_aggregator_service import NewsAggregatorService
+            clusters = NewsAggregatorService.cluster_news_items(news_items)
+            records = []
+            for cluster in clusters:
+                representative = cluster["items"][0]
+                news_ids = [
+                    item.get("_id", item.get("news_id", ""))
+                    for item in cluster["items"]
+                    if item.get("_id") or item.get("news_id")
+                ]
+                try:
+                    record = await self.analyze_single(representative)
+                except Exception as e:
+                    logger.error(f"Clustered analysis failed: {e}")
+                    record = NewsAnalysisRecord(
+                        news_ids=news_ids or [representative.get("_id", "")],
+                        degraded=True,
+                        failure_reason=str(e)[:200],
+                        result=self._rule_based_fallback(representative),
+                    )
+                    await self._persist(record)
+                if news_ids:
+                    record.news_ids = news_ids
+                    await self._persist(record)
+                records.append(record)
+            return records
+
         records = []
         for item in news_items:
             try:
@@ -295,15 +324,16 @@ class NewsImpactAgentService:
         """非交易建议安全过滤"""
         try:
             from app.services.personal_investment.terminology_filter import (
-                validate_compliance,
+                TerminologyFilter,
             )
-            # 对 event_summary 和 non_advisory_note 做合规检查
-            for field in ("event_summary", "non_advisory_note"):
-                text = result.get(field, "")
-                if text:
-                    compliant, replacements = validate_compliance(text)
-                    if not compliant and replacements:
-                        result[field] = replacements
+            for key, value in result.items():
+                if isinstance(value, str):
+                    result[key], _ = TerminologyFilter.filter_text(value)
+                elif isinstance(value, list):
+                    result[key] = [
+                        TerminologyFilter.filter_text(v)[0] if isinstance(v, str) else v
+                        for v in value
+                    ]
         except Exception as e:
             logger.warning(f"Compliance filter failed (non-blocking): {e}")
 
@@ -314,10 +344,14 @@ class NewsImpactAgentService:
         return result
 
     async def _persist(self, record: NewsAnalysisRecord):
-        """持久化分析记录"""
+        """持久化分析记录（同一 analysis_id 以最新内容覆盖）"""
         db = get_mongo_db()
         doc = record.to_doc()
-        await db[self.COLLECTION].insert_one(doc)
+        await db[self.COLLECTION].update_one(
+            {"analysis_id": doc["analysis_id"]},
+            {"$set": doc},
+            upsert=True,
+        )
 
 
 # 模块级单例

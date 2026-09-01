@@ -269,6 +269,16 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'marketplace/:templateId',
+        name: 'MarketplaceDetail',
+        component: () => import('@/views/PersonalInvestment/MarketplaceDetail.vue'),
+        meta: {
+          title: '策略详情',
+          requiresAuth: true,
+          hideInMenu: true
+        }
+      },
+      {
         path: 'observations',
         name: 'MyObservations',
         component: () => import('@/views/PersonalInvestment/Observations.vue'),
@@ -811,6 +821,12 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.requiresEvalPlatform && import.meta.env.VITE_EVAL_PLATFORM_ENABLED !== 'true') {
     ElMessage.warning('Agent 评测平台未启用')
+    next('/dashboard')
+    return
+  }
+
+  if (to.path.startsWith('/evolution') && import.meta.env.VITE_EVOLUTION_ENABLED !== 'true') {
+    ElMessage.warning('自进化功能未启用')
     next('/dashboard')
     return
   }

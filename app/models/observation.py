@@ -61,6 +61,7 @@ class ObservationRecord(BaseModel):
 
     # 新闻闭环扩展字段（可选）
     news_event_id: Optional[str] = None
+    analysis_id: Optional[str] = None
     verification_indicators: List[str] = Field(default_factory=list)
     check_windows: List[int] = Field(default_factory=lambda: [1, 3, 7])
 

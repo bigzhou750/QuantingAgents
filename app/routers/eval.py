@@ -5,10 +5,13 @@ Agent 评测平台 API 路由
 仅允许研发和管理员角色访问。
 """
 
+import csv
+import io
+import json
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -372,6 +375,49 @@ class BatchImportCasesRequest(BaseModel):
     cases: List[CaseCreateRequest]
 
 
+def parse_case_import_file(content: bytes, filename: str) -> List[dict]:
+    """把 JSON/CSV/Excel 导入文件解析成 Case 行字典。"""
+    ext = (filename or "").lower().rsplit(".", 1)[-1]
+    if ext == "json":
+        try:
+            rows = json.loads(content.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"JSON 文件无法解析: {exc}")
+        if not isinstance(rows, list):
+            raise ValueError("JSON 文件必须是 case 数组")
+        return rows
+
+    if ext == "csv":
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"CSV 文件编码不支持: {exc}")
+        reader = csv.DictReader(io.StringIO(text))
+        return list(reader)
+
+    if ext in ("xlsx", "xls"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise ValueError("Excel 导入需要安装 openpyxl") from exc
+        try:
+            wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            ws = wb.active
+            header_cells = next(ws.iter_rows())
+            headers = [str(c.value).strip() if c.value is not None else "" for c in header_cells]
+            rows = []
+            for row in ws.iter_rows(min_row=2):
+                values = [c.value for c in row]
+                if any(v is not None and str(v).strip() for v in values):
+                    rows.append(dict(zip(headers, values)))
+            wb.close()
+            return rows
+        except Exception as exc:
+            raise ValueError(f"Excel 文件无法解析: {exc}") from exc
+
+    raise ValueError("仅支持 .json、.csv、.xlsx 导入文件")
+
+
 @router.post("/datasets/{dataset_id}/cases/batch-import", dependencies=[Depends(verify_eval_access)])
 async def batch_import_cases(dataset_id: str, request: BatchImportCasesRequest):
     """批量导入用例到评测集"""
@@ -405,6 +451,70 @@ async def batch_import_cases(dataset_id: str, request: BatchImportCasesRequest):
         success=True,
         data={"imported": imported, "failed": failed, "errors": errors},
         message=f"批量导入完成：{imported} 条成功，{failed} 条失败",
+    )
+
+
+@router.post("/datasets/{dataset_id}/cases/upload", dependencies=[Depends(verify_eval_access)])
+async def upload_cases_file(
+    dataset_id: str,
+    file: UploadFile = File(...),
+):
+    """从 JSON/CSV/Excel 文件批量导入用例，逐行报告部分失败。"""
+    content = await file.read()
+    try:
+        rows = parse_case_import_file(content, file.filename or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    imported = 0
+    failed = 0
+    errors = []
+    for idx, row in enumerate(rows):
+        try:
+            name = str(row.get("name", "")).strip()
+            if not name:
+                raise ValueError("缺少 name 字段")
+            input_data = row.get("input")
+            if isinstance(input_data, str):
+                input_data = json.loads(input_data)
+            if not isinstance(input_data, dict):
+                raise ValueError("input 必须是对象或合法 JSON 字符串")
+
+            expected_output = row.get("expected_output")
+            if isinstance(expected_output, str) and expected_output.strip():
+                expected_output = json.loads(expected_output)
+            scoring_criteria = row.get("scoring_criteria")
+            if isinstance(scoring_criteria, str) and scoring_criteria.strip():
+                scoring_criteria = json.loads(scoring_criteria)
+
+            tags = row.get("tags", [])
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+            await dataset_service.add_case(
+                dataset_id=dataset_id,
+                name=name,
+                input_data=input_data,
+                expected_output=expected_output,
+                scoring_criteria=scoring_criteria,
+                tags=tags,
+                difficulty=str(row.get("difficulty") or "medium"),
+                category=str(row.get("category") or "general"),
+                description=str(row.get("description") or ""),
+            )
+            imported += 1
+        except Exception as exc:
+            failed += 1
+            errors.append({
+                "index": idx,
+                "name": row.get("name", ""),
+                "error": str(exc),
+            })
+
+    return ApiResponse(
+        success=True,
+        data={"imported": imported, "failed": failed, "errors": errors},
+        message=f"文件导入完成：{imported} 条成功，{failed} 条失败",
     )
 
 
@@ -1311,6 +1421,62 @@ class RegressionTaskConfig(BaseModel):
     created_at: Optional[str] = None
     last_run_id: Optional[str] = None
     last_run_at: Optional[str] = None
+
+
+class EvalGovernanceConfig(BaseModel):
+    """评测成本告警和第三方观测配置。"""
+    daily_cost_budget_usd: float = 0.0
+    alert_enabled: bool = True
+    alert_webhook: str = ""
+    observability_backend: str = "none"
+    observability_api_key: str = ""
+    observability_host: str = ""
+    observability_project: str = "quantingagents-eval"
+
+
+@router.get("/governance/config", dependencies=[Depends(verify_eval_access)])
+async def get_governance_config():
+    """读取评测成本、告警和观测配置。"""
+    try:
+        db = get_mongo_db()
+        doc = await db["eval_governance_config"].find_one({"config_id": "default"})
+        if doc:
+            doc.pop("_id", None)
+            return ApiResponse(success=True, data=doc)
+        return ApiResponse(success=True, data=EvalGovernanceConfig().model_dump())
+    except Exception as e:
+        logger.error(f"Failed to get governance config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/governance/config", dependencies=[Depends(verify_eval_access)])
+async def update_governance_config(config: EvalGovernanceConfig):
+    """保存评测成本、告警和观测配置，并应用观测适配器设置。"""
+    try:
+        if config.observability_backend not in {"none", "langfuse", "phoenix"}:
+            raise HTTPException(status_code=400, detail="不支持的观测后端")
+        db = get_mongo_db()
+        doc = config.model_dump()
+        doc["config_id"] = "default"
+        doc["updated_at"] = now_tz()
+        await db["eval_governance_config"].update_one(
+            {"config_id": "default"}, {"$set": doc}, upsert=True
+        )
+        from app.services.eval.observability_adapter import observability_adapter
+        observability_adapter.configure(
+            backend=config.observability_backend,
+            api_key=config.observability_api_key,
+            host=config.observability_host,
+            project=config.observability_project,
+        )
+        response = config.model_dump()
+        response["updated_at"] = doc["updated_at"].isoformat()
+        return ApiResponse(success=True, data=response, message="评测治理配置已保存")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update governance config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/regression-tasks", dependencies=[Depends(verify_eval_access)])

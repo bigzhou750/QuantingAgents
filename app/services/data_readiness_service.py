@@ -5,6 +5,7 @@
 为策略选股、体检和模拟提供数据质量闸门。
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -99,6 +100,7 @@ class DataReadinessService:
     def __init__(self):
         self._initialized = False
         self._last_report: Optional[DataReadinessReport] = None
+        self._replenish_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         """初始化服务和索引"""
@@ -202,6 +204,49 @@ class DataReadinessService:
                 logger.warning(f"Data gate warning: {cat.value} is stale")
 
         return len(failures) == 0, failures
+
+    async def schedule_replenishment(
+        self, required_categories: List[DataCategory]
+    ) -> bool:
+        """在用户请求前安排一次非阻塞补数。
+
+        只有闸门明确发现缺失或错误时才触发，避免每次请求都启动同步任务。
+        同一进程内已有补数任务时复用它，防止并发请求重复打数据源。
+        """
+        settings = get_settings()
+        if not getattr(settings, "DATA_READINESS_ENABLED", True):
+            return False
+
+        passed, failures = await self.check_gate(required_categories)
+        if passed or not failures:
+            return False
+
+        if self._replenish_task and not self._replenish_task.done():
+            return True
+
+        self._replenish_task = asyncio.create_task(
+            self._replenish_categories(required_categories)
+        )
+        return True
+
+    async def _replenish_categories(self, categories: List[DataCategory]) -> None:
+        """复用现有同步适配器执行轻量补数，失败只记录到既有状态。"""
+        try:
+            category_set = set(categories)
+            if DataCategory.STOCK_POOL in category_set:
+                from app.services.multi_source_basics_sync_service import (
+                    get_multi_source_sync_service,
+                )
+                await get_multi_source_sync_service().run_full_sync(force=False)
+
+            if DataCategory.QUOTES in category_set:
+                from app.services.quotes_ingestion_service import QuotesIngestionService
+                await QuotesIngestionService().run_once()
+
+            # 重新计算状态，让下一次请求能看到补数结果。
+            await self.refresh()
+        except Exception as exc:
+            logger.warning("用户请求触发的数据补数失败: %s", exc)
 
     # ==================== 内部检查方法 ====================
 

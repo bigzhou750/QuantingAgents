@@ -140,13 +140,13 @@ const statusLabel = (s: string) => ({
   promoted: '已发布', rollback: '已回滚', stopped: '已停止',
 }[s] || s)
 
-const statusTagType = (s: string) => ({
+const statusTagType = (s: string): any => ({
   draft: 'info', pending_verify: 'warning', verifying: '',
   verified: '', approved: 'success', rejected: 'danger',
   promoted: 'success', rollback: 'warning', stopped: 'danger',
 }[s] || '')
 
-const riskTagType = (r: string) => ({
+const riskTagType = (r: string): any => ({
   low: 'success', medium: 'warning', high: 'danger', critical: 'danger',
 }[r] || 'info')
 

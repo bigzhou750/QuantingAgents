@@ -31,6 +31,18 @@ export interface NewsWatchImpact {
   evidence_note: string
   latest_news_time?: string
   sample_headlines: string[]
+  direct_count?: number
+  indirect_count?: number
+  direction?: 'positive' | 'negative' | 'neutral'
+  strength?: number
+  exposure?: number
+  evidence_quality?: 'strong' | 'moderate' | 'weak'
+  market_confirmation?: string
+  risk_category?: string
+  watch_indicators?: string[]
+  is_direct?: boolean
+  impact_paths?: string[]
+  refresh_state?: 'current' | 'refreshing' | 'insufficient' | 'source_failure'
 }
 
 export interface NewsWatchImpactAnalysisResult {
@@ -123,4 +135,13 @@ export const newsWatchApi = {
 
   closedLoopMetrics: () =>
     ApiClient.get('/api/news-watch/closed-loop-metrics'),
+
+  observationTasks: (params: { status?: string; skip?: number; limit?: number } = {}) =>
+    ApiClient.get<{ items: Record<string, unknown>[]; total: number }>('/api/news-watch/observation-tasks', params),
+
+  triggerReview: (payload: { observation_id: string; window_days?: number }) =>
+    ApiClient.post('/api/news-watch/review', payload),
+
+  ignoreNews: (payload: { symbol?: string; news_id?: string; title?: string }) =>
+    ApiClient.post('/api/news-watch/ignore', payload),
 }

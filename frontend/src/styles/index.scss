@@ -50,6 +50,16 @@ h6 {
   }
 }
 
+// Element Plus 的 inline form 会让未指定宽度的 Select 按内容收缩，
+// 最终只显示下拉箭头。显式 width 的组件仍由行内样式或页面样式优先控制。
+.el-form--inline .el-form-item .el-select {
+  width: 180px;
+}
+
+.el-form--inline .el-form-item .el-select .el-select__wrapper {
+  width: 100%;
+}
+
 // 优化页面标题
 .page-title,
 .section-title,

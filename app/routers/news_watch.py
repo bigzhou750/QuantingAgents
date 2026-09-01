@@ -40,6 +40,19 @@ class AlertConfigUpdate(BaseModel):
     )
 
 
+class ObservationReviewRequest(BaseModel):
+    """触发观察任务复盘请求"""
+    observation_id: str
+    window_days: int = Field(default=7, ge=1, le=30)
+
+
+class IgnoreNewsRequest(BaseModel):
+    """忽略一条新闻"""
+    symbol: Optional[str] = None
+    news_id: Optional[str] = None
+    title: str = ""
+
+
 # ── 1. 关注收集 ───────────────────────────────────────────────
 
 @router.post("/collect", response_model=dict)
@@ -350,7 +363,7 @@ async def analyze_batch(
         from app.services.news_impact_agent_service import get_news_impact_agent_service
         agent = await get_news_impact_agent_service()
         items = [item.model_dump() for item in request.news_items]
-        records = await agent.analyze_batch(items)
+        records = await agent.analyze_batch(items, cluster_first=request.cluster_first)
         return ok(data={"items": [r.to_doc() for r in records], "count": len(records)})
     except Exception as e:
         logger.error(f"Batch analysis failed: {e}")
@@ -364,7 +377,7 @@ async def auto_holdings_impact(current_user: dict = Depends(get_current_user)):
     """自动加载持仓影响分析（缓存+后台刷新）"""
     try:
         service = await get_news_watch_service()
-        result = await service.analyze_holdings_impact(
+        result = await service.get_auto_holdings_impact(
             user_id=current_user["id"],
             hours_back=72,
         )
@@ -451,4 +464,71 @@ async def get_closed_loop_metrics(current_user: dict = Depends(get_current_user)
         metrics = await closed_loop.get_metrics(current_user["id"])
         return ok(data=metrics.to_dict())
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/observation-tasks")
+async def list_news_observation_tasks(
+    status: Optional[str] = Query(None, description="待观察/已确认/已失效/已复盘"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
+):
+    """列出新闻来源的观察任务及其状态"""
+    try:
+        from app.services.personal_investment.observation_service import observation_service
+        result = await observation_service.list_observations(
+            user_id=current_user["id"],
+            status=status,
+            source_type="news",
+            skip=skip,
+            limit=limit,
+        )
+        return ok(data=result)
+    except Exception as e:
+        logger.error(f"List news observation tasks failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/review")
+async def trigger_observation_review(
+    request: ObservationReviewRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """按窗口触发新闻观察复盘"""
+    try:
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        closed_loop = await get_news_closed_loop_service()
+        result = await closed_loop.trigger_review(
+            observation_id=request.observation_id,
+            user_id=current_user["id"],
+            window_days=request.window_days,
+        )
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return ok(data=result, message="复盘完成")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Trigger review failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ignore")
+async def ignore_news(
+    request: IgnoreNewsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """记录用户忽略的新闻"""
+    try:
+        service = await get_news_watch_service()
+        result = await service.ignore_item(
+            user_id=current_user["id"],
+            symbol=request.symbol,
+            news_id=request.news_id,
+            title=request.title,
+        )
+        return ok(data=result, message="已忽略")
+    except Exception as e:
+        logger.error(f"Ignore news failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

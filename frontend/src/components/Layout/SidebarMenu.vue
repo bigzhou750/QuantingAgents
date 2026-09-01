@@ -89,7 +89,7 @@
       <el-menu-item index="/evaluation/bad-cases">Bad Case 池</el-menu-item>
     </el-sub-menu>
 
-    <el-sub-menu v-if="showEvaluationPlatform" index="/evolution">
+    <el-sub-menu v-if="showSelfEvolution" index="/evolution">
       <template #title>
         <el-icon><MagicStick /></el-icon>
         <span>自进化</span>
@@ -178,6 +178,9 @@ const authStore = useAuthStore()
 const activeMenu = computed(() => route.path)
 const showEvaluationPlatform = computed(() => {
   return import.meta.env.VITE_EVAL_PLATFORM_ENABLED === 'true' && authStore.isAdmin
+})
+const showSelfEvolution = computed(() => {
+  return showEvaluationPlatform.value && import.meta.env.VITE_EVOLUTION_ENABLED === 'true'
 })
 </script>
 

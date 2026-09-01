@@ -12,6 +12,7 @@ Agent 评测平台三期功能验收测试
 - 3.8 Release Gate 配置
 """
 
+import io
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -231,6 +232,64 @@ class TestOnlineSampleModel:
         assert req.source == "user_feedback"
         assert req.risk_level == "high"
         assert "finance" in req.tags
+
+
+class TestCaseImportFormats:
+    """验证 JSON/CSV/Excel 用例文件解析和错误边界"""
+
+    def test_parse_json_array(self):
+        from app.routers.eval import parse_case_import_file
+        rows = parse_case_import_file(
+            b'[{"name":"case-1","input":{"prompt":"test"}}]',
+            "cases.json",
+        )
+        assert rows[0]["name"] == "case-1"
+        assert rows[0]["input"]["prompt"] == "test"
+
+    def test_parse_csv_rows(self):
+        from app.routers.eval import parse_case_import_file
+        rows = parse_case_import_file(
+            "name,input,category,tags\ncase-1,\"{\\\"prompt\\\": \\\"test\\\"}\",finance,one,two\n".encode(),
+            "cases.csv",
+        )
+        assert rows[0]["name"] == "case-1"
+        assert rows[0]["category"] == "finance"
+
+    def test_parse_xlsx_rows(self):
+        from openpyxl import Workbook
+        from app.routers.eval import parse_case_import_file
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["name", "input", "difficulty"])
+        sheet.append(["case-1", '{"prompt":"test"}', "easy"])
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+
+        rows = parse_case_import_file(buffer.getvalue(), "cases.xlsx")
+        assert rows == [{"name": "case-1", "input": '{"prompt":"test"}', "difficulty": "easy"}]
+
+    def test_reject_unsupported_extension(self):
+        from app.routers.eval import parse_case_import_file
+        with pytest.raises(ValueError, match="仅支持"):
+            parse_case_import_file(b"x", "cases.txt")
+
+
+class TestGovernanceConfigDefaults:
+    """评测治理配置与回归任务默认安全状态"""
+
+    def test_governance_defaults(self):
+        from app.routers.eval import EvalGovernanceConfig
+        config = EvalGovernanceConfig()
+        assert config.observability_backend == "none"
+        assert config.alert_enabled is True
+        assert config.daily_cost_budget_usd == 0
+
+    def test_regression_task_disabled_by_default(self):
+        from app.routers.eval import RegressionTaskConfig
+        task = RegressionTaskConfig()
+        assert task.enabled is False
+        assert task.schedule_cron == ""
 
 
 # ==================== 3.7 告警规则 ====================

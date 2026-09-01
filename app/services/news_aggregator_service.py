@@ -93,6 +93,7 @@ class NewsAggregatorService:
         # 去重 + 事件聚类
         deduped = self._deduplicate(all_news)
         result.news_list = deduped
+        result.event_clusters = self.cluster_news_items(deduped)
 
         # 新鲜度
         if deduped:
@@ -299,6 +300,121 @@ class NewsAggregatorService:
 
         return result
 
+    @staticmethod
+    def _event_time(value: Any) -> Optional[datetime]:
+        """把新闻常见时间格式转成可比较时间。"""
+        if not value:
+            return None
+        text = str(value).strip().replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            pass
+        for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(text[:19], fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.strptime(text[:8], "%Y%m%d")
+        except ValueError:
+            return None
+
+    @classmethod
+    def cluster_news_items(
+        cls,
+        news_items: List[Dict[str, Any]],
+        window_hours: int = 24,
+        similarity_threshold: float = 0.6,
+    ) -> List[Dict[str, Any]]:
+        """轻量事件聚类：URL/标题相似度 + 同一发布时间窗口。"""
+        clusters: List[Dict[str, Any]] = []
+
+        for item in news_items:
+            title = item.get("title", "")
+            url = item.get("url", "")
+            pub_time = cls._event_time(
+                item.get("published_at") or item.get("publish_time")
+                or item.get("pub_date") or item.get("time")
+            )
+
+            target_cluster = None
+            for cluster in clusters:
+                representative = cluster["items"][0]
+                rep_time = cls._event_time(
+                    representative.get("published_at")
+                    or representative.get("publish_time")
+                    or representative.get("pub_date") or representative.get("time")
+                )
+                same_url = url and url == representative.get("url")
+                same_title = title and title == representative.get("title")
+                same_window = (
+                    pub_time
+                    and rep_time
+                    and abs((pub_time - rep_time).total_seconds()) <= window_hours * 3600
+                )
+                if same_url or (
+                    same_title
+                    and (same_window or not pub_time or not rep_time)
+                ):
+                    target_cluster = cluster
+                    break
+
+                similar_title = (
+                    title
+                    and representative.get("title")
+                    and SequenceMatcher(None, title, representative["title"]).ratio()
+                    >= similarity_threshold
+                )
+                if similar_title and (same_window or not pub_time or not rep_time):
+                    target_cluster = cluster
+                    break
+
+            if target_cluster is None:
+                target_cluster = {
+                    "cluster_id": f"event_{len(clusters) + 1}",
+                    "title": title,
+                    "count": 0,
+                    "published_at_min": None,
+                    "published_at_max": None,
+                    "symbols": [],
+                    "urls": [],
+                    "items": [],
+                }
+                clusters.append(target_cluster)
+
+            target_cluster["count"] += 1
+            target_cluster.setdefault("title", title or target_cluster.get("title", ""))
+            if pub_time:
+                current_min = target_cluster.get("published_at_min")
+                current_max = target_cluster.get("published_at_max")
+                target_cluster["published_at_min"] = min(pub_time, current_min) if current_min else pub_time
+                target_cluster["published_at_max"] = max(pub_time, current_max) if current_max else pub_time
+            if item.get("symbol"):
+                target_cluster["symbols"].append(item["symbol"])
+            if url:
+                target_cluster["urls"].append(url)
+            target_cluster["items"].append({
+                "_id": item.get("_id", ""),
+                "news_id": item.get("news_id", ""),
+                "title": title,
+                "symbol": item.get("symbol", item.get("stock_code", "")),
+                "url": url,
+                "published_at": (
+                    item.get("published_at")
+                    or item.get("publish_time")
+                    or item.get("pub_date") or item.get("time")
+                ),
+            })
+
+        for cluster in clusters:
+            if cluster.get("published_at_min"):
+                cluster["published_at_min"] = cluster["published_at_min"].isoformat()
+            if cluster.get("published_at_max"):
+                cluster["published_at_max"] = cluster["published_at_max"].isoformat()
+
+        return clusters
+
     async def _log_health(self, symbol: str, result: AggregatedNewsResult):
         """持久化来源健康日志"""
         try:
@@ -312,6 +428,7 @@ class NewsAggregatorService:
                 "source_statuses": result.source_statuses,
                 "fallback_steps": result.fallback_steps,
                 "failure_summary": result.failure_summary,
+                "freshness": result.freshness,
             }
             await db[self.HEALTH_COLLECTION].insert_one(doc)
         except Exception as e:

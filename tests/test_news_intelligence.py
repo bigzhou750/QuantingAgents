@@ -13,7 +13,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.models.news_intelligence import (
     NewsSourceStatus,
@@ -265,3 +265,132 @@ class TestDeduplication:
         ]
         result = service._deduplicate(news)
         assert len(result) == 2
+
+
+# ==================== 事件聚类与来源状态 ====================
+
+class TestEventClustering:
+    @pytest.fixture
+    def service(self):
+        from app.services.news_aggregator_service import NewsAggregatorService
+        return NewsAggregatorService()
+
+    def test_same_window_similar_title_clusters(self, service):
+        news = [
+            {"title": "贵州茅台发布年报业绩增长", "url": "http://a.com/1", "published_at": "2026-08-31T10:00:00Z"},
+            {"title": "贵州茅台发布年报业绩增长 20%", "url": "http://b.com/2", "published_at": "2026-08-31T12:00:00Z"},
+        ]
+        clusters = service.cluster_news_items(news)
+        assert len(clusters) == 1
+        assert clusters[0]["count"] == 2
+
+    def test_far_apart_times_do_not_cluster(self, service):
+        news = [
+            {"title": "同一主题事件", "url": "http://a.com/1", "published_at": "2026-08-01T10:00:00Z"},
+            {"title": "同一主题事件", "url": "http://b.com/2", "published_at": "2026-08-31T10:00:00Z"},
+        ]
+        clusters = service.cluster_news_items(news)
+        assert len(clusters) == 2
+
+
+class TestNewsSourceStatus:
+    @pytest.fixture
+    def service(self):
+        from app.services.news_aggregator_service import NewsAggregatorService
+        return NewsAggregatorService()
+
+    @pytest.mark.asyncio
+    async def test_success_is_counted(self, service):
+        with patch("app.services.news_data_service.NewsDataService") as mock_cls:
+            instance = AsyncMock()
+            instance.query_news = AsyncMock(return_value=[{"title": "新闻"}])
+            mock_cls.return_value = instance
+            news, status = await service._fetch_news("000001", timedelta(hours=72))
+        assert status.status == NewsSourceStatus.SUCCESS.value
+        assert len(news) == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_is_not_success(self, service):
+        with patch("app.services.news_data_service.NewsDataService") as mock_cls:
+            instance = AsyncMock()
+            instance.query_news = AsyncMock(return_value=[])
+            mock_cls.return_value = instance
+            news, status = await service._fetch_news("000001", timedelta(hours=72))
+        assert status.status == NewsSourceStatus.EMPTY.value
+        assert len(news) == 0
+
+    @pytest.mark.asyncio
+    async def test_rate_limited_is_not_counted_as_success(self, service):
+        with patch("app.services.news_data_service.NewsDataService") as mock_cls:
+            instance = AsyncMock()
+            instance.query_news = AsyncMock(side_effect=RuntimeError("rate limited 429"))
+            mock_cls.return_value = instance
+            news, status = await service._fetch_news("000001", timedelta(hours=72))
+        assert status.status == NewsSourceStatus.RATE_LIMITED.value
+        assert len(news) == 0
+
+
+# ==================== Agent 批量聚类与合规 ====================
+
+class TestAgentBatchCluster:
+    @pytest.fixture
+    def service(self):
+        from app.services.news_impact_agent_service import NewsImpactAgentService
+        return NewsImpactAgentService()
+
+    @pytest.mark.asyncio
+    async def test_cluster_first_produces_single_record(self, service):
+        from app.models.news_intelligence import NewsAnalysisRecord
+        record = NewsAnalysisRecord(analysis_id="analysis_1", news_ids=["n1"])
+        with patch.object(service, "analyze_single", new=AsyncMock(return_value=record)) as mock_analyze:
+            with patch.object(service, "_persist", new=AsyncMock()):
+                records = await service.analyze_batch([
+                    {"_id": "n1", "title": "同一事件标题", "published_at": "2026-08-31T10:00:00Z"},
+                    {"_id": "n2", "title": "同一事件标题后续", "published_at": "2026-08-31T12:00:00Z"},
+                ], cluster_first=True)
+        assert len(records) == 1
+        assert records[0].news_ids == ["n1", "n2"]
+        mock_analyze.assert_awaited_once()
+
+
+class TestComplianceFilter:
+    @pytest.fixture
+    def service(self):
+        from app.services.news_impact_agent_service import NewsImpactAgentService
+        return NewsImpactAgentService()
+
+    def test_trading_terms_are_rewritten(self, service):
+        result = {
+            "event_summary": "建议买入该标的",
+            "watch_indicators": ["加仓观察"],
+        }
+        filtered = service._apply_compliance_filter(result)
+        assert "买入" not in filtered["event_summary"]
+        assert "关注" in filtered["event_summary"]
+        assert "增加观察" in filtered["watch_indicators"][0]
+
+
+# ==================== 持仓影响自动加载 ====================
+
+class TestAutoHoldingsImpact:
+    @pytest.mark.asyncio
+    async def test_no_cache_runs_and_persists(self):
+        from app.services.news_watch_service import NewsWatchService
+        svc = NewsWatchService()
+        mock_db = MagicMock()
+        cache = AsyncMock()
+        cache.find_one = AsyncMock(return_value=None)
+        cache.update_one = AsyncMock()
+        mock_db.__getitem__ = MagicMock(side_effect=lambda name: cache)
+
+        with patch.object(svc, "_get_db", new=AsyncMock(return_value=mock_db)):
+            with patch.object(
+                svc,
+                "analyze_holdings_impact",
+                new=AsyncMock(return_value={"has_holdings": True, "impacts": []}),
+            ):
+                result = await svc.get_auto_holdings_impact("u1")
+
+        assert result["cached"] is False
+        assert result["refresh_state"] == "current"
+        cache.update_one.assert_awaited_once()

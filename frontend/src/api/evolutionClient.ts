@@ -1,7 +1,5 @@
 import { ApiClient } from './request'
 
-type RequestConfig = Record<string, any>
-
 export const evolutionApi = {
   // Config
   async getConfig() {

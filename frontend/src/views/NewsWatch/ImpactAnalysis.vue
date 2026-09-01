@@ -8,10 +8,18 @@
           <el-tag v-if="route.query.observation_id" type="warning" size="small" style="margin-top: 8px;">
             当前观察：{{ route.query.symbol }}
           </el-tag>
+          <el-tag
+            v-if="result.refresh_state === 'refreshing'"
+            type="warning"
+            size="small"
+            style="margin-top: 8px;"
+          >
+            后台刷新中，当前展示最近有效结果
+          </el-tag>
         </div>
         <el-button type="primary" @click="runAnalysis" :loading="loading">
           <el-icon><DataAnalysis /></el-icon>
-          开始分析
+          {{ result.refresh_state === 'refreshing' ? '刷新中' : '重新分析' }}
         </el-button>
       </div>
     </el-card>
@@ -74,6 +82,40 @@
               {{ row.news_count }} 条
             </template>
           </el-table-column>
+          <el-table-column label="影响方向" width="100">
+            <template #default="{ row }">
+              <el-tag :type="directionTagType(row.direction)" size="small">
+                {{ directionLabel(row.direction) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="强度" width="80">
+            <template #default="{ row }">{{ row.strength || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="证据质量" width="100">
+            <template #default="{ row }">
+              <el-tag :type="evidenceTagType(row.evidence_quality)" size="small">
+                {{ evidenceLabel(row.evidence_quality) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="覆盖" width="110">
+            <template #default="{ row }">
+              <span>直接 {{ row.direct_count || 0 }} / 间接 {{ row.indirect_count || 0 }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="影响路径" min-width="180">
+            <template #default="{ row }">
+              <div v-for="(path, idx) in (row.impact_paths || [])" :key="idx" class="path-item">{{ path }}</div>
+              <span v-if="!(row.impact_paths || []).length" class="muted">无</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="后续观察" min-width="160">
+            <template #default="{ row }">
+              <div v-for="(watch, idx) in (row.watch_indicators || [])" :key="idx" class="watch-item">{{ watch }}</div>
+              <span v-if="!(row.watch_indicators || []).length" class="muted">无</span>
+            </template>
+          </el-table-column>
           <el-table-column label="证据说明" min-width="250">
             <template #default="{ row }">
               <span class="evidence-note">{{ row.evidence_note }}</span>
@@ -113,9 +155,9 @@
 
     <!-- 初始状态 -->
     <el-card v-else-if="!analyzed && !loading">
-      <el-empty description='点击"开始分析"查看持仓新闻影响'>
+      <el-empty description="正在自动加载持仓新闻影响">
         <template #description>
-          <p class="muted">分析将基于你的投资画像中的当前持仓和最近 72 小时的新闻数据。</p>
+          <p class="muted">页面会先展示最近有效结果，过期时自动后台刷新。</p>
         </template>
       </el-empty>
     </el-card>
@@ -123,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
@@ -152,6 +194,19 @@ const runAnalysis = async () => {
   }
 }
 
+const autoLoad = async () => {
+  loading.value = true
+  try {
+    const res = await newsWatchApi.holdingsImpactAuto()
+    result.value = res.data || {}
+    analyzed.value = true
+  } catch {
+    ElMessage.error('自动加载失败，请点击重新分析')
+  } finally {
+    loading.value = false
+  }
+}
+
 const getImpactTagType = (level: string): 'success' | 'warning' | 'danger' | 'info' => {
   const map: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
     low: 'info',
@@ -166,6 +221,11 @@ const translateImpactLevel = (level: string) => {
   return map[level] || level
 }
 
+const directionLabel = (d: string) => ({ positive: '正面', negative: '负面', neutral: '中性' }[d] || '中性')
+const directionTagType = (d: string): any => ({ positive: 'success', negative: 'danger', neutral: 'info' }[d] || 'info')
+const evidenceLabel = (e: string) => ({ strong: '强', moderate: '中', weak: '弱' }[e] || '弱')
+const evidenceTagType = (e: string): any => ({ strong: 'success', moderate: 'warning', weak: 'info' }[e] || 'info')
+
 const formatTime = (iso: string) => {
   if (!iso) return '—'
   try {
@@ -174,6 +234,10 @@ const formatTime = (iso: string) => {
     return iso
   }
 }
+
+onMounted(() => {
+  autoLoad()
+})
 </script>
 
 <style scoped>

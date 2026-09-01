@@ -8,7 +8,7 @@
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.routers.auth_db import get_current_user
@@ -249,13 +249,23 @@ async def enable_strategy(strategy_id: str, current_user: dict = Depends(get_cur
 # ==================== 策略选股 API ====================
 
 @router.post("/screening-tasks")
-async def create_screening_task(body: ScreeningTaskRequest, current_user: dict = Depends(get_current_user)):
+async def create_screening_task(
+    body: ScreeningTaskRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
     """创建策略选股任务"""
     try:
         # 验证策略存在且属于当前用户
         strategy = await strategy_service.get_strategy(body.strategy_id, current_user["id"])
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
+
+        from app.services.data_readiness_service import DataCategory, get_data_readiness_service
+        readiness = await get_data_readiness_service()
+        background_tasks.add_task(
+            readiness.schedule_replenishment, [DataCategory.STOCK_POOL]
+        )
 
         result = await task_service.create_task(
             user_id=current_user["id"],
@@ -300,13 +310,23 @@ async def get_screening_result(task_id: str, current_user: dict = Depends(get_cu
 # ==================== 策略体检 API ====================
 
 @router.post("/checkup-tasks")
-async def create_checkup_task(body: CheckupTaskRequest, current_user: dict = Depends(get_current_user)):
+async def create_checkup_task(
+    body: CheckupTaskRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
     """创建策略体检任务"""
     try:
         # 验证策略存在且属于当前用户
         strategy = await strategy_service.get_strategy(body.strategy_id, current_user["id"])
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
+
+        from app.services.data_readiness_service import DataCategory, get_data_readiness_service
+        readiness = await get_data_readiness_service()
+        background_tasks.add_task(
+            readiness.schedule_replenishment, [DataCategory.INDEX_DATA]
+        )
 
         result = await task_service.create_task(
             user_id=current_user["id"],
@@ -520,8 +540,8 @@ async def get_home_summary(current_user: dict = Depends(get_current_user)):
 @router.get("/marketplace")
 async def list_marketplace_templates(
     tag: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
     """列出策略广场已上架的策略模板"""

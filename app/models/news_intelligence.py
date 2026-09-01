@@ -65,6 +65,7 @@ class SourceStatusEntry:
 class AggregatedNewsResult:
     """聚合新闻结果"""
     news_list: List[Dict[str, Any]] = field(default_factory=list)
+    event_clusters: List[Dict[str, Any]] = field(default_factory=list)
     source_statuses: List[Dict[str, Any]] = field(default_factory=list)
     fallback_steps: List[str] = field(default_factory=list)
     direct_count: int = 0
@@ -75,6 +76,7 @@ class AggregatedNewsResult:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "news_list": self.news_list,
+            "event_clusters": self.event_clusters,
             "source_statuses": self.source_statuses,
             "fallback_steps": self.fallback_steps,
             "direct_count": self.direct_count,

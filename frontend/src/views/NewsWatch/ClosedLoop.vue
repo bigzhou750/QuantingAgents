@@ -9,7 +9,7 @@
       <template #header><span>📊 闭环指标概览</span></template>
       <el-row :gutter="16" v-loading="metricsLoading">
         <el-col :span="4" v-for="metric in metricCards" :key="metric.key">
-          <el-statistic :title="metric.label" :value="metric.value" :suffix="metric.suffix" />
+          <el-statistic :title="metric.label" :value="Number(metric.value)" :suffix="metric.suffix" />
         </el-col>
       </el-row>
     </el-card>
@@ -78,6 +78,48 @@
         <el-empty v-else description="暂无复盘记录" :image-size="60" />
       </div>
     </el-card>
+
+    <!-- 新闻观察任务 -->
+    <el-card style="margin-top: 16px;">
+      <template #header>
+        <div class="card-header">
+          <span>新闻观察任务</span>
+          <el-radio-group v-model="observationStatusFilter" size="small" @change="loadObservationTasks">
+            <el-radio-button value="">全部</el-radio-button>
+            <el-radio-button value="active">待观察</el-radio-button>
+            <el-radio-button value="reviewed">已复盘</el-radio-button>
+            <el-radio-button value="removed">已失效</el-radio-button>
+          </el-radio-group>
+        </div>
+      </template>
+      <el-table :data="observationTasks" border stripe empty-text="暂无新闻观察任务" v-loading="observationLoading">
+        <el-table-column prop="stock_code" label="代码" width="100" />
+        <el-table-column prop="stock_name" label="名称" width="120" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="observationStatusType(row.status)" size="small">{{ observationStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="验证指标" min-width="180">
+          <template #default="{ row }">
+            <span>{{ (row.verification_indicators || []).join('、') || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="user_notes" label="备注" min-width="220" />
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'active'"
+              size="small"
+              type="primary"
+              @click="triggerObservationReview(row)"
+            >
+              复盘
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
@@ -105,6 +147,9 @@ const alerts = ref<any[]>([])
 // 复盘
 const reviewLoading = ref(false)
 const reviewSummary = ref<any>(null)
+const observationTasks = ref<any[]>([])
+const observationStatusFilter = ref('')
+const observationLoading = ref(false)
 
 const loadMetrics = async () => {
   metricsLoading.value = true
@@ -131,6 +176,33 @@ const loadReviewSummary = async () => {
     reviewSummary.value = res.data
   } catch { /* silent */ }
   finally { reviewLoading.value = false }
+}
+
+const loadObservationTasks = async () => {
+  observationLoading.value = true
+  try {
+    const res = await newsWatchApi.observationTasks({
+      status: observationStatusFilter.value || undefined,
+      limit: 50,
+    })
+    observationTasks.value = res.data?.items || []
+  } catch { /* silent */ }
+  finally { observationLoading.value = false }
+}
+
+const triggerObservationReview = async (row: any) => {
+  try {
+    await newsWatchApi.triggerReview({
+      observation_id: row.observation_id,
+      window_days: row.review_interval_days || 7,
+    })
+    ElMessage.success('复盘完成')
+    await loadObservationTasks()
+    await loadReviewSummary()
+    await loadMetrics()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.detail || '复盘失败')
+  }
 }
 
 const handleAlertAction = async (row: any, action: string) => {
@@ -161,17 +233,20 @@ const handleConvertToObservation = async (row: any) => {
 }
 
 // Labels
-const impactType = (l: string) => ({ high: 'danger', medium: 'warning', low: 'info' }[l] || '')
+const impactType = (l: string): any => ({ high: 'danger', medium: 'warning', low: 'info' }[l] || '')
 const alertStatusLabel = (s: string) => ({ pending: '待处理', simulated: '待处理', confirmed: '已确认', ignored: '已忽略', converted: '已转观察', reviewed: '已复盘' }[s] || s)
-const alertStatusType = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' => ({ pending: 'warning', simulated: 'warning', confirmed: 'success', ignored: 'info', converted: '', reviewed: 'success' }[s] as any || '')
+const alertStatusType = (s: string): any => ({ pending: 'warning', simulated: 'warning', confirmed: 'success', ignored: 'info', converted: '', reviewed: 'success' }[s] || '')
 const verdictLabel = (v: string) => ({ verified: '已验证', unverified: '未验证', contradicted: '反向验证' }[v] || v)
-const verdictTagType = (v: string): '' | 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || '')
-const verdictTimelineType = (v: string): '' | 'success' | 'warning' | 'danger' => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] as any || '')
+const verdictTagType = (v: string): any => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] || '')
+const verdictTimelineType = (v: string): any => ({ verified: 'success', unverified: 'warning', contradicted: 'danger' }[v] || '')
+const observationStatusLabel = (s: string) => ({ active: '待观察', reviewed: '已复盘', removed: '已失效' }[s] || s)
+const observationStatusType = (s: string): any => ({ active: 'warning', reviewed: 'success', removed: 'info' }[s] || '')
 
 onMounted(() => {
   loadMetrics()
   loadAlerts()
   loadReviewSummary()
+  loadObservationTasks()
 })
 </script>
 

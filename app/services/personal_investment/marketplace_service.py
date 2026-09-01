@@ -40,6 +40,9 @@ class MarketplaceService:
         await db[self.COLLECTION_TEMPLATES].create_index("source")
         await db[self.COLLECTION_TEMPLATES].create_index("tags")
         await db[self.COLLECTION_TEMPLATES].create_index("created_at")
+        await db[self.COLLECTION_STRATEGIES].create_index(
+            [("user_id", 1), ("source_template_id", 1)]
+        )
         self._initialized = True
         logger.info("MarketplaceService initialized")
 
@@ -69,11 +72,30 @@ class MarketplaceService:
             auto_publish: 仅当 True 且合规检查通过时直接上架
         """
         # 合规检查
-        compliance = TerminologyFilter.validate_compliance(f"{name} {description} {one_liner} {audience} {risk_boundary}")
+        compliance = TerminologyFilter.validate_compliance(
+            f"{name} {description} {one_liner} {audience} {not_for} "
+            f"{risk_boundary} {data_requirements} {rule_explanation or {}}"
+        )
         if not compliance.get("compliant", True):
             violations = compliance.get("violations", [])
             terms = [v.get("term", v.get("pattern", "")) for v in violations]
             raise ValueError(f"策略包含不合规措辞: {', '.join(terms)}。请修正后重新提交。")
+
+        if source == TemplateSource.AGENT_DRAFT and auto_publish:
+            raise ValueError("Agent 生成的策略只能保存为草稿或待审核状态，不能直接上架")
+
+        if auto_publish:
+            missing_fields = [
+                label for label, value in (
+                    ("一句话说明", one_liner),
+                    ("适合人群", audience),
+                    ("风险边界", risk_boundary),
+                    ("数据要求", data_requirements),
+                    ("规则解释", rule_explanation),
+                ) if not value
+            ]
+            if missing_fields:
+                raise ValueError(f"模板缺少上架必填字段: {', '.join(missing_fields)}")
 
         template_id = f"tpl_{uuid.uuid4().hex[:12]}"
         status = TemplateStatus.PUBLISHED if auto_publish else TemplateStatus.DRAFT
@@ -143,8 +165,32 @@ class MarketplaceService:
         if not doc:
             raise ValueError("模板不存在")
 
-        # 合规检查
-        text = f"{doc.get('name', '')} {doc.get('description', '')} {doc.get('one_liner', '')}"
+        if doc.get("status") not in {
+            TemplateStatus.DRAFT.value,
+            TemplateStatus.PENDING_REVIEW.value,
+        }:
+            raise ValueError("只有草稿或待审核模板可以上架")
+
+        required_fields = {
+            "一句话说明": doc.get("one_liner"),
+            "适合人群": doc.get("audience"),
+            "风险边界": doc.get("risk_boundary"),
+            "数据要求": doc.get("data_requirements"),
+            "规则解释": doc.get("rule_explanation"),
+        }
+        missing_fields = [label for label, value in required_fields.items() if not value]
+        if missing_fields:
+            raise ValueError(f"模板缺少上架必填字段: {', '.join(missing_fields)}")
+
+        # 合规检查覆盖所有会面向普通用户展示的解释字段
+        text = " ".join(
+            str(doc.get(field, ""))
+            for field in (
+                "name", "description", "one_liner", "audience",
+                "not_for", "risk_boundary", "data_requirements",
+                "rule_explanation",
+            )
+        )
         compliance = TerminologyFilter.validate_compliance(text)
         if not compliance.get("compliant", True):
             raise ValueError("模板包含不合规措辞，无法上架")
@@ -274,7 +320,7 @@ class MarketplaceService:
             {
                 "template_id": "tpl_balanced_start",
                 "name": "均衡起步策略",
-                "one_liner": "兼顾估值和成长的入门级策略，适合刚开始学习投资的用戶",
+                "one_liner": "兼顾估值和成长的入门级策略，适合刚开始学习投资的用户",
                 "description": "在估值不太贵、盈利不太差的公司中寻找机会。条件相对宽松，帮助新手建立投资框架后再逐步细化。",
                 "audience": "刚开始接触股票投资、希望先建立基本认知的新手投资者",
                 "not_for": "已有成熟投资体系、追求极致选股精度的资深投资者",
