@@ -37,6 +37,16 @@ log "🚀 开始部署 TradingAgents-CN (分支: $BRANCH)"
 # 1. 拉取最新代码
 log "📥 拉取最新代码..."
 cd "$DEPLOY_DIR"
+
+# 如果 remote 是 HTTPS 且设置了 GITEE_TOKEN，确保认证可用
+REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "")
+if [[ "$REMOTE_URL" == https://* ]] && [ -n "${GITEE_TOKEN:-}" ]; then
+    # 使用 credential helper 避免明文写在 URL 中
+    git config credential.helper store
+    echo "https://oauth2:${GITEE_TOKEN}@gitee.com" > ~/.git-credentials
+    chmod 600 ~/.git-credentials
+fi
+
 git fetch origin "$BRANCH"
 git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
 git reset --hard "origin/$BRANCH"

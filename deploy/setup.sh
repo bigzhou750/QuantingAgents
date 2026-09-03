@@ -86,7 +86,17 @@ else
                 exit 1
                 ;;
             3)
-                read -rp "请输入 Gitee 私人令牌 (Personal Access Token): " GITEE_TOKEN
+                # 优先从环境变量读取，避免令牌出现在命令历史中
+                if [ -n "${GITEE_TOKEN:-}" ]; then
+                    echo "✅ 已从环境变量 GITEE_TOKEN 获取令牌"
+                else
+                    read -rsp "请输入 Gitee 私人令牌 (不会显示在屏幕上): " GITEE_TOKEN
+                    echo ""
+                fi
+                if [ -z "$GITEE_TOKEN" ]; then
+                    echo "❌ 未提供令牌，退出"
+                    exit 1
+                fi
                 REPO_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
                 SSH_REPO_URL="$REPO_URL"
                 ;;

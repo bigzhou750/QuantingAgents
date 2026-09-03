@@ -31,19 +31,29 @@ ssh root@your-server-ip
 将本项目代码传到服务器（方式任选其一）：
 
 ```bash
-# 方式A: 本地 scp 上传
+# 方式A: 本地 scp 上传（最简单，无需认证）
 scp -r ./quanting-agent root@your-server-ip:/opt/tradingagents/worktree/
 
-# 方式B: 服务器上直接克隆（需先配置 SSH Key）
+# 方式B: 服务器上通过 SSH Key 克隆（推荐长期使用）
 git clone git@gitee.com:bigzhou750/quanting-agent.git /opt/tradingagents/worktree
+
+# 方式C: 服务器上通过私人令牌克隆
+GITEE_TOKEN=你的令牌 sudo -E bash -c 'git clone https://oauth2:$GITEE_TOKEN@gitee.com/bigzhou750/quanting-agent.git /opt/tradingagents/worktree'
 ```
 
 ### 3. 运行初始化脚本
 
 ```bash
 cd /opt/tradingagents/worktree
+
+# 如果使用 SSH Key（默认推荐）
 sudo bash deploy/setup.sh https://gitee.com/bigzhou750/quanting-agent.git feat/assistant
+
+# 如果使用私人令牌（通过环境变量传入，不会写入文件）
+GITEE_TOKEN=你的令牌 sudo -E bash deploy/setup.sh https://gitee.com/bigzhou750/quanting-agent.git feat/assistant
 ```
+
+> ⚠️ **安全提示**：永远不要将私人令牌硬编码在脚本或代码中。使用环境变量 `GITEE_TOKEN` 传入，或使用 SSH Key 方式认证。
 
 脚本会自动完成：
 - ✅ 创建目录结构
