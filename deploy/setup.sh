@@ -52,9 +52,44 @@ echo ""
 echo "📥 [3/7] 克隆代码仓库..."
 
 if [ -d "$WORKTREE_DIR/.git" ]; then
-    echo "✅ Git 仓库已存在，拉取最新代码..."
+    echo "✅ Git 仓库已存在"
     cd "$WORKTREE_DIR"
-    git fetch origin
+
+    # 如果提供了 GITEE_TOKEN，切换到 HTTPS 认证
+    if [ -n "${GITEE_TOKEN:-}" ]; then
+        HTTPS_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
+        git remote set-url origin "$HTTPS_URL"
+        echo "🔑 已配置 HTTPS + Token 认证"
+    fi
+
+    echo "📥 拉取最新代码..."
+    if ! git fetch origin 2>/dev/null; then
+        echo "⚠️  git fetch 失败，可能是 SSH Key 未配置"
+        echo ""
+        echo "请选择操作:"
+        echo "  1) 使用私人令牌认证（推荐）"
+        echo "  2) 手动配置 SSH Key 后重试"
+        echo "  3) 跳过代码更新，继续部署"
+        read -rp "请选择 [1/2/3]: " FETCH_CHOICE
+        case "$FETCH_CHOICE" in
+            1)
+                if [ -z "${GITEE_TOKEN:-}" ]; then
+                    read -rsp "请输入 Gitee 私人令牌: " GITEE_TOKEN
+                    echo ""
+                fi
+                HTTPS_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
+                git remote set-url origin "$HTTPS_URL"
+                git fetch origin
+                ;;
+            2)
+                echo "请配置 SSH Key 后重新运行此脚本"
+                exit 1
+                ;;
+            3)
+                echo "⏭️  跳过代码更新"
+                ;;
+        esac
+    fi
 elif [ -d "$WORKTREE_DIR" ] && [ "$(ls -A "$WORKTREE_DIR" 2>/dev/null)" ]; then
     # 目录存在且非空，但不是 git 仓库
     echo ""
