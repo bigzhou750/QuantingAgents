@@ -6,11 +6,18 @@
 set -euo pipefail
 
 DEPLOY_DIR="/opt/tradingagents/worktree"
-COMPOSE_FILE="docker-compose.hub.nginx.yml"
-OVERRIDE_FILE="deploy/docker-compose.prod.override.yml"
+LOCAL_COMPOSE="deploy/docker-compose.local-build.yml"
+HUB_COMPOSE="docker-compose.hub.nginx.yml"
 BRANCH="${1:-feat/assistant}"
 LOG_FILE="/opt/tradingagents/logs/deploy.log"
 LOCK_FILE="/tmp/tradingagents-deploy.lock"
+
+# 自动选择 compose 文件：优先本地构建版
+if [ -f "$DEPLOY_DIR/$LOCAL_COMPOSE" ]; then
+    COMPOSE_FILE="$LOCAL_COMPOSE"
+else
+    COMPOSE_FILE="$HUB_COMPOSE"
+fi
 
 # 日志函数
 log() {
@@ -59,21 +66,18 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# 3. 拉取最新 Docker 镜像
-log "🐳 拉取最新 Docker 镜像..."
-if [ -f "$OVERRIDE_FILE" ]; then
-    docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull mongodb redis backend frontend nginx
+# 3. 构建/拉取 Docker 镜像
+if [[ "$COMPOSE_FILE" == *"local-build"* ]]; then
+    log "🔨 本地构建 Docker 镜像（仅重建变更部分）..."
+    docker compose -f "$COMPOSE_FILE" build --no-cache=false
 else
+    log "🐳 拉取最新 Docker 镜像..."
     docker compose -f "$COMPOSE_FILE" pull mongodb redis backend frontend nginx
 fi
 
 # 4. 重启服务
 log "🔄 重启服务..."
-if [ -f "$OVERRIDE_FILE" ]; then
-    docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans
-else
-    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-fi
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 # 5. 清理旧镜像
 log "🧹 清理旧镜像..."

@@ -253,13 +253,21 @@ echo "🚀 [7/7] 首次启动所有服务..."
 
 cd "$WORKTREE_DIR"
 
-COMPOSE_FILE="docker-compose.hub.nginx.yml"
-OVERRIDE_FILE="deploy/docker-compose.prod.override.yml"
+# 优先使用本地构建版（Docker Hub 镜像可能不可用）
+LOCAL_COMPOSE="deploy/docker-compose.local-build.yml"
+HUB_COMPOSE="docker-compose.hub.nginx.yml"
 
-if [ -f "$OVERRIDE_FILE" ]; then
-    docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d
-else
+if [ -f "$LOCAL_COMPOSE" ]; then
+    COMPOSE_FILE="$LOCAL_COMPOSE"
+    echo "📦 使用本地构建模式 (首次构建约10-20分钟，请耐心等待)"
+    docker compose -f "$COMPOSE_FILE" up -d --build
+elif [ -f "$HUB_COMPOSE" ]; then
+    COMPOSE_FILE="$HUB_COMPOSE"
+    echo "📦 使用 Docker Hub 镜像模式"
     docker compose -f "$COMPOSE_FILE" up -d
+else
+    echo "❌ 未找到 docker-compose 配置文件"
+    exit 1
 fi
 
 echo ""
