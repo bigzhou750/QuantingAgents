@@ -1,0 +1,108 @@
+#!/bin/bash
+# TradingAgents-CN 部署核心脚本
+# 被 setup.sh、post-receive hook、webhook-server 调用
+# 用法: ./deploy.sh [branch]
+
+set -euo pipefail
+
+DEPLOY_DIR="/opt/tradingagents/worktree"
+COMPOSE_FILE="docker-compose.hub.nginx.yml"
+OVERRIDE_FILE="deploy/docker-compose.prod.override.yml"
+BRANCH="${1:-feat/assistant}"
+LOG_FILE="/opt/tradingagents/logs/deploy.log"
+LOCK_FILE="/tmp/tradingagents-deploy.lock"
+
+# 日志函数
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# 防止并发部署
+if [ -f "$LOCK_FILE" ]; then
+    LOCK_PID=$(cat "$LOCK_FILE")
+    if kill -0 "$LOCK_PID" 2>/dev/null; then
+        log "⚠️  另一个部署进程正在运行 (PID: $LOCK_PID)，跳过本次部署"
+        exit 0
+    else
+        rm -f "$LOCK_FILE"
+    fi
+fi
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+
+mkdir -p "$(dirname "$LOG_FILE")"
+
+log "🚀 开始部署 TradingAgents-CN (分支: $BRANCH)"
+
+# 1. 拉取最新代码
+log "📥 拉取最新代码..."
+cd "$DEPLOY_DIR"
+git fetch origin "$BRANCH"
+git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+git reset --hard "origin/$BRANCH"
+COMMIT=$(git rev-parse --short HEAD)
+log "📌 当前提交: $COMMIT"
+
+# 2. 确保 .env 存在
+if [ ! -f ".env" ]; then
+    log "❌ .env 文件不存在，请先运行 setup.sh"
+    exit 1
+fi
+
+# 3. 拉取最新 Docker 镜像
+log "🐳 拉取最新 Docker 镜像..."
+if [ -f "$OVERRIDE_FILE" ]; then
+    docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull mongodb redis backend frontend nginx
+else
+    docker compose -f "$COMPOSE_FILE" pull mongodb redis backend frontend nginx
+fi
+
+# 4. 重启服务
+log "🔄 重启服务..."
+if [ -f "$OVERRIDE_FILE" ]; then
+    docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans
+else
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+fi
+
+# 5. 清理旧镜像
+log "🧹 清理旧镜像..."
+docker image prune -f 2>/dev/null || true
+
+# 6. 等待健康检查
+log "⏳ 等待服务就绪..."
+sleep 10
+
+HEALTHY=true
+for i in $(seq 1 6); do
+    if curl -sf http://localhost/health > /dev/null 2>&1; then
+        log "✅ Nginx 健康检查通过"
+        break
+    fi
+    if [ "$i" -eq 6 ]; then
+        log "⚠️  Nginx 健康检查超时，请手动检查"
+        HEALTHY=false
+    fi
+    sleep 5
+done
+
+for i in $(seq 1 6); do
+    if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+        log "✅ Backend 健康检查通过"
+        break
+    fi
+    if [ "$i" -eq 6 ]; then
+        log "⚠️  Backend 健康检查超时，请手动检查"
+        HEALTHY=false
+    fi
+    sleep 5
+done
+
+if [ "$HEALTHY" = true ]; then
+    log "✅ 部署完成！提交: $COMMIT"
+else
+    log "⚠️  部署完成但部分服务未就绪，请检查日志: docker compose logs"
+fi
+
+# 输出当前容器状态
+docker compose -f "$COMPOSE_FILE" ps 2>/dev/null | tee -a "$LOG_FILE"
