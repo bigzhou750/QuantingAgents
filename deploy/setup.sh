@@ -52,10 +52,44 @@ echo ""
 echo "📥 [3/7] 克隆代码仓库..."
 
 if [ -d "$WORKTREE_DIR/.git" ]; then
-    echo "⚠️  代码已存在，跳过克隆（如需重新克隆请删除 $WORKTREE_DIR）"
+    echo "✅ Git 仓库已存在，拉取最新代码..."
     cd "$WORKTREE_DIR"
     git fetch origin
-else
+elif [ -d "$WORKTREE_DIR" ] && [ "$(ls -A "$WORKTREE_DIR" 2>/dev/null)" ]; then
+    # 目录存在且非空，但不是 git 仓库
+    echo ""
+    echo "⚠️  目录 $WORKTREE_DIR 已存在但不是 Git 仓库"
+    echo ""
+    echo "请选择操作:"
+    echo "  1) 删除并重新克隆（推荐）"
+    echo "  2) 在现有目录中初始化 Git 并关联远程仓库"
+    echo "  3) 取消退出"
+    read -rp "请选择 [1/2/3]: " DIR_CHOICE
+
+    case "$DIR_CHOICE" in
+        1)
+            echo "🗑️  备份到 ${WORKTREE_DIR}.bak.$(date +%Y%m%d%H%M%S)..."
+            mv "$WORKTREE_DIR" "${WORKTREE_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+            mkdir -p "$WORKTREE_DIR"
+            ;;
+        2)
+            cd "$WORKTREE_DIR"
+            git init
+            git remote add origin "$REPO_URL" 2>/dev/null || git remote set-url origin "$REPO_URL"
+            git fetch origin
+            git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+            echo "✅ 已关联远程仓库"
+            # 跳过下面的克隆逻辑
+            SKIP_CLONE=true
+            ;;
+        3)
+            echo "❌ 已取消"
+            exit 1
+            ;;
+    esac
+fi
+
+if [ "${SKIP_CLONE:-false}" != "true" ] && [ ! -d "$WORKTREE_DIR/.git" ]; then
     # 对于私有仓库，尝试 SSH 方式克隆
     SSH_REPO_URL=$(echo "$REPO_URL" | sed 's|https://gitee.com/|git@gitee.com:|')
 
