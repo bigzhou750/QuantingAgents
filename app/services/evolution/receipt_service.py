@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 
 from app.core.database import get_mongo_db
 from app.models.evolution import EvolutionReceipt
+from pymongo.errors import DuplicateKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +31,34 @@ class ReceiptService:
         await db[self.COLLECTION].create_index("proposal_id")
         await db[self.COLLECTION].create_index("final_action")
         await db[self.COLLECTION].create_index("created_at")
+        await db[self.COLLECTION].create_index([("idempotency_key", 1)], unique=True, sparse=True)
         self._initialized = True
         logger.info("ReceiptService initialized")
 
     async def create(self, receipt: EvolutionReceipt) -> EvolutionReceipt:
         """创建回执"""
         db = get_mongo_db()
-        await db[self.COLLECTION].insert_one(receipt.model_dump(by_alias=True, exclude={"id"}))
+        existing = None
+        if receipt.idempotency_key:
+            existing = await db[self.COLLECTION].find_one({"idempotency_key": receipt.idempotency_key})
+        if existing:
+            return EvolutionReceipt(**existing)
+        try:
+            await db[self.COLLECTION].insert_one(receipt.model_dump(by_alias=True, exclude={"id"}))
+        except DuplicateKeyError:
+            existing = await db[self.COLLECTION].find_one({"idempotency_key": receipt.idempotency_key})
+            if existing:
+                return EvolutionReceipt(**existing)
+            raise
         logger.info(f"[Evolution] Created receipt {receipt.receipt_id} for proposal {receipt.proposal_id}")
         return receipt
+
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[EvolutionReceipt]:
+        if not idempotency_key:
+            return None
+        db = get_mongo_db()
+        doc = await db[self.COLLECTION].find_one({"idempotency_key": idempotency_key})
+        return EvolutionReceipt(**doc) if doc else None
 
     async def get(self, receipt_id: str) -> Optional[EvolutionReceipt]:
         """获取回执"""

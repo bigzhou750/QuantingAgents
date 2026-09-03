@@ -233,6 +233,18 @@ class TestOnlineSampleModel:
         assert req.risk_level == "high"
         assert "finance" in req.tags
 
+    def test_online_sample_keeps_release_lineage(self):
+        from app.routers.eval import OnlineSampleRequest
+        req = OnlineSampleRequest(
+            input_data={"prompt": "test"},
+            source_trace_id="trace_123",
+            release_receipt_id="receipt_123",
+            artifact_version="1.2.3",
+        )
+        assert req.source_trace_id == "trace_123"
+        assert req.release_receipt_id == "receipt_123"
+        assert req.artifact_version == "1.2.3"
+
 
 class TestCaseImportFormats:
     """验证 JSON/CSV/Excel 用例文件解析和错误边界"""

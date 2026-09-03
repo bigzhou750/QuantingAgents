@@ -213,6 +213,10 @@ class Settings(BaseSettings):
     EVOLUTION_ALLOWED_ARTIFACT_TYPES: str = Field(default="skill,prompt,rubric,policy,case", description="允许自进化的 artifact 类型（逗号分隔）")
     EVOLUTION_FORBIDDEN_TARGETS: str = Field(default="", description="禁止修改的 artifact ID 列表（逗号分隔）")
     EVOLUTION_SCHEDULE_CRON: str = Field(default="", description="定时触发表达式（空=禁用）")
+    EVOLUTION_COOLDOWN_MINUTES: int = Field(default=60, ge=0, le=10080, description="相同失败模式冷却时间")
+    EVOLUTION_CHANGE_BUDGET_CHARS: int = Field(default=20000, ge=100, le=200000, description="单提案最大变更字符数")
+    EVOLUTION_DAILY_COST_BUDGET_USD: float = Field(default=10.0, ge=0, le=100000, description="每日验证成本预算")
+    EVOLUTION_REQUIRE_SMOKE_TEST: bool = Field(default=True, description="发布后是否必须通过 smoke test")
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)

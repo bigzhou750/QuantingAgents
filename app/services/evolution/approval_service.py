@@ -37,18 +37,48 @@ class ApprovalService:
         self._initialized = True
         logger.info("ApprovalService initialized")
 
-    async def approve(self, proposal_id: str, auditor: str, comment: str = "") -> Dict[str, Any]:
+    async def approve(
+        self,
+        proposal_id: str,
+        auditor: str,
+        comment: str = "",
+        request_id: str = "",
+        idempotency_key: str = "",
+    ) -> Dict[str, Any]:
         """批准提案"""
         from app.services.evolution.proposal_service import proposal_service
+        from app.services.evolution.verification_service import verification_service
+
+        proposal = await proposal_service.get(proposal_id)
+        if not proposal:
+            raise ValueError(f"Proposal {proposal_id} not found")
+        if proposal.status != ProposalStatus.VERIFIED:
+            raise ValueError(
+                f"Proposal must be verified before approval (current: {proposal.status.value})"
+            )
+        verifications = await verification_service.list_by_proposal(proposal_id)
+        latest = verifications[0] if verifications else None
+        if not latest or latest.status != "completed":
+            raise ValueError("Proposal has no completed verification")
+        gate = latest.gate_result or latest.comparison_result.get("gate", {})
+        if gate and gate.get("passed") is False:
+            raise ValueError("Proposal verification gate did not pass")
 
         record = ApprovalRecord(
             reviewer=auditor,
             action=ApprovalAction.APPROVE,
             comment=comment,
+            request_id=request_id,
+            idempotency_key=idempotency_key,
         )
         record_dict = record.model_dump()
 
         db = get_mongo_db()
+        if idempotency_key:
+            existing = await db[self.COLLECTION].find_one({"idempotency_key": idempotency_key})
+            if existing:
+                existing.pop("_id", None)
+                return existing
         await db[self.COLLECTION].insert_one({
             "proposal_id": proposal_id,
             **record_dict,
@@ -66,18 +96,40 @@ class ApprovalService:
         logger.info(f"[Evolution] Proposal {proposal_id} approved by {auditor}")
         return record_dict
 
-    async def reject(self, proposal_id: str, auditor: str, comment: str = "") -> Dict[str, Any]:
+    async def reject(
+        self,
+        proposal_id: str,
+        auditor: str,
+        comment: str = "",
+        request_id: str = "",
+        idempotency_key: str = "",
+    ) -> Dict[str, Any]:
         """拒绝提案"""
         from app.services.evolution.proposal_service import proposal_service
+
+        proposal = await proposal_service.get(proposal_id)
+        if not proposal:
+            raise ValueError(f"Proposal {proposal_id} not found")
+        if proposal.status != ProposalStatus.VERIFIED:
+            raise ValueError(
+                f"Proposal cannot be rejected from current status: {proposal.status.value}"
+            )
 
         record = ApprovalRecord(
             reviewer=auditor,
             action=ApprovalAction.REJECT,
             comment=comment,
+            request_id=request_id,
+            idempotency_key=idempotency_key,
         )
         record_dict = record.model_dump()
 
         db = get_mongo_db()
+        if idempotency_key:
+            existing = await db[self.COLLECTION].find_one({"idempotency_key": idempotency_key})
+            if existing:
+                existing.pop("_id", None)
+                return existing
         await db[self.COLLECTION].insert_one({
             "proposal_id": proposal_id,
             **record_dict,
@@ -93,16 +145,27 @@ class ApprovalService:
         logger.info(f"[Evolution] Proposal {proposal_id} rejected by {auditor}")
         return record_dict
 
-    async def comment(self, proposal_id: str, auditor: str, comment: str) -> Dict[str, Any]:
+    async def comment(
+        self, proposal_id: str, auditor: str, comment: str,
+        request_id: str = "",
+        idempotency_key: str = "",
+    ) -> Dict[str, Any]:
         """添加评论（不改变状态）"""
         record = ApprovalRecord(
             reviewer=auditor,
             action=ApprovalAction.COMMENT,
             comment=comment,
+            request_id=request_id,
+            idempotency_key=idempotency_key,
         )
         record_dict = record.model_dump()
 
         db = get_mongo_db()
+        if idempotency_key:
+            existing = await db[self.COLLECTION].find_one({"idempotency_key": idempotency_key})
+            if existing:
+                existing.pop("_id", None)
+                return existing
         await db[self.COLLECTION].insert_one({
             "proposal_id": proposal_id,
             **record_dict,

@@ -200,7 +200,11 @@ class MetricsService:
 
         # 聚合评分
         pipeline = [
-            {"$match": {"trial_id": {"$in": trial_ids}}},
+            # skipped/not_configured/error 不是低分，不应污染聚合或 Release Gate。
+            {"$match": {
+                "trial_id": {"$in": trial_ids},
+                "status": {"$nin": ["skipped", "not_configured", "error"]},
+            }},
             {"$group": {
                 "_id": "$score_name",
                 "avg_score": {"$avg": "$score"},

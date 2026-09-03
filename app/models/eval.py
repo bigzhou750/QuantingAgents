@@ -321,5 +321,8 @@ class EvalBadCase(BaseModel):
     created_by: str = Field(default="", description="创建者")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
+    source_trace_id: Optional[str] = Field(default=None, description="来源 trace/session ID")
+    release_receipt_id: Optional[str] = Field(default=None, description="来源发布回执")
+    artifact_version: Optional[str] = Field(default=None, description="线上运行时 artifact 版本")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}

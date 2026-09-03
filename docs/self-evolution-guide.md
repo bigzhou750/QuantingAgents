@@ -15,6 +15,11 @@ EVOLUTION_HUMAN_GATE=true                 # 生产环境必须开启
 EVOLUTION_TRIGGER_REGRESSION_THRESHOLD=0.05
 EVOLUTION_TRIGGER_BAD_CASE_COUNT=10
 EVOLUTION_BUDGET_MAX_RUNS_PER_DAY=5
+EVOLUTION_DAILY_COST_BUDGET_USD=10
+EVOLUTION_CHANGE_BUDGET_CHARS=20000
+EVOLUTION_COOLDOWN_MINUTES=60
+EVOLUTION_REQUIRE_SMOKE_TEST=true
+EVOLUTION_SCHEDULE_CRON=             # 留空表示不注册定时任务
 ```
 
 ## 核心流程
@@ -57,6 +62,10 @@ EVOLUTION_BUDGET_MAX_RUNS_PER_DAY=5
 - **Promote**: 将已批准的候选写为正式 artifact 新版本
 - **Rollback**: 恢复到指定稳定版本
 - **Stop**: 紧急停止（预算超限、安全退化等）
+
+Promote 前必须同时满足：proposal 已验证、verification sandbox 已清理、Gate 通过、artifact 基线版本未变化、人工审批有效和 smoke test 通过。版本冲突或任一门禁失败都会拒绝发布。
+
+候选验证的 overlay context 会记录 proposal、artifact、基线版本、候选版本、dataset version 和 sandbox 路径，并通过 `evolution.overlay.loaded` trace 事件记录实际加载的候选文件。正式运行没有 overlay context，只读取 active artifact。
 
 ## API 端点
 
@@ -113,3 +122,7 @@ EVOLUTION_BUDGET_MAX_RUNS_PER_DAY=5
 5. **Stop hook**: 预算超限、重复失败、安全退化时自动停止
 6. **Audit trail**: 所有操作有完整审计记录
 7. **Version rollback**: 任何版本都可回滚
+
+8. **Scope isolation**: candidate 只能使用 validation split 和固定 dataset version，不能访问 test/holdout/production split
+9. **Idempotency**: proposal 指纹、定时窗口锁和 promote 锁防止重复提案及并发发布
+10. **Notification outbox**: 通知失败会记录 delivery 状态，不会伪造“已通知”

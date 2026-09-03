@@ -47,6 +47,9 @@ class BadCaseService:
         source_trial_id: Optional[str] = None,
         source_run_id: Optional[str] = None,
         created_by: str = "",
+        source_trace_id: Optional[str] = None,
+        release_receipt_id: Optional[str] = None,
+        artifact_version: Optional[str] = None,
     ) -> Dict[str, Any]:
         """创建 bad case"""
         db = get_mongo_db()
@@ -63,6 +66,9 @@ class BadCaseService:
             risk_level=risk_level,
             tags=tags or [],
             created_by=created_by,
+            source_trace_id=source_trace_id,
+            release_receipt_id=release_receipt_id,
+            artifact_version=artifact_version,
         )
 
         await db[self.COLLECTION].insert_one(doc.model_dump(by_alias=True, exclude={"id"}))

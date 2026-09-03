@@ -310,6 +310,7 @@ class EmbeddedAgentRuntime:
         user_id: str,
         username: str,
         sink: EventSink,
+        session_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         current_task = asyncio.current_task()
         if current_task is None:
@@ -337,9 +338,15 @@ class EmbeddedAgentRuntime:
                 await self.ensure_session(service, models, session_id, title, user_id, username)
                 self._active[session_id] = (task_id, service, event_bus, sink)
                 try:
+                    effective_prompt = prompt
+                    if session_config and session_config.get("overlay"):
+                        effective_prompt, overlay_event = self._apply_overlay_prompt(
+                            prompt, session_config["overlay"]
+                        )
+                        await sink("evolution.overlay.loaded", overlay_event)
                     result = await service.send_message(
                         session_id,
-                        prompt,
+                        effective_prompt,
                         role="user",
                         include_shell_tools=False,
                     )
@@ -379,6 +386,46 @@ class EmbeddedAgentRuntime:
                     self._active.pop(session_id, None)
         finally:
             self._pending.pop(session_id, None)
+
+    @staticmethod
+    def _apply_overlay_prompt(
+        prompt: str, overlay: dict[str, Any]
+    ) -> tuple[str, dict[str, Any]]:
+        """读取候选 overlay 内容并仅注入当前 verification prompt。"""
+        root = Path(str(overlay.get("sandbox_path", ""))).expanduser().resolve()
+        if not root.is_dir():
+            raise RuntimeError(f"candidate overlay does not exist: {root}")
+
+        sections: list[str] = []
+        loaded_files: list[str] = []
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix not in {".md", ".json", ".yaml", ".yml"}:
+                continue
+            relative = path.relative_to(root)
+            if len(str(relative)) > 240:
+                continue
+            content = path.read_text(encoding="utf-8")
+            if len(content) > 12000:
+                content = content[:12000] + "\n[overlay content truncated]"
+            sections.append(f"### Candidate artifact: {relative}\n{content}")
+            loaded_files.append(str(relative))
+
+        if not sections:
+            raise RuntimeError(f"candidate overlay is empty: {root}")
+        context = (
+            "\n\n[EVOLUTION CANDIDATE OVERLAY]\n"
+            "以下内容仅用于本次候选验证，不代表正式版本。请按候选内容执行并在结果中保留研究边界。\n"
+            + "\n\n".join(sections)
+            + "\n[END EVOLUTION CANDIDATE OVERLAY]"
+        )
+        return prompt + context, {
+            "overlay_id": overlay.get("overlay_id", ""),
+            "proposal_id": overlay.get("proposal_id", ""),
+            "artifact_id": overlay.get("artifact_id", ""),
+            "baseline_version": overlay.get("baseline_version", ""),
+            "candidate_version": overlay.get("candidate_version", ""),
+            "loaded_files": loaded_files,
+        }
 
     async def cancel(self, session_id: str) -> bool:
         active = self._active.get(session_id)

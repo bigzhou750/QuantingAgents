@@ -20,6 +20,7 @@ from app.models.evolution import (
 )
 from app.services.evolution.artifact_registry import artifact_registry
 from app.services.evolution.clustering import identify_primary_failure_surface
+from app.services.evolution.governance_service import governance_service
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,23 @@ class ProposalService:
 
         # 生成候选 diff
         diff = self._generate_candidate_diff(artifact_type, target_surface, trigger_info)
+        fingerprint = governance_service.fingerprint(trigger_info, target_artifact_id)
+        duplicate = await governance_service.find_active_duplicate(fingerprint)
+        if duplicate:
+            return Proposal(**duplicate)
+        if not forbidden:
+            entry = await artifact_registry.get_registry_entry(target_artifact_id)
+            if not entry:
+                raise ValueError(f"Artifact '{target_artifact_id}' is not registered")
+            await governance_service.validate_target(
+                target_artifact_id,
+                artifact_type.value,
+                entry.path,
+                diff.get("sections_affected", []),
+            )
+            governance_service.validate_change_budget(diff)
+        else:
+            entry = None
 
         # 评估风险等级
         risk_level = self._assess_risk(trigger_info, artifact_type)
@@ -94,6 +112,10 @@ class ProposalService:
             rollback_strategy="restore_previous_version",
             status=ProposalStatus.DRAFT if forbidden else ProposalStatus.PENDING_VERIFY,
             forbidden_target=forbidden,
+            baseline_artifact_version=entry.current_version if entry else "",
+            candidate_version="candidate",
+            fingerprint=fingerprint,
+            idempotency_key=fingerprint,
             created_by="system",
         )
 
@@ -106,6 +128,14 @@ class ProposalService:
             "target_artifact": target_artifact_id,
             "forbidden": forbidden,
         })
+        try:
+            await governance_service.notify("proposal_created", {
+                "proposal_id": proposal_id,
+                "artifact_id": target_artifact_id,
+                "trigger_type": trigger_type_str,
+            })
+        except Exception:
+            logger.warning("Failed to notify proposal creation", exc_info=True)
 
         logger.info(f"[Evolution] Created proposal {proposal_id} for {target_artifact_id} ({'FORBIDDEN' if forbidden else 'pending verify'})")
         return proposal
@@ -299,11 +329,7 @@ class ProposalService:
 
     async def update_status(self, proposal_id: str, status: ProposalStatus) -> Optional[Proposal]:
         """更新提案状态"""
-        db = get_mongo_db()
-        await db[self.COLLECTION].update_one(
-            {"proposal_id": proposal_id},
-            {"$set": {"status": status.value, "updated_at": now_tz()}},
-        )
+        await governance_service.transition(proposal_id, status)
         return await self.get(proposal_id)
 
     async def get_stats(self) -> Dict[str, Any]:

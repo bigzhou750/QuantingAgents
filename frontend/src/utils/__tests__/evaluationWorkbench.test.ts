@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const readView = (name: string) => readFileSync(resolve(__dirname, `../../views/Evaluation/${name}`), 'utf-8')
+const readEvolutionView = (name: string) => readFileSync(resolve(__dirname, `../../views/Evolution/${name}`), 'utf-8')
 
 describe('Evaluation production workbench', () => {
   it('supports case editing, batch operations and JSON/CSV/Excel import', () => {
@@ -38,5 +39,15 @@ describe('Evaluation production workbench', () => {
     expect(source).toContain('regression-tasks')
     expect(source).toContain('governance/config')
     expect(source).toContain('release-gate/config')
+  })
+
+  it('shows overlay, gate, stop and smoke-test state in governance views', () => {
+    const detail = readEvolutionView('ProposalDetail.vue')
+    const receipts = readEvolutionView('Receipts.vue')
+    expect(detail).toContain('overlay_id')
+    expect(detail).toContain('cleanup_status')
+    expect(detail).toContain('canPromote')
+    expect(receipts).toContain('smoke_test_result')
+    expect(receipts).toContain('gate_result')
   })
 })

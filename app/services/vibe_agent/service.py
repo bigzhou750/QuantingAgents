@@ -325,19 +325,19 @@ class VibeAgentService:
             # 导致用户已关闭的画像内容被强行注入（对应 spec: User disables
             # context injection）。
             final_prompt = payload.content
-            if HAS_CONTEXT_BUILDER and (payload.profile_id or payload.strategy_id):
+            # 画像上下文默认按当前登录用户解析，不能依赖前端传入 profile_id。
+            # 旧版/缓存中的前端可能没有该字段，但用户仍然期望已保存持仓可用于研究。
+            if HAS_CONTEXT_BUILDER:
                 try:
-                    include_profile = False
-                    if payload.profile_id:
-                        from app.services.personal_investment.profile_service import profile_service
-                        profile = await profile_service.get_profile(user["id"])
-                        include_profile = bool(
-                            profile and profile.get("context_injection_enabled", True)
+                    from app.services.personal_investment.profile_service import profile_service
+                    profile = await profile_service.get_profile(user["id"])
+                    include_profile = bool(
+                        profile and profile.get("context_injection_enabled", True)
+                    )
+                    if profile and not include_profile:
+                        logger.info(
+                            f"Profile context injection disabled by user for task {task_id}, skipping"
                         )
-                        if profile and not include_profile:
-                            logger.info(
-                                f"Profile context injection disabled by user for task {task_id}, skipping"
-                            )
 
                     context_summary = None
                     if include_profile or payload.strategy_id:

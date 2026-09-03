@@ -112,6 +112,15 @@ class ContextBuilder:
         holdings_count = summary.get("current_holdings_count", 0)
         if holdings_count > 0:
             lines.append(f"- 当前持仓数量：{holdings_count} 只")
+            for holding in summary.get("current_holdings", []):
+                code = holding.get("stock_code", "")
+                name = holding.get("stock_name", "")
+                quantity = holding.get("quantity", 0)
+                cost_price = holding.get("cost_price", 0)
+                label = f"{code} {name}".strip()
+                lines.append(
+                    f"- 持仓：{label}，数量 {quantity} 股，成本价 {cost_price}"
+                )
 
         if len(lines) <= 1:
             return None

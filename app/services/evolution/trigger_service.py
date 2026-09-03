@@ -209,6 +209,11 @@ class TriggerService:
         if not settings.EVOLUTION_SCHEDULE_CRON:
             return None
 
+        from app.services.evolution.governance_service import governance_service
+        window_key = f"scheduled:{now_tz().strftime('%Y%m%d%H%M')}"
+        if not await governance_service.acquire_window_lock(window_key):
+            return None
+
         # 查找最近完成的 run 作为基准
         db = get_mongo_db()
         latest_run = await db["eval_runs"].find_one(
@@ -221,7 +226,17 @@ class TriggerService:
         run_id = latest_run.get("run_id", "")
         dataset_id = latest_run.get("dataset_id", "")
 
-        trigger_info = await self._evaluate_triggers(run_id, dataset_id, latest_run)
+        try:
+            trigger_info = await self._evaluate_triggers(run_id, dataset_id, latest_run)
+        except Exception as exc:
+            db = get_mongo_db()
+            await db["evolution_trigger_failures"].insert_one({
+                "window_key": window_key,
+                "run_id": run_id,
+                "error": str(exc)[:500],
+                "created_at": now_tz(),
+            })
+            return None
         if trigger_info:
             trigger_info["trigger_type"] = TriggerType.SCHEDULED.value
             await self._log_event(TriggerType.SCHEDULED.value, run_id, trigger_info)

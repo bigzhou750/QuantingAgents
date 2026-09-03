@@ -246,10 +246,13 @@ class EvalRunnerService:
             num_trials = run_doc["num_trials_per_case"]
             timeout_seconds = run_doc["config"]["timeout_seconds"]
 
+            evolution_config = run_doc.get("config") or {}
+
             # 按创建运行时记录的版本获取 case，确保可复现
             cases = await dataset_service.list_cases(
                 dataset_id, limit=1000, version=dataset_version
             )
+            self._validate_evolution_scope(evolution_config, cases, dataset_version)
 
             # 为每个 case 创建并执行 trial
             for case in cases:
@@ -332,6 +335,28 @@ class EvalRunnerService:
         finally:
             self._running_tasks.pop(run_id, None)
 
+    @staticmethod
+    def _validate_evolution_scope(
+        run_config: Dict[str, Any],
+        cases: List[Dict[str, Any]],
+        dataset_version: str,
+    ) -> None:
+        """验证候选验证只能访问固定版本的 validation 样本。"""
+        if not run_config.get("evolution_proposal_id"):
+            return
+        split = str(run_config.get("split", "validation")).lower()
+        if split in {"test", "holdout", "production"}:
+            raise ValueError(f"candidate verification split is not allowed: {split}")
+        overlay_version = run_config.get("overlay_dataset_version")
+        if overlay_version and overlay_version != dataset_version:
+            raise ValueError("candidate overlay dataset version does not match run snapshot")
+        forbidden_cases = [
+            case for case in cases
+            if str(case.get("split", "")).lower() in {"test", "holdout", "production"}
+        ]
+        if forbidden_cases:
+            raise ValueError("candidate verification cannot access test/holdout cases")
+
     async def _execute_trial(self, run_id: str, trial_id: str, case: Dict[str, Any], timeout_seconds: int):
         """执行单个 trial"""
         db = get_mongo_db()
@@ -355,6 +380,18 @@ class EvalRunnerService:
                 eval_task_id = f"task_{trial_id}"
 
                 prompt = case.get("input", {}).get("prompt", "")
+                run_doc = await self.get_run(run_id)
+                run_config = (run_doc or {}).get("config") or {}
+                overlay = None
+                if run_config.get("sandbox_path") and run_config.get("evolution_proposal_id"):
+                    overlay = {
+                        "sandbox_path": run_config["sandbox_path"],
+                        "proposal_id": run_config["evolution_proposal_id"],
+                        "artifact_id": run_config.get("artifact_override", ""),
+                        "overlay_id": run_config.get("overlay_id", ""),
+                        "baseline_version": run_config.get("baseline_artifact_version", ""),
+                        "candidate_version": run_config.get("candidate_version", "candidate"),
+                    }
 
                 result = await asyncio.wait_for(
                     embedded_agent_runtime.run(
@@ -365,6 +402,7 @@ class EvalRunnerService:
                         user_id="eval_system",
                         username="Evaluation System",
                         sink=_make_trace_sink(trial_id),  # 归一化事件并落盘为标准 trace
+                        session_config={"overlay": overlay} if overlay else None,
                     ),
                     timeout=timeout_seconds,
                 )

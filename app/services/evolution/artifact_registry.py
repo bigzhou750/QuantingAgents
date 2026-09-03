@@ -81,6 +81,37 @@ class ArtifactRegistryService:
         await db[self.COLLECTION_VERSIONS].create_index("status")
         await db[self.COLLECTION_VERSIONS].create_index("artifact_type")
 
+        # 首次启用自进化时登记受控默认资产，避免 proposal 生成因没有 registry
+        # 条目而无法进入验证。真实用户资产仍必须显式登记。
+        defaults = [
+            (ArtifactType.SKILL, "general", "vibe_agent_runtime/vendor/src/skills/general/SKILL.md"),
+            (ArtifactType.PROMPT, "system_default", "runtime/system_prompt"),
+            (ArtifactType.POLICY, "grounding", "policy/grounding"),
+            (ArtifactType.POLICY, "safety", "policy/safety"),
+            (ArtifactType.POLICY, "routing_default", "policy/routing"),
+            (ArtifactType.RUBRIC, "financial_default", "rubric/financial"),
+        ]
+        for artifact_type, name, path in defaults:
+            artifact_id = f"art_{artifact_type.value}_{name}"
+            if not await db[self.COLLECTION_REGISTRY].find_one({"artifact_id": artifact_id}):
+                await self.register(
+                    artifact_type=artifact_type,
+                    name=name,
+                    path=path,
+                    owner="system",
+                    content_snapshot={"content": "", "managed": True},
+                    allowlist_patterns=[
+                        path.rsplit("/", 1)[-1],
+                        artifact_type.value,
+                        "tool_selection",
+                        "output_format",
+                        "system_prompt",
+                        "output_instructions",
+                        "rules",
+                        "thresholds",
+                    ],
+                )
+
         self._initialized = True
         logger.info("ArtifactRegistryService initialized")
 
@@ -265,6 +296,13 @@ class ArtifactRegistryService:
         )
         if not target:
             raise ValueError(f"Version {target_version} not found for artifact {artifact_id}")
+
+        expected_hash = target.get("content_hash", "")
+        actual_hash = _compute_content_hash(target.get("content_snapshot", {}))
+        if expected_hash and expected_hash != actual_hash:
+            raise ValueError(f"Version {target_version} content hash mismatch")
+        if target.get("status") == ArtifactVersionStatus.ACTIVE.value:
+            return ArtifactVersion(**target)
 
         # 将当前 active 版本标记为 rolled_back
         await db[self.COLLECTION_VERSIONS].update_many(

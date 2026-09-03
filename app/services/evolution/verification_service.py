@@ -55,6 +55,8 @@ class VerificationService:
         """
         from app.services.evolution.proposal_service import proposal_service
         from app.services.evolution.artifact_registry import artifact_registry
+        from app.services.evolution.governance_service import governance_service
+        from app.models.evolution import StopReason
         from app.services.eval.runner_service import runner_service
         from app.services.eval.metrics_service import metrics_service
 
@@ -63,11 +65,30 @@ class VerificationService:
         if not proposal:
             raise ValueError(f"Proposal {proposal_id} not found")
 
+        try:
+            await governance_service.assert_verification_budget()
+        except ValueError as budget_error:
+            await governance_service.stop(
+                proposal_id,
+                StopReason.BUDGET_EXCEEDED,
+                {"error": str(budget_error)},
+            )
+            raise
+        try:
+            await governance_service.assert_no_repeated_failure(
+                proposal.fingerprint, proposal.target_artifact_id, proposal_id
+            )
+        except ValueError as repeat_error:
+            raise
+
         # 更新状态为 verifying
         await proposal_service.update_status(proposal_id, ProposalStatus.VERIFYING)
 
         verification_id = f"vrf_{uuid.uuid4().hex[:12]}"
+        overlay_id = f"overlay_{uuid.uuid4().hex[:12]}"
         sandbox_path = ""
+        overlay_manifest: Dict[str, Any] = {}
+        verification_record: Optional[VerificationRun] = None
 
         try:
             # 获取当前 artifact 版本作为基线
@@ -75,12 +96,34 @@ class VerificationService:
 
             # 创建 sandbox
             sandbox_path = self._create_sandbox(proposal, current_version)
+            overlay_manifest = {
+                "overlay_id": overlay_id,
+                "proposal_id": proposal_id,
+                "artifact_id": proposal.target_artifact_id,
+                "artifact_type": proposal.target_artifact_type.value,
+                "baseline_version": current_version.version if current_version else "",
+                "candidate_version": proposal.candidate_version or "candidate",
+                "sandbox_path": sandbox_path,
+                "dataset_version": "",
+                "created_at": now_tz().isoformat(),
+            }
 
             # 确定 dataset_id（从 trigger run 获取）
             db = get_mongo_db()
             trigger_run = await db["eval_runs"].find_one({"run_id": proposal.trigger_run_id})
             dataset_id = trigger_run.get("dataset_id", "") if trigger_run else ""
             dataset_version = trigger_run.get("dataset_version") if trigger_run else None
+            overlay_manifest["dataset_version"] = dataset_version or ""
+
+            await db[proposal_service.COLLECTION].update_one(
+                {"proposal_id": proposal_id},
+                {"$set": {
+                    "overlay_id": overlay_id,
+                    "baseline_artifact_version": overlay_manifest["baseline_version"],
+                    "candidate_version": overlay_manifest["candidate_version"],
+                    "updated_at": now_tz(),
+                }},
+            )
 
             if not dataset_id:
                 raise ValueError(f"Cannot determine dataset_id from trigger run {proposal.trigger_run_id}")
@@ -94,6 +137,11 @@ class VerificationService:
                     "evolution_proposal_id": proposal_id,
                     "sandbox_path": sandbox_path,
                     "artifact_override": proposal.target_artifact_id,
+                    "overlay_id": overlay_id,
+                    "baseline_artifact_version": overlay_manifest["baseline_version"],
+                    "candidate_version": overlay_manifest["candidate_version"],
+                    "overlay_dataset_version": dataset_version or "",
+                    "split": "validation",
                 },
                 created_by="evolution_verify",
             )
@@ -127,14 +175,25 @@ class VerificationService:
                 baseline_run_id=proposal.trigger_run_id,
                 candidate_run_id=candidate_run_id,
                 sandbox_path=sandbox_path,
+                overlay_id=overlay_id,
+                overlay_manifest=overlay_manifest,
                 comparison_result=comparison,
+                gate_result=comparison.get("gate", {}),
                 status="completed",
                 completed_at=now_tz(),
             )
+            verification_record = verification
             await db[self.COLLECTION].insert_one(verification.model_dump(by_alias=True, exclude={"id"}))
 
-            # 更新提案状态
-            await proposal_service.update_status(proposal_id, ProposalStatus.VERIFIED)
+            # Gate 失败时保留完整验证记录，但禁止进入人工审批。
+            if not (comparison.get("gate") or {}).get("passed", False):
+                await governance_service.stop(
+                    proposal_id,
+                    StopReason.GATE_FAILURE,
+                    comparison.get("gate", {}),
+                )
+            else:
+                await proposal_service.update_status(proposal_id, ProposalStatus.VERIFIED)
 
             # 清理事件日志
             await self._log_event("verification_completed", proposal_id, {
@@ -142,12 +201,28 @@ class VerificationService:
                 "baseline_run": proposal.trigger_run_id,
                 "candidate_run": candidate_run_id,
             })
+            try:
+                await governance_service.notify("verification_completed", {
+                    "proposal_id": proposal_id,
+                    "verification_id": verification_id,
+                    "gate_passed": (comparison.get("gate") or {}).get("passed", False),
+                })
+            except Exception:
+                logger.warning("Failed to notify verification completion", exc_info=True)
 
             return verification
 
         except Exception as e:
             logger.error(f"[Evolution] Verification failed for {proposal_id}: {e}")
             await proposal_service.update_status(proposal_id, ProposalStatus.DRAFT)
+            try:
+                await governance_service.notify("verification_failed", {
+                    "proposal_id": proposal_id,
+                    "verification_id": verification_id,
+                    "error": str(e)[:500],
+                })
+            except Exception:
+                logger.warning("Failed to notify verification failure", exc_info=True)
 
             # 保存失败的验证记录
             db = get_mongo_db()
@@ -156,6 +231,9 @@ class VerificationService:
                 proposal_id=proposal_id,
                 status="failed",
                 sandbox_path=sandbox_path,
+                overlay_id=overlay_id,
+                overlay_manifest=overlay_manifest,
+                cleanup_status="failed",
                 comparison_result={"error": str(e)},
                 completed_at=now_tz(),
             )
@@ -167,8 +245,24 @@ class VerificationService:
             if sandbox_path and os.path.exists(sandbox_path):
                 try:
                     shutil.rmtree(sandbox_path)
+                    cleanup_status = "cleaned"
+                    if verification_record:
+                        verification_record.cleanup_status = cleanup_status
+                    await get_mongo_db()[self.COLLECTION].update_one(
+                        {"verification_id": verification_id},
+                        {"$set": {"cleanup_status": cleanup_status}},
+                    )
                     logger.info(f"[Evolution] Cleaned up sandbox: {sandbox_path}")
                 except Exception as cleanup_err:
+                    if verification_record:
+                        verification_record.cleanup_status = "failed"
+                    try:
+                        await get_mongo_db()[self.COLLECTION].update_one(
+                            {"verification_id": verification_id},
+                            {"$set": {"cleanup_status": "failed", "status": "cleanup_failed"}},
+                        )
+                    except Exception:
+                        logger.warning("Failed to persist sandbox cleanup failure", exc_info=True)
                     logger.warning(f"[Evolution] Sandbox cleanup failed: {cleanup_err}")
 
     def _create_sandbox(self, proposal, current_version) -> str:
@@ -261,6 +355,36 @@ class VerificationService:
                     else:
                         result["regression_detected"] = False
                         result["regression_delta"] = round(c_rate - b_rate, 4)
+
+            runs_data = comparison.get("runs", []) if isinstance(comparison, dict) else []
+            checks = []
+            if len(runs_data) >= 2:
+                baseline_metrics, candidate_metrics = runs_data[0], runs_data[1]
+                success_ok = candidate_metrics.get("success_rate", 0) >= baseline_metrics.get("success_rate", 0)
+                checks.append({"name": "success_rate", "passed": success_ok})
+                baseline_latency = (baseline_metrics.get("latency") or {}).get("mean_ms", 0)
+                candidate_latency = (candidate_metrics.get("latency") or {}).get("mean_ms", 0)
+                latency_ok = not baseline_latency or candidate_latency <= baseline_latency * 1.2
+                checks.append({"name": "latency_budget", "passed": latency_ok})
+                baseline_cost = (baseline_metrics.get("cost") or {}).get("total_usd", 0)
+                candidate_cost = (candidate_metrics.get("cost") or {}).get("total_usd", 0)
+                cost_ok = not baseline_cost or candidate_cost <= baseline_cost * 1.2
+                checks.append({"name": "cost_budget", "passed": cost_ok})
+
+            baseline_scores = baseline_scores.get("scores", {})
+            candidate_scores = candidate_scores.get("scores", {})
+            for scorer_name in ("safety", "evidence_quality", "trajectory"):
+                if scorer_name in baseline_scores and scorer_name in candidate_scores:
+                    checks.append({
+                        "name": scorer_name,
+                        "passed": candidate_scores[scorer_name].get("avg_score", 0)
+                        >= baseline_scores[scorer_name].get("avg_score", 0),
+                    })
+            result["gate"] = {
+                "passed": bool(checks) and all(check["passed"] for check in checks),
+                "checks": checks,
+                "evaluated_at": now_tz().isoformat(),
+            }
 
             return result
 

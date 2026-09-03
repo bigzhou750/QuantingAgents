@@ -95,6 +95,12 @@ class TestContextBuilder:
             "exclude_st": True,
             "max_position_per_stock": 0.2,
             "current_holdings_count": 5,
+            "current_holdings": [{
+                "stock_code": "000651",
+                "stock_name": "格力电器",
+                "quantity": 200,
+                "cost_price": 38.89,
+            }],
         }
 
         result = ContextBuilder._format_profile_summary(summary)
@@ -104,6 +110,9 @@ class TestContextBuilder:
         assert "平衡型" in result
         assert "价值投资" in result
         assert "排除 ST 股票" in result
+        assert "000651 格力电器" in result
+        assert "数量 200 股" in result
+        assert "成本价 38.89" in result
 
     @pytest.mark.asyncio
     async def test_format_strategy_info(self):

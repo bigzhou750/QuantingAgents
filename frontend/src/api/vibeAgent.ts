@@ -63,7 +63,7 @@ export const vibeAgentApi = {
   listMessages(sessionId: string): Promise<ApiResponse<VibeMessage[]>> {
     return request.get(`/api/vibe-agent/sessions/${sessionId}/messages`)
   },
-  sendMessage(sessionId: string, payload: { content: string; idempotency_key?: string; metadata?: Record<string, any> }): Promise<ApiResponse<VibeTask>> {
+  sendMessage(sessionId: string, payload: { content: string; idempotency_key?: string; metadata?: Record<string, any>; profile_id?: string; strategy_id?: string }): Promise<ApiResponse<VibeTask>> {
     return request.post(`/api/vibe-agent/sessions/${sessionId}/messages`, payload)
   },
   listTasks(params?: { status?: string; session_id?: string; page?: number; page_size?: number }): Promise<ApiResponse<{ tasks: VibeTask[]; total: number }>> {

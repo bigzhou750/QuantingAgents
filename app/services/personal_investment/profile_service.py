@@ -84,7 +84,18 @@ class ProfileService:
         if not profile:
             return None
 
-        # 返回归一化的摘要字段
+        # 返回归一化的摘要字段。持仓只暴露研究所需字段，不把原始画像文档直接交给 runtime。
+        holdings = []
+        for holding in profile.get("current_holdings", [])[:20]:
+            if not isinstance(holding, dict) or not holding.get("stock_code"):
+                continue
+            holdings.append({
+                "stock_code": str(holding["stock_code"]),
+                "stock_name": str(holding.get("stock_name", "")),
+                "quantity": holding.get("quantity", 0),
+                "cost_price": holding.get("cost_price", 0),
+            })
+
         return {
             "risk_preference": profile.get("risk_preference"),
             "trading_style": profile.get("trading_style"),
@@ -93,7 +104,8 @@ class ProfileService:
             "excluded_stocks": profile.get("excluded_stocks", []),
             "exclude_st": profile.get("exclude_st", True),
             "max_position_per_stock": profile.get("max_position_per_stock", 0.2),
-            "current_holdings_count": len(profile.get("current_holdings", [])),
+            "current_holdings_count": len(holdings),
+            "current_holdings": holdings,
         }
 
 

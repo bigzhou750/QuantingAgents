@@ -24,6 +24,10 @@
             <span v-else>-</span>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDate(proposal.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="正式基线版本">{{ proposal.baseline_artifact_version || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="候选版本">{{ proposal.candidate_version || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="Overlay ID">{{ proposal.overlay_id || '尚未创建' }}</el-descriptions-item>
+          <el-descriptions-item label="Stop 原因">{{ proposal.stop_reason || '—' }}</el-descriptions-item>
           <el-descriptions-item label="回滚策略">{{ proposal.rollback_strategy }}</el-descriptions-item>
           <el-descriptions-item label="变更原因" :span="3">{{ proposal.reason }}</el-descriptions-item>
           <el-descriptions-item v-if="proposal.forbidden_target" label="⚠️ 禁止修改" :span="3">
@@ -83,6 +87,13 @@
             <pre class="diff-block">{{ JSON.stringify(verification.comparison_result, null, 2) }}</pre>
           </div>
           <el-alert v-if="verification.comparison_result?.error" type="error" :title="verification.comparison_result.error" :closable="false" />
+          <el-descriptions v-if="verification.overlay_manifest" :column="3" border size="small" style="margin-top: 12px;">
+            <el-descriptions-item label="Overlay">{{ verification.overlay_id || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="清理状态">{{ verification.cleanup_status || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="Gate">
+              {{ verification.gate_result?.passed === true ? '通过' : verification.gate_result?.passed === false ? '失败' : '未计算' }}
+            </el-descriptions-item>
+          </el-descriptions>
         </div>
         <el-empty v-else description="暂无验证记录" />
       </el-card>
@@ -140,6 +151,9 @@ const canApprove = computed(() =>
 )
 const canPromote = computed(() =>
   proposal.value && proposal.value.status === 'approved'
+    && verification.value?.status === 'completed'
+    && verification.value?.cleanup_status === 'cleaned'
+    && verification.value?.gate_result?.passed === true
 )
 const canStop = computed(() =>
   proposal.value && !['promoted', 'stopped', 'rejected'].includes(proposal.value.status)

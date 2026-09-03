@@ -94,7 +94,7 @@ export const useAuthStore = defineStore('auth', {
     
     // 是否为管理员
     isAdmin(): boolean {
-      return this.roles.includes('admin')
+      return this.roles.includes('admin') || this.user?.is_admin === true
     },
     
     // 检查权限
@@ -340,6 +340,13 @@ export const useAuthStore = defineStore('auth', {
 
         if (response.success) {
           this.user = response.data
+          if (this.user?.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = this.user?.roles || ['user']
+          }
           console.log('✅ 用户信息获取成功:', this.user?.username)
 
           // 同步用户偏好设置到 appStore

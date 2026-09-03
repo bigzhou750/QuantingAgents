@@ -1073,6 +1073,9 @@ class OnlineSampleRequest(BaseModel):
     tags: List[str] = []
     session_id: Optional[str] = None
     user_feedback: Optional[str] = None
+    source_trace_id: Optional[str] = None
+    release_receipt_id: Optional[str] = None
+    artifact_version: Optional[str] = None
 
 
 @router.post("/online-sample", dependencies=[Depends(verify_eval_access)])
@@ -1092,6 +1095,11 @@ async def submit_online_sample(request: OnlineSampleRequest):
             failure_reason=request.failure_reason or request.user_feedback or "",
             risk_level=request.risk_level,
             tags=tags,
+            source_trial_id=request.source_trace_id,
+            source_run_id=request.release_receipt_id,
+            source_trace_id=request.source_trace_id,
+            release_receipt_id=request.release_receipt_id,
+            artifact_version=request.artifact_version,
         )
         return ApiResponse(success=True, data=result, message="线上样本已收录")
     except Exception as e:

@@ -8,7 +8,7 @@ Agent 自进化闭环 API 路由
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -40,14 +40,26 @@ class ArtifactRegisterRequest(BaseModel):
 class RollbackRequest(BaseModel):
     target_version: str
     reason: str = ""
+    request_id: str = ""
+    idempotency_key: str = ""
 
 
 class ApprovalRequest(BaseModel):
     comment: str = ""
+    request_id: str = ""
+    idempotency_key: str = ""
 
 
 class StopRequest(BaseModel):
     reason: str = "manual"
+    request_id: str = ""
+    idempotency_key: str = ""
+
+
+class PostReleaseObservationRequest(BaseModel):
+    """发布后质量观测请求"""
+    receipt_id: str
+    metrics: dict
 
 
 class EvolutionConfigUpdate(BaseModel):
@@ -57,6 +69,10 @@ class EvolutionConfigUpdate(BaseModel):
     budget_max_runs_per_day: Optional[int] = None
     human_gate: Optional[bool] = None
     schedule_cron: Optional[str] = None
+    cooldown_minutes: Optional[int] = None
+    change_budget_chars: Optional[int] = None
+    daily_cost_budget_usd: Optional[float] = None
+    require_smoke_test: Optional[bool] = None
 
 
 # ==================== 权限检查 ====================
@@ -83,7 +99,7 @@ async def health_check():
 @router.get("/config", dependencies=[Depends(verify_evolution_access)])
 async def get_config():
     """获取自进化配置"""
-    return ApiResponse(success=True, data={
+    data = {
         "enabled": settings.EVOLUTION_ENABLED,
         "automation_mode": settings.EVOLUTION_AUTOMATION_MODE,
         "trigger_regression_threshold": settings.EVOLUTION_TRIGGER_REGRESSION_THRESHOLD,
@@ -92,7 +108,10 @@ async def get_config():
         "human_gate": settings.EVOLUTION_HUMAN_GATE,
         "allowed_artifact_types": settings.EVOLUTION_ALLOWED_ARTIFACT_TYPES,
         "schedule_cron": settings.EVOLUTION_SCHEDULE_CRON,
-    })
+    }
+    from app.services.evolution.governance_service import governance_service
+    data["governance"] = await governance_service.get_config()
+    return ApiResponse(success=True, data=data)
 
 
 @router.put("/config", dependencies=[Depends(verify_evolution_access)])
@@ -117,6 +136,15 @@ async def update_config(update: EvolutionConfigUpdate):
     if update.schedule_cron is not None:
         settings.EVOLUTION_SCHEDULE_CRON = update.schedule_cron
         updated["schedule_cron"] = update.schedule_cron
+    governance_values = update.model_dump(exclude_none=True)
+    governance_values = {
+        key: governance_values[key]
+        for key in ("cooldown_minutes", "change_budget_chars", "daily_cost_budget_usd", "require_smoke_test")
+        if key in governance_values
+    }
+    if governance_values:
+        from app.services.evolution.governance_service import governance_service
+        updated["governance"] = await governance_service.update_config(governance_values)
     return ApiResponse(success=True, data=updated, message="配置已更新")
 
 
@@ -191,10 +219,16 @@ async def list_artifact_versions(artifact_id: str, skip: int = 0, limit: int = 5
 @router.post("/artifacts/{artifact_id}/rollback", dependencies=[Depends(verify_evolution_access)])
 async def rollback_artifact(artifact_id: str, request: RollbackRequest, user: dict = Depends(verify_evolution_access)):
     """回滚 artifact 到指定版本"""
-    from app.services.evolution.artifact_registry import artifact_registry
+    from app.services.evolution.promote_service import promote_service
     try:
-        version = await artifact_registry.rollback(artifact_id, request.target_version, rolled_back_by=user.get("username", "admin"))
-        return ApiResponse(success=True, data=version.model_dump(by_alias=True, exclude={"id"}), message=f"Rolled back to {request.target_version}")
+        receipt = await promote_service.rollback(
+            artifact_id,
+            request.target_version,
+            rolled_back_by=user.get("username", "admin"),
+            request_id=request.request_id,
+            idempotency_key=request.idempotency_key,
+        )
+        return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message=f"Rolled back to {request.target_version}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -260,7 +294,13 @@ async def get_verification(proposal_id: str):
 async def approve_proposal(proposal_id: str, request: ApprovalRequest, user: dict = Depends(verify_evolution_access)):
     """批准提案"""
     from app.services.evolution.approval_service import approval_service
-    record = await approval_service.approve(proposal_id, user.get("username", "admin"), request.comment)
+    record = await approval_service.approve(
+        proposal_id,
+        user.get("username", "admin"),
+        request.comment,
+        request_id=request.request_id,
+        idempotency_key=request.idempotency_key,
+    )
     return ApiResponse(success=True, data=record, message="Proposal approved")
 
 
@@ -268,7 +308,13 @@ async def approve_proposal(proposal_id: str, request: ApprovalRequest, user: dic
 async def reject_proposal(proposal_id: str, request: ApprovalRequest, user: dict = Depends(verify_evolution_access)):
     """拒绝提案"""
     from app.services.evolution.approval_service import approval_service
-    record = await approval_service.reject(proposal_id, user.get("username", "admin"), request.comment)
+    record = await approval_service.reject(
+        proposal_id,
+        user.get("username", "admin"),
+        request.comment,
+        request_id=request.request_id,
+        idempotency_key=request.idempotency_key,
+    )
     return ApiResponse(success=True, data=record, message="Proposal rejected")
 
 
@@ -276,7 +322,13 @@ async def reject_proposal(proposal_id: str, request: ApprovalRequest, user: dict
 async def comment_proposal(proposal_id: str, request: ApprovalRequest, user: dict = Depends(verify_evolution_access)):
     """添加评论"""
     from app.services.evolution.approval_service import approval_service
-    record = await approval_service.comment(proposal_id, user.get("username", "admin"), request.comment)
+    record = await approval_service.comment(
+        proposal_id,
+        user.get("username", "admin"),
+        request.comment,
+        request_id=request.request_id,
+        idempotency_key=request.idempotency_key,
+    )
     return ApiResponse(success=True, data=record, message="Comment added")
 
 
@@ -291,11 +343,21 @@ async def get_audit_trail(proposal_id: str):
 # ==================== Promote / Stop ====================
 
 @router.post("/proposals/{proposal_id}/promote", dependencies=[Depends(verify_evolution_access)])
-async def promote_proposal(proposal_id: str, user: dict = Depends(verify_evolution_access)):
+async def promote_proposal(
+    proposal_id: str,
+    request_id: Optional[str] = Query(None),
+    idempotency_key: Optional[str] = Query(None),
+    user: dict = Depends(verify_evolution_access),
+):
     """将候选发布为正式版本"""
     from app.services.evolution.promote_service import promote_service
     try:
-        receipt = await promote_service.promote(proposal_id, promoted_by=user.get("username", "admin"))
+        receipt = await promote_service.promote(
+            proposal_id,
+            promoted_by=user.get("username", "admin"),
+            request_id=request_id or "",
+            idempotency_key=idempotency_key or "",
+        )
         return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message="Proposal promoted")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -305,11 +367,42 @@ async def promote_proposal(proposal_id: str, user: dict = Depends(verify_evoluti
 async def stop_proposal(proposal_id: str, request: StopRequest, user: dict = Depends(verify_evolution_access)):
     """紧急停止提案"""
     from app.services.evolution.promote_service import promote_service
-    receipt = await promote_service.stop(proposal_id, request.reason, stopped_by=user.get("username", "admin"))
+    receipt = await promote_service.stop(
+        proposal_id,
+        request.reason,
+        stopped_by=user.get("username", "admin"),
+        request_id=request.request_id,
+        idempotency_key=request.idempotency_key,
+    )
     return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message="Proposal stopped")
 
 
 # ==================== Receipts ====================
+
+@router.post("/post-release/observe", dependencies=[Depends(verify_evolution_access)])
+async def observe_post_release(request: PostReleaseObservationRequest):
+    """判断发布后指标是否退化，并返回回滚建议。"""
+    from app.services.evolution.receipt_service import receipt_service
+    from app.services.evolution.governance_service import governance_service
+    receipt = await receipt_service.get(request.receipt_id)
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    result = governance_service.evaluate_post_release(request.metrics)
+    if result["rollback_suggestion"]:
+        result["suggested_rollback"] = {
+            "artifact_id": receipt.artifact_id,
+            "target_version": receipt.baseline_artifact_version,
+        }
+    return ApiResponse(success=True, data=result, message="发布后观测完成")
+
+
+@router.post("/notifications/retry", dependencies=[Depends(verify_evolution_access)])
+async def retry_evolution_notifications():
+    """重试失败的自进化通知投递。"""
+    from app.services.evolution.governance_service import governance_service
+    result = await governance_service.retry_failed_notifications()
+    return ApiResponse(success=True, data=result, message="通知重试完成")
+
 
 @router.get("/receipts", dependencies=[Depends(verify_evolution_access)])
 async def list_receipts(skip: int = 0, limit: int = 50):

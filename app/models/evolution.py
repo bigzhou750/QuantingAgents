@@ -155,6 +155,16 @@ class Proposal(BaseModel):
     rollback_strategy: str = Field(default="restore_previous_version", description="回滚方式")
     status: ProposalStatus = Field(default=ProposalStatus.DRAFT, description="提案状态")
     forbidden_target: bool = Field(default=False, description="是否为禁止修改的目标")
+    baseline_artifact_version: str = Field(default="", description="创建提案时的正式版本")
+    candidate_version: str = Field(default="", description="候选版本")
+    overlay_id: str = Field(default="", description="候选验证 overlay ID")
+    fingerprint: str = Field(default="", description="触发内容指纹")
+    idempotency_key: str = Field(default="", description="幂等键")
+    gate_result: Dict[str, Any] = Field(default_factory=dict, description="验证门禁结果")
+    stop_reason: Optional[StopReason] = Field(default=None, description="停止原因")
+    lock_id: str = Field(default="", description="proposal 锁 ID")
+    lock_expires_at: Optional[datetime] = Field(default=None, description="proposal 锁过期时间")
+    smoke_test_result: Dict[str, Any] = Field(default_factory=dict, description="发布后 smoke test")
     created_by: str = Field(default="system", description="创建者")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
@@ -174,6 +184,11 @@ class VerificationRun(BaseModel):
     status: str = Field(default="pending", description="验证状态（复用 RunStatus 值）")
     created_at: datetime = Field(default_factory=now_tz)
     completed_at: Optional[datetime] = Field(default=None, description="完成时间")
+    overlay_id: str = Field(default="", description="候选 overlay ID")
+    overlay_manifest: Dict[str, Any] = Field(default_factory=dict, description="候选 overlay 清单")
+    cleanup_status: str = Field(default="pending", description="sandbox 清理状态")
+    gate_result: Dict[str, Any] = Field(default_factory=dict, description="验证门禁结果")
+    smoke_test_result: Dict[str, Any] = Field(default_factory=dict, description="发布后 smoke test")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
@@ -184,6 +199,8 @@ class ApprovalRecord(BaseModel):
     action: ApprovalAction = Field(..., description="审批动作")
     comment: str = Field(default="", description="审批意见")
     timestamp: datetime = Field(default_factory=now_tz)
+    request_id: str = Field(default="", description="请求 ID")
+    idempotency_key: str = Field(default="", description="幂等键")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
@@ -199,6 +216,13 @@ class EvolutionReceipt(BaseModel):
     stop_reason: Optional[StopReason] = Field(default=None, description="停止原因")
     promoted_version: Optional[str] = Field(default=None, description="promote 后的新版本号")
     created_at: datetime = Field(default_factory=now_tz)
+    gate_result: Dict[str, Any] = Field(default_factory=dict, description="门禁结果")
+    smoke_test_result: Dict[str, Any] = Field(default_factory=dict, description="发布后 smoke test")
+    baseline_artifact_version: str = Field(default="", description="发布前版本")
+    candidate_version: str = Field(default="", description="发布版本")
+    request_id: str = Field(default="", description="请求或幂等 ID")
+    idempotency_key: str = Field(default="", description="幂等键")
+    artifact_id: str = Field(default="", description="关联 artifact ID")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 

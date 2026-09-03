@@ -28,6 +28,10 @@
       </el-col>
     </el-row>
 
+    <div class="page-actions">
+      <el-button type="primary" plain @click="openGovernanceConfig">治理配置</el-button>
+    </div>
+
     <!-- 筛选 -->
     <el-card style="margin-bottom: 16px;">
       <el-form :inline="true">
@@ -101,17 +105,57 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog v-model="governanceDialogVisible" title="自进化治理配置" width="620px">
+      <el-form :model="governanceConfig" label-width="150px">
+        <el-form-item label="自动化模式">
+          <el-select v-model="governanceConfig.automation_mode">
+            <el-option label="手动" value="manual" />
+            <el-option label="半自动" value="semi-auto" />
+            <el-option label="自动" value="auto" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="趋势回退阈值"><el-input-number v-model="governanceConfig.trigger_regression_threshold" :min="0" :max="1" :step="0.01" /></el-form-item>
+        <el-form-item label="Bad Case 阈值"><el-input-number v-model="governanceConfig.trigger_bad_case_count" :min="1" /></el-form-item>
+        <el-form-item label="每日验证次数"><el-input-number v-model="governanceConfig.budget_max_runs_per_day" :min="1" /></el-form-item>
+        <el-form-item label="每日成本预算"><el-input-number v-model="governanceConfig.daily_cost_budget_usd" :min="0" :precision="4" /></el-form-item>
+        <el-form-item label="变更字符预算"><el-input-number v-model="governanceConfig.change_budget_chars" :min="100" /></el-form-item>
+        <el-form-item label="相同问题冷却(分钟)"><el-input-number v-model="governanceConfig.cooldown_minutes" :min="0" /></el-form-item>
+        <el-form-item label="定时触发 Cron"><el-input v-model="governanceConfig.schedule_cron" placeholder="留空表示关闭" /></el-form-item>
+        <el-form-item label="人工审批门禁"><el-switch v-model="governanceConfig.human_gate" /></el-form-item>
+        <el-form-item label="必须通过 Smoke Test"><el-switch v-model="governanceConfig.require_smoke_test" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="governanceDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="governanceSaving" @click="saveGovernanceConfig">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { evolutionApi } from '@/api/evolutionClient'
 
 const loading = ref(false)
 const proposals = ref<any[]>([])
 const stats = ref<any>({})
 const filters = ref({ status: '', artifact_type: '' })
+const governanceDialogVisible = ref(false)
+const governanceSaving = ref(false)
+const governanceConfig = ref({
+  automation_mode: 'manual',
+  trigger_regression_threshold: 0.05,
+  trigger_bad_case_count: 10,
+  budget_max_runs_per_day: 5,
+  human_gate: true,
+  schedule_cron: '',
+  cooldown_minutes: 60,
+  change_budget_chars: 20000,
+  daily_cost_budget_usd: 10,
+  require_smoke_test: true,
+})
 
 const loadProposals = async () => {
   loading.value = true
@@ -151,6 +195,34 @@ const riskTagType = (r: string): any => ({
 }[r] || 'info')
 
 const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+
+const openGovernanceConfig = async () => {
+  try {
+    const res = await evolutionApi.getConfig()
+    const data = res.data?.data || {}
+    governanceConfig.value = {
+      ...governanceConfig.value,
+      ...data,
+      ...(data.governance || {}),
+    }
+    governanceDialogVisible.value = true
+  } catch {
+    ElMessage.error('加载治理配置失败')
+  }
+}
+
+const saveGovernanceConfig = async () => {
+  governanceSaving.value = true
+  try {
+    await evolutionApi.updateConfig(governanceConfig.value)
+    ElMessage.success('治理配置已保存')
+    governanceDialogVisible.value = false
+  } catch {
+    ElMessage.error('保存治理配置失败')
+  } finally {
+    governanceSaving.value = false
+  }
+}
 
 onMounted(loadProposals)
 </script>

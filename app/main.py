@@ -305,6 +305,7 @@ async def lifespan(app: FastAPI):
             from app.services.evolution.verification_service import verification_service
             from app.services.evolution.approval_service import approval_service
             from app.services.evolution.receipt_service import receipt_service
+            from app.services.evolution.governance_service import governance_service
 
             await artifact_registry.initialize()
             await trigger_service.initialize()
@@ -312,6 +313,7 @@ async def lifespan(app: FastAPI):
             await verification_service.initialize()
             await approval_service.initialize()
             await receipt_service.initialize()
+            await governance_service.initialize()
             logger.info("✅ Agent 自进化服务已初始化")
         except Exception as e:
             logger.warning(f"Agent 自进化服务初始化失败: {e}")
@@ -738,6 +740,28 @@ async def lifespan(app: FastAPI):
             logger.info(f"⏸️ 策略自动模拟已添加但暂停")
         else:
             logger.info(f"📈 策略自动模拟已配置: {settings.SIMULATION_AUTO_RUN_CRON}")
+
+        # 自进化定时检查（默认关闭；必须显式配置 cron）
+        if settings.EVOLUTION_ENABLED and settings.EVOLUTION_SCHEDULE_CRON:
+            async def run_evolution_scheduled_check():
+                try:
+                    from app.services.evolution.trigger_service import trigger_service
+                    from app.services.evolution.proposal_service import proposal_service
+                    trigger_info = await trigger_service.scheduled_check()
+                    if trigger_info:
+                        await proposal_service.create_from_trigger(trigger_info)
+                except Exception as e:
+                    logger.warning(f"自进化定时检查失败: {e}")
+
+            scheduler.add_job(
+                run_evolution_scheduled_check,
+                CronTrigger.from_crontab(settings.EVOLUTION_SCHEDULE_CRON, timezone=settings.TIMEZONE),
+                id="evolution_scheduled_check",
+                name="自进化定时检查",
+            )
+            logger.info(f"🧬 自进化定时检查已配置: {settings.EVOLUTION_SCHEDULE_CRON}")
+        else:
+            logger.info("⏸️ 自进化定时检查未启用")
 
         scheduler.start()
 
