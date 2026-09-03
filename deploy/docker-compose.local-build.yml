@@ -54,7 +54,7 @@ services:
   # FastAPI 后端（本地构建）
   backend:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.backend
     image: tradingagents-backend:local
     container_name: tradingagents-backend
@@ -62,10 +62,10 @@ services:
     expose:
       - "8000"
     volumes:
-      - ./logs:/app/logs
-      - ./data:/app/data
+      - ../logs:/app/logs
+      - ../data:/app/data
     env_file:
-      - .env
+      - ../.env
     environment:
       TZ: "Asia/Shanghai"
       TRADINGAGENTS_LOG_LEVEL: "INFO"
@@ -138,7 +138,7 @@ services:
   # Vue 3 前端（本地构建）
   frontend:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.frontend
     image: tradingagents-frontend:local
     container_name: tradingagents-frontend
@@ -167,7 +167,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - frontend
       - backend
