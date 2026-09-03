@@ -15,10 +15,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 🚀 切换为国内镜像源（阿里云），大幅提升国内服务器构建速度
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null; \
-    true
+# 🚀 切换为国内镜像源（腾讯云），大幅提升国内服务器构建速度
+RUN echo 'deb https://mirrors.tencent.com/debian/ bookworm main contrib non-free non-firmware' > /etc/apt/sources.list && \
+    echo 'deb https://mirrors.tencent.com/debian/ bookworm-updates main contrib non-free non-firmware' >> /etc/apt/sources.list && \
+    echo 'deb https://mirrors.tencent.com/debian-security/ bookworm-security main contrib non-free non-firmware' >> /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/debian.sources && \
+    apt-get update
 
 # 创建必需的目录并安装系统依赖
 # - curl: 健康检查
@@ -26,12 +28,6 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 # - wkhtmltopdf: 从官方下载（用于 PDF 生成）
 # - 中文字体: 用于 PDF 中文显示
 RUN mkdir -p /app/logs /app/data /app/config && \
-    # 配置 apt 重试和超时
-    echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
-    echo 'Acquire::http::Timeout "60";' >> /etc/apt/apt.conf.d/80-retries && \
-    echo 'Acquire::https::Timeout "60";' >> /etc/apt/apt.conf.d/80-retries && \
-    # 更新软件源
-    apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
