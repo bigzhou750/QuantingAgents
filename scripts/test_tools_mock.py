@@ -22,6 +22,33 @@ if vendor_root.is_dir() and str(vendor_root) not in sys.path:
     sys.path.insert(0, str(vendor_root))
 
 
+def test_registry():
+    """测试工具注册表完整性"""
+    try:
+        from src.tools import build_registry
+        registry = build_registry()
+        names = registry.tool_names
+        print(f"  已注册工具数: {len(names)}")
+        import_failures = registry.import_failures
+        reg_failures = registry.registration_failures
+        if import_failures:
+            print(f"  ⚠️  导入失败 ({len(import_failures)}):")
+            for mod, reason in import_failures.items():
+                print(f"    → {mod}: {reason[:120]}")
+        if reg_failures:
+            print(f"  ⚠️  注册失败 ({len(reg_failures)}):")
+            for name, reason in reg_failures.items():
+                print(f"    → {name}: {reason[:120]}")
+        print(f"  可用工具:")
+        for name in sorted(names):
+            print(f"    ✓ {name}")
+        return len(names), len(import_failures) + len(reg_failures)
+    except Exception as e:
+        print(f"  exception: {e}")
+        traceback.print_exc()
+        return 0, 0
+
+
 def test_symbol_search():
     """测试标的搜索工具"""
     from src.tools.symbol_search_tool import SymbolSearchTool
@@ -36,30 +63,41 @@ def test_symbol_search():
     return data.get("ok", False)
 
 
-def test_market_data():
-    """测试市场数据工具（K线）"""
+def test_market_data_multi_source():
+    """测试市场数据工具 - 多数据源对比"""
     from src.tools.market_data_tool import MarketDataTool
     tool = MarketDataTool()
-    result = tool.execute(
-        codes=["600519.SH"],
-        start_date="2026-09-01",
-        end_date="2026-09-04",
-        source="eastmoney",
-        interval="1D",
-    )
-    data = json.loads(result)
-    status = data.get("status")
-    print(f"  status={status}")
-    if status == "ok" and data.get("data"):
-        panels = data["data"].get("panels", {})
-        for code, panel in list(panels.items())[:1]:
-            rows = panel.get("rows", [])
-            print(f"    → {code}: {len(rows)} bars")
-            if rows:
-                print(f"      last: {rows[-1]}")
-    elif status == "error":
-        print(f"    error: {data.get('error', 'unknown')}")
-    return status == "ok"
+    sources = ["eastmoney", "baostock", "akshare", "tencent", "auto"]
+    results = {}
+    for src in sources:
+        t0 = time.time()
+        try:
+            result = tool.execute(
+                codes=["600519.SH"],
+                start_date="2026-09-01",
+                end_date="2026-09-04",
+                source=src,
+                interval="1D",
+            )
+            elapsed = time.time() - t0
+            data = json.loads(result)
+            status = data.get("status")
+            bars = 0
+            if status == "ok" and data.get("data"):
+                panels = data["data"].get("panels", {})
+                for code, panel in panels.items():
+                    bars = len(panel.get("rows", []))
+            error = data.get("error", "")
+            results[src] = {"status": status, "bars": bars, "time": elapsed, "error": error}
+            icon = "✅" if status == "ok" and bars > 0 else "❌"
+            print(f"  {icon} {src:12s} status={status}, bars={bars}, {elapsed:.1f}s")
+            if error:
+                print(f"      error: {str(error)[:120]}")
+        except Exception as e:
+            elapsed = time.time() - t0
+            results[src] = {"status": "exception", "bars": 0, "time": elapsed, "error": str(e)}
+            print(f"  ❌ {src:12s} EXCEPTION {elapsed:.1f}s: {str(e)[:120]}")
+    return results
 
 
 def test_fund_flow():
@@ -72,7 +110,7 @@ def test_fund_flow():
         status = data.get("status", data.get("ok"))
         print(f"  status={status}")
         if data.get("error"):
-            print(f"    error: {data['error'][:100]}")
+            print(f"    error: {str(data['error'])[:120]}")
         return bool(status and status != "error")
     except Exception as e:
         print(f"  exception: {e}")
@@ -84,35 +122,40 @@ def test_stock_news():
     try:
         from src.tools.stock_news_tool import StockNewsTool
         tool = StockNewsTool()
-        result = tool.execute(symbol="600519.SH", limit=3)
+        # stock_news 需要 code 参数而非 symbol
+        result = tool.execute(code="600519", scope="stock", limit=3)
         data = json.loads(result)
         status = data.get("status", data.get("ok"))
         print(f"  status={status}")
         if data.get("error"):
-            print(f"    error: {str(data['error'])[:100]}")
+            print(f"    error: {str(data['error'])[:120]}")
         if data.get("data") and isinstance(data["data"], dict):
             news = data["data"].get("news", data["data"].get("items", []))
             print(f"    → {len(news)} news items")
+        elif data.get("data") and isinstance(data["data"], list):
+            print(f"    → {len(data['data'])} news items")
         return bool(status and status != "error")
     except Exception as e:
         print(f"  exception: {e}")
+        traceback.print_exc()
         return False
 
 
 def test_northbound():
     """测试北向资金工具"""
     try:
-        from src.tools.northbound_tool import NorthboundTool
-        tool = NorthboundTool()
+        from src.tools.northbound_tool import NorthboundFlowTool
+        tool = NorthboundFlowTool()
         result = tool.execute()
         data = json.loads(result)
         status = data.get("status", data.get("ok"))
         print(f"  status={status}")
         if data.get("error"):
-            print(f"    error: {str(data['error'])[:100]}")
+            print(f"    error: {str(data['error'])[:120]}")
         return bool(status and status != "error")
     except Exception as e:
         print(f"  exception: {e}")
+        traceback.print_exc()
         return False
 
 
@@ -126,49 +169,21 @@ def test_web_search():
         status = data.get("status", data.get("ok"))
         print(f"  status={status}")
         if data.get("error"):
-            print(f"    error: {str(data['error'])[:100]}")
+            print(f"    error: {str(data['error'])[:120]}")
         if data.get("results"):
             print(f"    → {len(data['results'])} results")
         return bool(status and status != "error")
     except ImportError:
-        # 可能叫别的名字
-        print("  ⚠️  WebSearchTool not found, trying alternatives...")
+        print("  ⚠️  WebSearchTool not found")
         return None
     except Exception as e:
         print(f"  exception: {e}")
         return False
 
 
-def test_registry():
-    """测试工具注册表完整性"""
-    try:
-        from src.tools import build_tool_registry
-        registry = build_tool_registry()
-        names = registry.tool_names
-        print(f"  已注册工具数: {len(names)}")
-        import_failures = registry.import_failures
-        reg_failures = registry.registration_failures
-        if import_failures:
-            print(f"  ⚠️  导入失败 ({len(import_failures)}):")
-            for mod, reason in import_failures.items():
-                print(f"    → {mod}: {reason[:80]}")
-        if reg_failures:
-            print(f"  ⚠️  注册失败 ({len(reg_failures)}):")
-            for name, reason in reg_failures.items():
-                print(f"    → {name}: {reason[:80]}")
-        print(f"  可用工具列表:")
-        for name in sorted(names):
-            print(f"    ✓ {name}")
-        return len(names), len(import_failures) + len(reg_failures)
-    except Exception as e:
-        print(f"  exception: {e}")
-        traceback.print_exc()
-        return 0, 0
-
-
 def main():
     print("=" * 60)
-    print("Vibe Agent Runtime 工具链 Mock 测试")
+    print("Vibe Agent Runtime 工具链 Mock 测试 v2")
     print("=" * 60)
 
     # 1. 工具注册表
@@ -181,11 +196,11 @@ def main():
     ok = test_symbol_search()
     print(f"  耗时: {time.time()-t0:.1f}s, 结果: {'✅' if ok else '❌'}")
 
-    # 3. K线数据
-    print("\n📈 [3/7] get_market_data (600519.SH)")
-    t0 = time.time()
-    ok = test_market_data()
-    print(f"  耗时: {time.time()-t0:.1f}s, 结果: {'✅' if ok else '❌'}")
+    # 3. K线数据 - 多数据源对比
+    print("\n📈 [3/7] get_market_data (600519.SH) - 多源对比")
+    md_results = test_market_data_multi_source()
+    working_sources = [s for s, r in md_results.items() if r["status"] == "ok" and r["bars"] > 0]
+    print(f"  可用数据源: {working_sources or '无!'}")
 
     # 4. 资金流向
     print("\n💰 [4/7] fund_flow (600519.SH)")
@@ -194,13 +209,13 @@ def main():
     print(f"  耗时: {time.time()-t0:.1f}s, 结果: {'✅' if ok else '❌'}")
 
     # 5. 股票新闻
-    print("\n📰 [5/7] stock_news (600519.SH)")
+    print("\n📰 [5/7] stock_news (600519)")
     t0 = time.time()
     ok = test_stock_news()
     print(f"  耗时: {time.time()-t0:.1f}s, 结果: {'✅' if ok else '❌'}")
 
     # 6. 北向资金
-    print("\n🔄 [6/7] northbound")
+    print("\n🔄 [6/7] northbound_flow")
     t0 = time.time()
     ok = test_northbound()
     print(f"  耗时: {time.time()-t0:.1f}s, 结果: {'✅' if ok else '❌'}")
@@ -215,8 +230,13 @@ def main():
     else:
         print(f"  耗时: {elapsed:.1f}s, 结果: {'✅' if ok else '❌'}")
 
+    # 汇总
     print("\n" + "=" * 60)
-    print(f"注册工具: {total}, 失败: {failures}")
+    print(f"注册工具: {total}, 注册失败: {failures}")
+    if md_results:
+        ok_sources = [s for s, r in md_results.items() if r["status"] == "ok" and r["bars"] > 0]
+        fail_sources = [s for s, r in md_results.items() if r["status"] != "ok" or r["bars"] == 0]
+        print(f"K线数据源: ✅ {ok_sources}  ❌ {fail_sources}")
     print("=" * 60)
 
 
