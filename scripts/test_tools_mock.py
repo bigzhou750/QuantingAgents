@@ -230,6 +230,10 @@ def main():
     else:
         print(f"  耗时: {elapsed:.1f}s, 结果: {'✅' if ok else '❌'}")
 
+    # 8. Eastmoney curl fallback 独立测试
+    print("\n🔧 [8/8] eastmoney curl fallback 独立测试")
+    test_eastmoney_curl_fallback()
+
     # 汇总
     print("\n" + "=" * 60)
     print(f"注册工具: {total}, 注册失败: {failures}")
@@ -238,6 +242,77 @@ def main():
         fail_sources = [s for s, r in md_results.items() if r["status"] != "ok" or r["bars"] == 0]
         print(f"K线数据源: ✅ {ok_sources}  ❌ {fail_sources}")
     print("=" * 60)
+
+
+def test_eastmoney_curl_fallback():
+    """独立测试 eastmoney curl fallback 机制。
+
+    分别测试 Python requests 路径和 curl fallback 路径，
+    验证当 Python TLS 被 eastmoney 拦截时 curl 能否正常工作。
+    """
+    import os
+    import time
+
+    # 清除代理环境变量，避免干扰
+    for k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]:
+        os.environ.pop(k, None)
+
+    from backtest.loaders.eastmoney_client import get_json, _curl_get_json
+
+    params = {
+        "secid": "1.600519",
+        "klt": "101",
+        "fqt": "1",
+        "beg": "20260901",
+        "end": "20260904",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57",
+        "lmt": "10",
+    }
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+
+    # 测试1: Python requests 路径（通过 get_json 的 try 分支）
+    print("  --- Python requests 路径 ---")
+    t0 = time.time()
+    try:
+        data = get_json(url, params=params)
+        klines = data.get("data", {}).get("klines", [])
+        elapsed = time.time() - t0
+        print(f"  ✅ Python requests 成功, {len(klines)} 条K线, {elapsed:.1f}s")
+        if klines:
+            print(f"     示例: {klines[0]}")
+        python_ok = True
+    except Exception as e:
+        elapsed = time.time() - t0
+        print(f"  ❌ Python requests 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
+        python_ok = False
+
+    # 测试2: curl fallback 路径（直接调用 _curl_get_json）
+    print("  --- curl fallback 路径 ---")
+    t0 = time.time()
+    try:
+        data = _curl_get_json(url, params=params)
+        klines = data.get("data", {}).get("klines", [])
+        elapsed = time.time() - t0
+        print(f"  ✅ curl fallback 成功, {len(klines)} 条K线, {elapsed:.1f}s")
+        if klines:
+            print(f"     示例: {klines[0]}")
+        curl_ok = True
+    except Exception as e:
+        elapsed = time.time() - t0
+        print(f"  ❌ curl fallback 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
+        curl_ok = False
+
+    # 测试3: get_json 自动 fallback（模拟 Python 失败后自动切换 curl）
+    print("  --- get_json 自动 fallback 集成测试 ---")
+    if not python_ok and curl_ok:
+        print("  ✅ Python 失败但 curl 可用 → get_json 会自动 fallback")
+    elif python_ok:
+        print("  ℹ️  Python requests 本身就成功了，无需 fallback")
+    else:
+        print("  ❌ Python 和 curl 都失败了，检查网络或 IP 封禁状态")
+
+    return curl_ok
 
 
 if __name__ == "__main__":
