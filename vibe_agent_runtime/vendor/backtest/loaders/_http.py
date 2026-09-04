@@ -42,7 +42,7 @@ DEFAULT_USER_AGENT = (
 # the instant the interval elapses.
 _JITTER_MAX_S = 0.4
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-_DEFAULT_ATTEMPTS = 2
+_DEFAULT_ATTEMPTS = 3
 _BACKOFF_BASE_S = 0.45
 _BACKOFF_MAX_S = 2.0
 
@@ -128,6 +128,25 @@ def _session_for(bucket: str) -> requests.Session:
         return session
 
 
+def _reset_session(bucket: str) -> requests.Session:
+    """Close and replace a stale session for *bucket*.
+
+    Some providers (e.g. Eastmoney) intermittently drop keep-alive connections
+    without sending ``Connection: close``, causing ``RemoteDisconnected`` on
+    the next reuse.  Rebuilding the session forces a fresh TCP/TLS handshake.
+    """
+    with _SESSIONS_LOCK:
+        old = _SESSIONS.pop(bucket, None)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:  # noqa: BLE001
+                pass
+        session = requests.Session()
+        _SESSIONS[bucket] = session
+        return session
+
+
 def _sleep_backoff(attempt: int) -> None:
     delay = min(_BACKOFF_BASE_S * (2**attempt) + random.uniform(0.0, 0.15), _BACKOFF_MAX_S)
     time.sleep(delay)
@@ -199,6 +218,18 @@ def throttled_get(
             return session.get(url, params=params, headers=merged_headers, timeout=timeout)
         except requests.RequestException as exc:
             last_exc = exc
+            # RemoteDisconnected / ConnectionReset → stale keep-alive; rebuild
+            # the session so the next attempt gets a fresh TCP connection.
+            _is_stale_conn = isinstance(
+                exc,
+                (requests.ConnectionError,),
+            ) and any(
+                kw in str(exc).lower()
+                for kw in ("remote disconnected", "connection reset", "broken pipe")
+            )
+            if _is_stale_conn:
+                logger.debug("resetting stale session for %s after %s", host_key, exc)
+                _reset_session(host_key)
             if attempt + 1 >= max(1, attempts) or not _is_retryable_request_exception(exc):
                 raise
             logger.debug("retrying throttled GET %s after %s", url, exc)
