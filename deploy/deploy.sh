@@ -13,10 +13,13 @@ LOG_FILE="/opt/tradingagents/logs/deploy.log"
 LOCK_FILE="/tmp/tradingagents-deploy.lock"
 
 # 自动选择 compose 文件：优先本地构建版
+ENV_FILE="$DEPLOY_DIR/.env"
 if [ -f "$DEPLOY_DIR/$LOCAL_COMPOSE" ]; then
     COMPOSE_FILE="$LOCAL_COMPOSE"
+    COMPOSE_CMD="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 else
     COMPOSE_FILE="$HUB_COMPOSE"
+    COMPOSE_CMD="docker compose -f $COMPOSE_FILE"
 fi
 
 # 日志函数
@@ -69,15 +72,15 @@ fi
 # 3. 构建/拉取 Docker 镜像
 if [[ "$COMPOSE_FILE" == *"local-build"* ]]; then
     log "🔨 本地构建 Docker 镜像（仅重建变更部分）..."
-    docker compose -f "$COMPOSE_FILE" build --no-cache=false
+    $COMPOSE_CMD build --no-cache=false
 else
     log "🐳 拉取最新 Docker 镜像..."
-    docker compose -f "$COMPOSE_FILE" pull mongodb redis backend frontend nginx
+    $COMPOSE_CMD pull mongodb redis backend frontend nginx
 fi
 
 # 4. 重启服务
 log "🔄 重启服务..."
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+$COMPOSE_CMD up -d --remove-orphans
 
 # 5. 清理旧镜像
 log "🧹 清理旧镜像..."
@@ -115,8 +118,8 @@ done
 if [ "$HEALTHY" = true ]; then
     log "✅ 部署完成！提交: $COMMIT"
 else
-    log "⚠️  部署完成但部分服务未就绪，请检查日志: docker compose logs"
+    log "⚠️  部署完成但部分服务未就绪，请检查日志: $COMPOSE_CMD logs"
 fi
 
 # 输出当前容器状态
-docker compose -f "$COMPOSE_FILE" ps 2>/dev/null | tee -a "$LOG_FILE"
+$COMPOSE_CMD ps 2>/dev/null | tee -a "$LOG_FILE"
