@@ -232,6 +232,25 @@ async def lifespan(app: FastAPI):
 
     await init_db()
 
+    # 自动创建默认管理员账号（首次部署时）
+    try:
+        from app.services.user_service import user_service
+        existing_admin = await user_service.get_user_by_username("admin")
+        if not existing_admin:
+            admin_user = await user_service.create_admin_user(
+                username="admin",
+                password="admin123",
+                email="admin@tradingagents.cn"
+            )
+            if admin_user:
+                logger.info("✅ 已创建默认管理员账号: admin / admin123")
+            else:
+                logger.warning("⚠️ 默认管理员账号创建失败")
+        else:
+            logger.info("ℹ️ 管理员账号已存在，跳过创建")
+    except Exception as e:
+        logger.warning(f"⚠️ 默认管理员初始化失败（非阻塞）: {e}")
+
     try:
         from app.services.personal_investment.profile_service import profile_service
         from app.services.personal_investment.strategy_service import strategy_service
