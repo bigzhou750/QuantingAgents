@@ -72,6 +72,7 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
 # 复制后端代码和必需模块
 COPY app ./app
 COPY tradingagents ./tradingagents
+COPY vibe_agent_runtime ./vibe_agent_runtime
 COPY config ./config
 COPY scripts ./scripts
 COPY docs ./docs
