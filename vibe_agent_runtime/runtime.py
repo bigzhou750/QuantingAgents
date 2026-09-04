@@ -115,12 +115,15 @@ class EmbeddedAgentRuntime:
             return False
         return len(key) > 10
 
-    def _sync_runtime_llm_env(self) -> None:
-        default_model = (
-            unified_config.get_default_model()
-            or unified_config.get_quick_analysis_model()
-            or "qwen-turbo"
-        ).strip()
+    def _sync_runtime_llm_env(self, override_model: str | None = None) -> None:
+        if override_model and override_model.strip():
+            default_model = override_model.strip()
+        else:
+            default_model = (
+                unified_config.get_default_model()
+                or unified_config.get_quick_analysis_model()
+                or "deepseek-chat"
+            ).strip()
         provider = self._default_provider_for_model(default_model)
         api_key = ""
         base_url = ""
@@ -323,12 +326,10 @@ class EmbeddedAgentRuntime:
                 # Provider/database discovery is synchronous; never run it on
                 # the FastAPI event loop.
                 await asyncio.to_thread(self._bootstrap)
-                # 如果指定了模型，覆盖默认模型环境变量
+                # 如果指定了模型，重新同步环境变量（含 provider/API key/base_url）
                 if model and model.strip():
-                    model = model.strip()
-                    provider = self._default_provider_for_model(model)
-                    os.environ["TRADINGAGENTS_DEFAULT_MODEL"] = model
-                    logger.info(f"🔄 Runtime model overridden to: {model} (provider: {provider})")
+                    await asyncio.to_thread(self._sync_runtime_llm_env, model.strip())
+                    logger.info(f"🔄 Runtime model overridden to: {model.strip()}")
                 events, models, store_module, service_module, loop_module = self._load_modules()
                 event_bus = events.EventBus()
                 event_bus.set_loop(asyncio.get_running_loop())
