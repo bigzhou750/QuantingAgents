@@ -365,6 +365,7 @@ class VibeAgentService:
                 payload={
                     "prompt": final_prompt,
                     "metadata": payload.metadata,
+                    "model": payload.model,
                     "audit_context": self.audit_context(user, session_id, task_id),
                 },
                 created_at=now,
@@ -394,6 +395,7 @@ class VibeAgentService:
                 title=str(command.payload.get("title") or "QuantingAgents 研究"),
                 user_id=command.user_id,
                 username=command.username,
+                model=command.payload.get("model"),
                 sink=lambda event_type, payload: self.ingest_worker_event(
                     {
                         "event_type": event_type,

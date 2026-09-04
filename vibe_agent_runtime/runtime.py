@@ -311,6 +311,7 @@ class EmbeddedAgentRuntime:
         username: str,
         sink: EventSink,
         session_config: dict[str, Any] | None = None,
+        model: str | None = None,
     ) -> dict[str, Any]:
         current_task = asyncio.current_task()
         if current_task is None:
@@ -322,6 +323,12 @@ class EmbeddedAgentRuntime:
                 # Provider/database discovery is synchronous; never run it on
                 # the FastAPI event loop.
                 await asyncio.to_thread(self._bootstrap)
+                # 如果指定了模型，覆盖默认模型环境变量
+                if model and model.strip():
+                    model = model.strip()
+                    provider = self._default_provider_for_model(model)
+                    os.environ["TRADINGAGENTS_DEFAULT_MODEL"] = model
+                    logger.info(f"🔄 Runtime model overridden to: {model} (provider: {provider})")
                 events, models, store_module, service_module, loop_module = self._load_modules()
                 event_bus = events.EventBus()
                 event_bus.set_loop(asyncio.get_running_loop())
