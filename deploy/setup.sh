@@ -202,31 +202,32 @@ else
         exit 1
     fi
 
-    # 生成随机密钥
+    # 生成随机安全密钥（数据库密码使用默认值，与 compose 文件保持一致）
     JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null || openssl rand -base64 48)
     CSRF_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null || openssl rand -base64 48)
-    MONGO_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))" 2>/dev/null || openssl rand -base64 24)
-    REDIS_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))" 2>/dev/null || openssl rand -base64 24)
     WEBHOOK_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
 
-    # 替换模板占位符
-    sed \
+    # 复制模板并替换安全密钥占位符
+    cp "$TEMPLATE" "$WORKTREE_DIR/.env"
+    sed -i \
         -e "s|{{JWT_SECRET}}|${JWT_SECRET}|g" \
         -e "s|{{CSRF_SECRET}}|${CSRF_SECRET}|g" \
-        -e "s|{{MONGO_PASSWORD}}|${MONGO_PASSWORD}|g" \
-        -e "s|{{REDIS_PASSWORD}}|${REDIS_PASSWORD}|g" \
         -e "s|{{WEBHOOK_SECRET}}|${WEBHOOK_SECRET}|g" \
-        "$TEMPLATE" > "$WORKTREE_DIR/.env"
+        "$WORKTREE_DIR/.env"
 
     chmod 600 "$WORKTREE_DIR/.env"
 
-    echo "✅ .env 已生成（密钥已随机化）"
+    echo "✅ .env 已生成（JWT/CSRF/Webhook 密钥已随机化）"
     echo ""
     echo "⚠️  重要：请编辑 .env 填入 AI 模型 API 密钥:"
     echo "   vim $WORKTREE_DIR/.env"
     echo "   至少配置 DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY"
     echo ""
 fi
+
+# 同步 .env 到 deploy/ 目录（compose 文件从该目录读取）
+cp "$WORKTREE_DIR/.env" "$WORKTREE_DIR/deploy/.env"
+echo "📋 .env 已同步到 deploy/"
 
 # ==================== 5. 设置 Git 远程仓库为 SSH ====================
 echo ""
