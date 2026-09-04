@@ -65,7 +65,7 @@ services:
       - ../logs:/app/logs
       - ../data:/app/data
     env_file:
-      - ../.env
+      - .env
     environment:
       TZ: "Asia/Shanghai"
       TRADINGAGENTS_LOG_LEVEL: "INFO"

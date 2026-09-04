@@ -13,10 +13,9 @@ LOG_FILE="/opt/tradingagents/logs/deploy.log"
 LOCK_FILE="/tmp/tradingagents-deploy.lock"
 
 # 自动选择 compose 文件：优先本地构建版
-ENV_FILE="$DEPLOY_DIR/.env"
 if [ -f "$DEPLOY_DIR/$LOCAL_COMPOSE" ]; then
     COMPOSE_FILE="$LOCAL_COMPOSE"
-    COMPOSE_CMD="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
+    COMPOSE_CMD="docker compose -f $COMPOSE_FILE"
 else
     COMPOSE_FILE="$HUB_COMPOSE"
     COMPOSE_CMD="docker compose -f $COMPOSE_FILE"
@@ -63,11 +62,14 @@ git reset --hard "origin/$BRANCH"
 COMMIT=$(git rev-parse --short HEAD)
 log "📌 当前提交: $COMMIT"
 
-# 2. 确保 .env 存在
+# 2. 确保 .env 存在并同步到 deploy 目录
 if [ ! -f ".env" ]; then
     log "❌ .env 文件不存在，请先运行 setup.sh"
     exit 1
 fi
+# compose 文件在 deploy/ 子目录，需要将 .env 复制过去
+cp .env deploy/.env
+log "📋 .env 已同步到 deploy/"
 
 # 3. 构建/拉取 Docker 镜像
 if [[ "$COMPOSE_FILE" == *"local-build"* ]]; then
