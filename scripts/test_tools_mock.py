@@ -81,15 +81,25 @@ def test_market_data_multi_source():
             )
             elapsed = time.time() - t0
             data = json.loads(result)
+            # market_data_tool 返回两种格式:
+            # 1. 错误时: {"status": "error", "error": "..."}
+            # 2. 成功时: {"600519.SH": [...], "_provenance": {...}}
             status = data.get("status")
-            bars = 0
-            if status == "ok" and data.get("data"):
-                panels = data["data"].get("panels", {})
-                for code, panel in panels.items():
-                    bars = len(panel.get("rows", []))
             error = data.get("error", "")
+            bars = 0
+            if status == "error":
+                pass  # 有错误
+            elif isinstance(data.get("600519.SH"), list):
+                # 直接数据格式
+                bars = len(data["600519.SH"])
+                status = "ok"
+            elif status == "ok" and data.get("data"):
+                # 旧格式兼容
+                panels = data["data"].get("panels", {})
+                for code_key, panel in panels.items():
+                    bars = len(panel.get("rows", []))
             results[src] = {"status": status, "bars": bars, "time": elapsed, "error": error}
-            icon = "✅" if status == "ok" and bars > 0 else "❌"
+            icon = "✅" if bars > 0 else "❌"
             print(f"  {icon} {src:12s} status={status}, bars={bars}, {elapsed:.1f}s")
             if error:
                 print(f"      error: {str(error)[:120]}")
