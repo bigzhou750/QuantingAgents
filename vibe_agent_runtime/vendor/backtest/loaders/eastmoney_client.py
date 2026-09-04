@@ -25,7 +25,7 @@ import logging
 import re
 from typing import Any
 
-from backtest.loaders._http import resolve_min_interval, throttled_get_json
+from backtest.loaders._http import _THROTTLE, resolve_min_interval, throttled_get_json
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +78,45 @@ def _min_interval() -> float:
     return resolve_min_interval(_MIN_INTERVAL_ENV, _DEFAULT_MIN_INTERVAL)
 
 
+def _curl_get_json(url: str, *, params: dict[str, Any], timeout: int = 15) -> Any:
+    """Fallback GET via ``curl`` subprocess when Python TLS is blocked.
+
+    Some providers (e.g. Eastmoney) fingerprint Python's TLS ClientHello and
+    silently drop the connection, while ``curl`` with its own TLS stack works
+    fine.  This helper shells out to ``curl`` as a last resort.
+    """
+    import subprocess
+    from urllib.parse import urlencode
+
+    full_url = f"{url}?{urlencode(params)}"
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-s", "-S", "--max-time", str(timeout),
+                "-H", "User-Agent: Mozilla/5.0",
+                "-H", "Accept: */*",
+                full_url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout + 5,
+        )
+        if result.returncode != 0:
+            raise ConnectionError(f"curl exited {result.returncode}: {result.stderr.strip()}")
+        body = result.stdout.strip()
+        if not body:
+            raise ValueError("curl returned empty body")
+        return json.loads(body)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"curl timed out after {timeout}s for {url}")
+
+
 def get_json(url: str, *, params: dict[str, Any]) -> Any:
     """Issue a throttled Eastmoney GET and decode the body as JSON.
+
+    Tries the normal Python requests path first; on ``RemoteDisconnected`` or
+    similar connection errors, falls back to ``curl`` which uses a different
+    TLS stack that some providers accept.
 
     Args:
         url: Fully-qualified Eastmoney endpoint URL.
@@ -89,17 +126,26 @@ def get_json(url: str, *, params: dict[str, Any]) -> Any:
         The decoded JSON payload (typically a ``dict``).
 
     Raises:
-        requests.RequestException: Network failure, propagated for the caller's
-            retry policy.
-        requests.HTTPError: Non-2xx response status.
+        requests.RequestException: Network failure (only when curl also fails).
         ValueError: Body is not valid JSON.
     """
-    return throttled_get_json(
-        url,
-        host_key=_HOST_KEY,
-        min_interval=_min_interval(),
-        params=params,
-    )
+    # Try Python requests first (respects throttle / session reuse)
+    try:
+        return throttled_get_json(
+            url,
+            host_key=_HOST_KEY,
+            min_interval=_min_interval(),
+            params=params,
+        )
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        if any(kw in err_msg for kw in ("remote disconnected", "connection aborted",
+                                         "connection reset", "broken pipe")):
+            logger.debug("Python requests failed (%s), falling back to curl", exc)
+            # Still respect throttle spacing before curl call
+            _THROTTLE.wait(_HOST_KEY, _min_interval())
+            return _curl_get_json(url, params=params)
+        raise
 
 
 def _resolve_a_share_secid(code: str, suffix: str) -> str | None:
