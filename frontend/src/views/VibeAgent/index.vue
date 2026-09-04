@@ -255,7 +255,6 @@ import { vibeAgentApi,
 } from '@/api/vibeAgent'
 import { configApi } from '@/api/config'
 import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStream'
-import { configApi } from '@/api/config'
 import { formatDateTime } from '@/utils/datetime'
 import {
   buildWorkbenchActivity,
