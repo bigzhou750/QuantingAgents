@@ -67,6 +67,9 @@ services:
     env_file:
       - .env
     environment:
+      # 安全配置（必须显式声明才能从 env_file 注入容器）
+      JWT_SECRET: "${JWT_SECRET}"
+      CSRF_SECRET: "${CSRF_SECRET}"
       TZ: "Asia/Shanghai"
       TRADINGAGENTS_LOG_LEVEL: "INFO"
       TRADINGAGENTS_LOG_DIR: "/app/logs"
