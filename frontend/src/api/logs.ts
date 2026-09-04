@@ -73,10 +73,12 @@ export const LogsApi = {
    * 导出日志文件
    */
   async exportLogs(request: LogExportRequest): Promise<Blob> {
+    const token = localStorage.getItem('auth-token')
     const response = await fetch('/api/system/system-logs/export', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
       body: JSON.stringify(request)
     })

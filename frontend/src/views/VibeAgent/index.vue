@@ -678,7 +678,10 @@ onMounted(async () => {
 
   // 加载个人投资助手上下文选项
   try {
-    const profileResponse = await fetch('/api/investment/profile')
+    const token = localStorage.getItem('auth-token')
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+
+    const profileResponse = await fetch('/api/investment/profile', { headers })
     if (profileResponse.ok) {
       const profileData = await profileResponse.json()
       if (profileData.success && profileData.data?.context_injection_enabled !== false) {
@@ -687,7 +690,7 @@ onMounted(async () => {
       }
     }
 
-    const strategiesResponse = await fetch('/api/investment/strategies?limit=20')
+    const strategiesResponse = await fetch('/api/investment/strategies?limit=20', { headers })
     if (strategiesResponse.ok) {
       const strategiesData = await strategiesResponse.json()
       if (strategiesData.success) {
