@@ -230,9 +230,9 @@ def main():
     else:
         print(f"  耗时: {elapsed:.1f}s, 结果: {'✅' if ok else '❌'}")
 
-    # 8. Eastmoney curl fallback 独立测试
-    print("\n🔧 [8/8] eastmoney curl fallback 独立测试")
-    test_eastmoney_curl_fallback()
+    # 8. Tencent 默认数据源验证
+    print("\n🔧 [8/8] tencent 默认数据源验证")
+    test_tencent_default_source()
 
     # 汇总
     print("\n" + "=" * 60)
@@ -244,11 +244,13 @@ def main():
     print("=" * 60)
 
 
-def test_eastmoney_curl_fallback():
-    """独立测试 eastmoney curl fallback 机制。
+def test_tencent_default_source():
+    """验证 tencent 作为 A股默认数据源的可用性。
 
-    分别测试 Python requests 路径和 curl fallback 路径，
-    验证当 Python TLS 被 eastmoney 拦截时 curl 能否正常工作。
+    系统已将 A股 (.SH/.SZ/.BJ) 的首选数据源设为 tencent，
+    因为 eastmoney 对数据中心 IP 段有封锁。此测试验证：
+    1. auto 模式下 A股是否正确路由到 tencent
+    2. tencent loader 是否能正常返回 K线数据
     """
     import os
     import time
@@ -257,62 +259,68 @@ def test_eastmoney_curl_fallback():
     for k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]:
         os.environ.pop(k, None)
 
-    from backtest.loaders.eastmoney_client import get_json, _curl_get_json
+    from src.market_data import detect_source
 
-    params = {
-        "secid": "1.600519",
-        "klt": "101",
-        "fqt": "1",
-        "beg": "20260901",
-        "end": "20260904",
-        "fields1": "f1,f2,f3,f4,f5,f6",
-        "fields2": "f51,f52,f53,f54,f55,f56,f57",
-        "lmt": "10",
-    }
-    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    # 测试1: auto 检测是否正确路由到 tencent
+    print("  --- auto 数据源检测 ---")
+    test_symbols = ["600519.SH", "000001.SZ", "00700.HK"]
+    for sym in test_symbols:
+        detected = detect_source(sym)
+        icon = "✅" if detected == "tencent" else "⚠️"
+        print(f"  {icon} {sym} -> {detected}")
 
-    # 测试1: Python requests 路径（通过 get_json 的 try 分支）
-    print("  --- Python requests 路径 ---")
+    # 测试2: tencent loader 直接调用
+    print("  --- tencent loader 直接调用 ---")
+    from backtest.loaders.tencent_loader import DataLoader
+
+    loader = DataLoader()
     t0 = time.time()
     try:
-        data = get_json(url, params=params)
-        klines = data.get("data", {}).get("klines", [])
+        result = loader.fetch(["600519.SH"], "2026-09-01", "2026-09-04", interval="1D")
         elapsed = time.time() - t0
-        print(f"  ✅ Python requests 成功, {len(klines)} 条K线, {elapsed:.1f}s")
-        if klines:
-            print(f"     示例: {klines[0]}")
-        python_ok = True
+        if "600519.SH" in result and not result["600519.SH"].empty:
+            df = result["600519.SH"]
+            print(f"  ✅ tencent loader 成功, {len(df)} 条K线, {elapsed:.1f}s")
+            print(f"     示例: {df.iloc[0].to_dict()}")
+            loader_ok = True
+        else:
+            print(f"  ❌ tencent loader 返回空数据, {elapsed:.1f}s")
+            loader_ok = False
     except Exception as e:
         elapsed = time.time() - t0
-        print(f"  ❌ Python requests 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
-        python_ok = False
+        print(f"  ❌ tencent loader 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
+        loader_ok = False
 
-    # 测试2: curl fallback 路径（直接调用 _curl_get_json）
-    print("  --- curl fallback 路径 ---")
+    # 测试3: market_data_tool auto 模式集成
+    print("  --- market_data_tool auto 模式 ---")
+    import json
+    from src.tools.market_data_tool import MarketDataTool
+
+    tool = MarketDataTool()
     t0 = time.time()
     try:
-        data = _curl_get_json(url, params=params)
-        klines = data.get("data", {}).get("klines", [])
+        raw = tool.execute(
+            codes=["600519.SH"],
+            start_date="2026-09-01",
+            end_date="2026-09-04",
+            source="auto",
+            interval="1D",
+        )
         elapsed = time.time() - t0
-        print(f"  ✅ curl fallback 成功, {len(klines)} 条K线, {elapsed:.1f}s")
-        if klines:
-            print(f"     示例: {klines[0]}")
-        curl_ok = True
+        data = json.loads(raw)
+        provenance = data.get("_provenance", {})
+        prov = provenance.get("600519.SH", {})
+        actual_source = prov.get("source", "unknown")
+        bars = len(data.get("600519.SH", []))
+        icon = "✅" if actual_source == "tencent" and bars > 0 else "❌"
+        print(f"  {icon} source={actual_source}, bars={bars}, {elapsed:.1f}s")
+        tool_ok = actual_source == "tencent" and bars > 0
     except Exception as e:
         elapsed = time.time() - t0
-        print(f"  ❌ curl fallback 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
-        curl_ok = False
+        print(f"  ❌ market_data_tool 失败 ({elapsed:.1f}s): {type(e).__name__}: {e}")
+        tool_ok = False
 
-    # 测试3: get_json 自动 fallback（模拟 Python 失败后自动切换 curl）
-    print("  --- get_json 自动 fallback 集成测试 ---")
-    if not python_ok and curl_ok:
-        print("  ✅ Python 失败但 curl 可用 → get_json 会自动 fallback")
-    elif python_ok:
-        print("  ℹ️  Python requests 本身就成功了，无需 fallback")
-    else:
-        print("  ❌ Python 和 curl 都失败了，检查网络或 IP 封禁状态")
-
-    return curl_ok
+    return loader_ok and tool_ok
 
 
 if __name__ == "__main__":
