@@ -53,8 +53,6 @@ class VibeMessageCreate(BaseModel):
     # 个人投资助手上下文注入参数
     profile_id: Optional[str] = None
     strategy_id: Optional[str] = None
-    # 模型选择（可选，为空时使用系统默认模型）
-    model: Optional[str] = None
 
 
 class VibeSession(BaseModel):

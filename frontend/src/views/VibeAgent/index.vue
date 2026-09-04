@@ -171,47 +171,25 @@
           </el-scrollbar>
 
           <form class="composer" @submit.prevent="sendMessage">
-            <!-- 上下文注入选项 & 模型选择 -->
-            <div class="context-options">
-              <template v-if="investmentContextEnabled">
-                <el-checkbox v-model="useProfileContext">
-                  <el-icon><UserFilled /></el-icon>
-                  带入投资画像
-                </el-checkbox>
-                <el-select
-                  v-model="selectedStrategyId"
-                  placeholder="选择策略（可选）"
-                  clearable
-                  size="small"
-                  style="width: 180px; margin-left: 12px;"
-                >
-                  <el-option
-                    v-for="strategy in availableStrategies"
-                    :key="strategy.strategy_id"
-                    :label="strategy.name"
-                    :value="strategy.strategy_id"
-                  />
-                </el-select>
-              </template>
+            <!-- 上下文注入选项 -->
+            <div class="context-options" v-if="investmentContextEnabled">
+              <el-checkbox v-model="useProfileContext">
+                <el-icon><UserFilled /></el-icon>
+                带入投资画像
+              </el-checkbox>
               <el-select
-                v-model="selectedModel"
-                placeholder="默认模型"
+                v-model="selectedStrategyId"
+                placeholder="选择策略（可选）"
                 clearable
                 size="small"
-                style="width: 200px; margin-left: auto;"
+                style="width: 180px; margin-left: 12px;"
               >
-                <el-option-group
-                  v-for="group in availableModels"
-                  :key="group.provider"
-                  :label="group.provider_name"
-                >
-                  <el-option
-                    v-for="model in group.models"
-                    :key="model.name"
-                    :label="model.display_name || model.name"
-                    :value="model.name"
-                  />
-                </el-option-group>
+                <el-option
+                  v-for="strategy in availableStrategies"
+                  :key="strategy.strategy_id"
+                  :label="strategy.name"
+                  :value="strategy.strategy_id"
+                />
               </el-select>
             </div>
 
@@ -253,7 +231,6 @@ import { vibeAgentApi,
   type VibeSession,
   type VibeTask
 } from '@/api/vibeAgent'
-import { configApi } from '@/api/config'
 import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStream'
 import { formatDateTime } from '@/utils/datetime'
 import {
@@ -277,9 +254,6 @@ const useProfileContext = ref(false)
 const selectedStrategyId = ref<string | undefined>(undefined)
 const availableStrategies = ref<any[]>([])
 const sending = ref(false)
-// 模型选择
-const availableModels = ref<Array<{ provider: string; provider_name: string; models: Array<{ name: string; display_name: string }> }>>([])
-const selectedModel = ref<string>('')
 const activeTask = ref<VibeTask | null>(null)
 const tasksBySession = ref<Record<string, VibeTask>>({})
 const health = ref({ available: false, status: 'unknown', diagnostics: {} as Record<string, any> })
@@ -631,11 +605,6 @@ const sendMessage = async () => {
       messagePayload.strategy_id = selectedStrategyId.value
     }
 
-    // 如果选择了模型
-    if (selectedModel.value) {
-      messagePayload.model = selectedModel.value
-    }
-
     const res = await vibeAgentApi.sendMessage(activeSessionId.value, messagePayload)
     activeTask.value = (res as any).data as VibeTask
     tasksBySession.value[activeTask.value.session_id] = activeTask.value
@@ -705,13 +674,6 @@ onMounted(async () => {
   }
   if (activeSessionId.value && streamState.value === 'idle') {
     reconnectStream()
-  }
-
-  // 加载可用模型列表
-  try {
-    availableModels.value = await configApi.getAvailableModels()
-  } catch (error) {
-    console.warn('Failed to load available models:', error)
   }
 
   // 加载个人投资助手上下文选项
