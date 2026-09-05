@@ -243,7 +243,7 @@ async def rollback_artifact(artifact_id: str, request: RollbackRequest, user: di
         receipt = await promote_service.rollback(
             artifact_id,
             request.target_version,
-            rolled_back_by=user.get("username", "admin"),
+            rolled_back_by=user["username"],
             request_id=request.request_id,
             idempotency_key=request.idempotency_key,
             environment=request.environment,
@@ -316,7 +316,7 @@ async def approve_proposal(proposal_id: str, request: ApprovalRequest, user: dic
     from app.services.evolution.approval_service import approval_service
     record = await approval_service.approve(
         proposal_id,
-        user.get("username", "admin"),
+        user["username"],
         request.comment,
         request_id=request.request_id,
         idempotency_key=request.idempotency_key,
@@ -330,7 +330,7 @@ async def reject_proposal(proposal_id: str, request: ApprovalRequest, user: dict
     from app.services.evolution.approval_service import approval_service
     record = await approval_service.reject(
         proposal_id,
-        user.get("username", "admin"),
+        user["username"],
         request.comment,
         request_id=request.request_id,
         idempotency_key=request.idempotency_key,
@@ -344,7 +344,7 @@ async def comment_proposal(proposal_id: str, request: ApprovalRequest, user: dic
     from app.services.evolution.approval_service import approval_service
     record = await approval_service.comment(
         proposal_id,
-        user.get("username", "admin"),
+        user["username"],
         request.comment,
         request_id=request.request_id,
         idempotency_key=request.idempotency_key,
@@ -375,7 +375,7 @@ async def promote_proposal(
     try:
         receipt = await promote_service.promote(
             proposal_id,
-            promoted_by=user.get("username", "admin"),
+            promoted_by=user["username"],
             request_id=request_id or "",
             idempotency_key=idempotency_key or "",
             environment=environment,
@@ -392,7 +392,7 @@ async def stop_proposal(proposal_id: str, request: StopRequest, user: dict = Dep
     receipt = await promote_service.stop(
         proposal_id,
         request.reason,
-        stopped_by=user.get("username", "admin"),
+        stopped_by=user["username"],
         request_id=request.request_id,
         idempotency_key=request.idempotency_key,
     )

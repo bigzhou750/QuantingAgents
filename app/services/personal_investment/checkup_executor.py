@@ -72,6 +72,7 @@ class CheckupExecutor:
             # 9. 保存结果（含数据质量信息）
             result_summary = await task_service.save_checkup_result(
                 task_id=task_id,
+                user_id=user_id,
                 fitness_level=fitness_assessment["level"],
                 fitness_summary=fitness_assessment["summary"],
                 key_metrics=key_metrics,

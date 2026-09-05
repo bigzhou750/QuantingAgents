@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.routers.auth_db import get_current_user
+from app.routers.auth_db import get_current_user, get_current_admin
 from app.models.user import User
 from app.models.config import (
     SystemConfigResponse, LLMConfigRequest, DataSourceConfigRequest,
@@ -29,7 +29,7 @@ from app.core.response import ok
 
 
 
-router = APIRouter(prefix="/config", tags=["配置管理"])
+router = APIRouter(prefix="/config", tags=["配置管理"], dependencies=[Depends(get_current_admin)])
 logger = logging.getLogger("webapi")
 
 

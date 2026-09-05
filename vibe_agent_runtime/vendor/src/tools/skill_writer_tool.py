@@ -74,6 +74,11 @@ class SaveSkillTool(BaseTool):
     }
     repeatable = True
 
+    def __init__(self, user_skills_dir: Path | None = None) -> None:
+        if user_skills_dir is None:
+            raise RuntimeError("skill mutation requires an authenticated user scope")
+        self._user_skills_dir = Path(user_skills_dir)
+
     def execute(self, **kwargs: Any) -> str:
         """Create or overwrite a user skill.
 
@@ -91,7 +96,7 @@ class SaveSkillTool(BaseTool):
             return json.dumps({"status": "error", "error": "name and content required"})
 
         slug = _sanitize_skill_name(name)
-        skill_dir = USER_SKILLS_DIR / slug
+        skill_dir = self._user_skills_dir / slug
         skill_dir.mkdir(parents=True, exist_ok=True)
         skill_path = skill_dir / "SKILL.md"
 
@@ -140,6 +145,11 @@ class PatchSkillTool(BaseTool):
     }
     repeatable = True
 
+    def __init__(self, user_skills_dir: Path | None = None) -> None:
+        if user_skills_dir is None:
+            raise RuntimeError("skill mutation requires an authenticated user scope")
+        self._user_skills_dir = Path(user_skills_dir)
+
     def execute(self, **kwargs: Any) -> str:
         """Apply a find-and-replace patch to a skill.
 
@@ -159,7 +169,7 @@ class PatchSkillTool(BaseTool):
             return json.dumps({"status": "error", "error": "name and find required"})
 
         slug = _sanitize_skill_name(name)
-        user_path = USER_SKILLS_DIR / slug / "SKILL.md"
+        user_path = self._user_skills_dir / slug / "SKILL.md"
         bundled_dir = Path(__file__).resolve().parents[1] / "skills"
         bundled_path = bundled_dir / slug / "SKILL.md"
 
@@ -207,6 +217,11 @@ class DeleteSkillTool(BaseTool):
         "required": ["name"],
     }
 
+    def __init__(self, user_skills_dir: Path | None = None) -> None:
+        if user_skills_dir is None:
+            raise RuntimeError("skill mutation requires an authenticated user scope")
+        self._user_skills_dir = Path(user_skills_dir)
+
     def execute(self, **kwargs: Any) -> str:
         """Delete a user skill directory.
 
@@ -221,7 +236,7 @@ class DeleteSkillTool(BaseTool):
             return json.dumps({"status": "error", "error": "name required"})
 
         slug = _sanitize_skill_name(name)
-        skill_dir = USER_SKILLS_DIR / slug
+        skill_dir = self._user_skills_dir / slug
         if not skill_dir.exists():
             return json.dumps({"status": "error", "error": f"User skill '{slug}' not found"})
 
@@ -267,6 +282,11 @@ class SkillFileTool(BaseTool):
         "required": ["action", "skill_name"],
     }
 
+    def __init__(self, user_skills_dir: Path | None = None) -> None:
+        if user_skills_dir is None:
+            raise RuntimeError("skill mutation requires an authenticated user scope")
+        self._user_skills_dir = Path(user_skills_dir)
+
     def execute(self, **kwargs: Any) -> str:
         """Manage skill auxiliary files.
 
@@ -282,7 +302,7 @@ class SkillFileTool(BaseTool):
         if not skill_name:
             return json.dumps({"status": "error", "error": "skill_name required"})
 
-        skill_dir = USER_SKILLS_DIR / _sanitize_skill_name(skill_name)
+        skill_dir = self._user_skills_dir / _sanitize_skill_name(skill_name)
         if not skill_dir.exists():
             return json.dumps({"status": "error", "error": f"User skill '{skill_name}' not found. Create it with save_skill first."})
 

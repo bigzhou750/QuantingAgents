@@ -679,7 +679,7 @@ onMounted(async () => {
   // 加载个人投资助手上下文选项
   try {
     const token = localStorage.getItem('auth-token')
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
 
     const profileResponse = await fetch('/api/investment/profile', { headers })
     if (profileResponse.ok) {

@@ -291,7 +291,7 @@ async def get_screening_result(task_id: str, current_user: dict = Depends(get_cu
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
-        result = await task_service.get_screening_result(task_id)
+        result = await task_service.get_screening_result(task_id, current_user["id"])
         if not result:
             return ApiResponse(success=True, data={}, message="结果尚未生成")
         result["strategy_id"] = task.get("strategy_id")
@@ -352,7 +352,7 @@ async def get_checkup_result(task_id: str, current_user: dict = Depends(get_curr
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
-        result = await task_service.get_checkup_result(task_id)
+        result = await task_service.get_checkup_result(task_id, current_user["id"])
         if not result:
             return ApiResponse(success=True, data={}, message="结果尚未生成")
         result["strategy_id"] = task.get("strategy_id")

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from redis.asyncio import Redis
 
 from app.core.database import get_redis_client
+from app.core.isolation_metrics import record_queue_missing_owner
 
 from app.services.queue import (
     READY_LIST,
@@ -75,6 +76,8 @@ class QueueService:
         mapping = {
             "id": task_id,
             "user": user_id,
+            "owner_id": user_id,
+            "context_version": "1",
             "symbol": symbol,
             "status": "queued",
             "created_at": str(now),
@@ -112,6 +115,10 @@ class QueueService:
                 return None
 
             user_id = task_data.get("user")
+            if not user_id or str(task_data.get("owner_id", user_id)) != str(user_id):
+                record_queue_missing_owner(task_id)
+                logger.error("拒绝处理缺少或不一致 owner 的队列任务: %s", task_id)
+                return None
 
             # 再次检查并发限制（防止竞态条件）
             if not await self._check_user_concurrent_limit(user_id):
@@ -140,14 +147,17 @@ class QueueService:
             logger.error(f"出队失败: {e}")
             return None
 
-    async def ack_task(self, task_id: str, success: bool = True) -> bool:
+    async def ack_task(self, task_id: str, success: bool = True, user_id: Optional[str] = None) -> bool:
         """确认任务完成"""
         try:
             task_data = await self.get_task(task_id)
             if not task_data:
                 return False
 
-            user_id = task_data.get("user")
+            task_owner = task_data.get("user")
+            if not user_id or str(task_data.get("owner_id", task_owner)) != str(user_id):
+                record_queue_missing_owner(task_id)
+                return False
             worker_id = task_data.get("worker_id")
 
             # 从处理中集合移除
@@ -183,6 +193,7 @@ class QueueService:
         await self.r.hset(batch_key, mapping={
             "id": batch_id,
             "user": user_id,
+            "owner_id": user_id,
             "status": "queued",
             "submitted": str(len(symbols)),
             "created_at": str(now),
@@ -206,6 +217,13 @@ class QueueService:
             data["created_at"] = int(data["created_at"])
         if "submitted" in data and str(data["submitted"]).isdigit():
             data["submitted"] = int(data["submitted"])
+        return data
+
+    async def get_user_task(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        """Return a task only when its server-side owner matches."""
+        data = await self.get_task(task_id)
+        if not data or str(data.get("user")) != str(user_id):
+            return None
         return data
 
     async def get_batch(self, batch_id: str) -> Optional[Dict[str, Any]]:
@@ -328,11 +346,13 @@ class QueueService:
         except Exception as e:
             logger.error(f"处理过期任务失败: {task_id} - {e}")
 
-    async def cancel_task(self, task_id: str) -> bool:
+    async def cancel_task(self, task_id: str, user_id: Optional[str] = None) -> bool:
         """取消任务"""
         try:
             task_data = await self.get_task(task_id)
             if not task_data:
+                return False
+            if not user_id or str(task_data.get("user")) != str(user_id):
                 return False
 
             status = task_data.get("status")

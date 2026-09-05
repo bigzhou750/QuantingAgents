@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30)
+    AUTH_REGISTRATION_ENABLED: bool = Field(default=True)
+    AUTH_PASSWORD_MIN_LENGTH: int = Field(default=8, ge=6, le=128)
+    AUTH_LOGIN_RATE_LIMIT: int = Field(default=10, ge=1, le=1000)
+    AUTH_REGISTER_RATE_LIMIT: int = Field(default=5, ge=1, le=1000)
+    AUTH_TOKEN_REVOCATION_ENABLED: bool = Field(default=True)
+    AUTH_TOKEN_ISSUER: str = Field(default="quantingagents")
 
     # 队列配置
     QUEUE_MAX_SIZE: int = Field(default=10000)
@@ -187,6 +193,10 @@ class Settings(BaseSettings):
 
     # Embedded Vibe Agent runtime. This is data, never source code.
     VIBE_AGENT_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/vibe-agent")
+    USER_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/users")
+    MULTI_ACCOUNT_ISOLATION_ENABLED: bool = Field(default=True)
+    MULTI_ACCOUNT_ISOLATION_ENFORCE: bool = Field(default=False)
+    MULTI_ACCOUNT_MIGRATION_VERSION: int = Field(default=0, ge=0)
     VIBE_AGENT_WORKER_ENABLED: bool = Field(default=True)
     VIBE_AGENT_WORKER_ID: str = Field(default="quanting-vibe-worker")
     VIBE_AGENT_WORKER_CONCURRENCY: int = Field(default=2, ge=1, le=8)

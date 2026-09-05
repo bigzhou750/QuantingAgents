@@ -23,7 +23,7 @@ from src.session.models import (
     Principal,
     Session,
 )
-from src.session.search import get_shared_index
+from src.session.search import SessionSearchIndex, get_shared_index
 from src.session.store import SessionStore
 
 if TYPE_CHECKING:
@@ -65,6 +65,8 @@ class SessionService:
         store: SessionStore,
         event_bus: EventBus,
         runs_dir: Path,
+        memory_dir: Optional[Path] = None,
+        search_index: Optional[SessionSearchIndex] = None,
     ) -> None:
         """Initialize the session service.
 
@@ -76,6 +78,7 @@ class SessionService:
         self.store = store
         self.event_bus = event_bus
         self.runs_dir = runs_dir
+        self.memory_dir = memory_dir
         # _active_loops is the cancellation handle only. It is populated after
         # the registry is built, which is far too late to serve as the
         # concurrency gate, so in-flight sessions are tracked separately and
@@ -93,7 +96,9 @@ class SessionService:
         self._user_cancel_requests: set[str] = set()
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
-        self._search_index = get_shared_index()
+        # Network/API callers pass a user-scoped index. Keep the legacy
+        # singleton only for standalone CLI callers that have no user scope.
+        self._search_index = search_index or get_shared_index()
         self._recover_interrupted_attempts()
 
     def _recover_interrupted_attempts(self) -> None:
@@ -472,7 +477,12 @@ class SessionService:
 
         try:
             from src.memory.persistent import PersistentMemory
-            pm = PersistentMemory()
+            # API callers provide a user-scoped directory. Avoid the shared
+            # Persistent memory is user-owned. Never fall back to the process
+            # home directory because that would merge tenants.
+            if not self.memory_dir:
+                raise RuntimeError("persistent memory requires an authenticated user scope")
+            pm = PersistentMemory(memory_dir=self.memory_dir)
         except (ImportError, ModuleNotFoundError):
             # vendor 同步时可能漏拷 src/memory/ 包，降级为 None
             # build_registry 和 AgentLoop 均已支持 persistent_memory=None
@@ -525,8 +535,10 @@ class SessionService:
                 agent_executor,
                 lambda: build_registry(
                     persistent_memory=pm,
+                    search_index=self._search_index,
                     include_shell_tools=include_shell_tools,
                     agent_config=agent_config,
+                    user_skills_dir=(self.memory_dir.parent / "skills" / "user") if self.memory_dir else None,
                     session_id=session_id,
                     event_callback=event_callback,
                     warn_callback=_mcp_collision_warn,

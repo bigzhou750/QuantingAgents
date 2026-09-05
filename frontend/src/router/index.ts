@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import { resolveRouteAccess } from '@/utils/authPolicy'
 
 // 配置NProgress
 NProgress.configure({
@@ -723,6 +724,12 @@ const routes: RouteRecordRaw[] = [
       transition: 'fade'
     }
   },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/views/Auth/Register.vue'),
+    meta: { title: '注册', hideInMenu: true, transition: 'fade' }
+  },
 
   {
     path: '/about',
@@ -805,6 +812,16 @@ router.beforeEach(async (to, _from, next) => {
     hasToken: !!authStore.token
   })
 
+  // A cached token may establish a provisional session, but never a role.
+  // Resolve identity from the server before protected navigation.
+  if (authStore.isAuthenticated && !authStore.user) {
+    try {
+      await authStore.checkAuthStatus()
+    } catch {
+      authStore.clearAuthInfo()
+    }
+  }
+
   // 检查是否需要认证
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     console.log('🔒 需要认证但用户未登录:', {
@@ -835,7 +852,19 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.fetchUserPermissions()
   }
 
-  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+  const access = resolveRouteAccess(
+    { isAuthenticated: authStore.isAuthenticated, isAdmin: authStore.isAdmin },
+    Boolean(to.meta.requiresAuth),
+    Boolean(to.meta.requiresAdmin)
+  )
+
+  if (access === 'login') {
+    authStore.setRedirectPath(to.fullPath)
+    next('/login')
+    return
+  }
+
+  if (access === 'admin') {
     ElMessage.warning('需要管理员权限')
     next('/dashboard')
     return

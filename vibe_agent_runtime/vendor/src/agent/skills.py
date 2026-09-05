@@ -121,8 +121,12 @@ class SkillsLoader:
             user_skills_dir: User-created skills directory; defaults to ~/.vibe-trading/skills/user/.
         """
         self.skills_dir = skills_dir or Path(__file__).resolve().parents[1] / "skills"
-        self._user_skills_dir = user_skills_dir or _configured_user_skills_dir()
-        self._legacy_user_skills_dir = USER_SKILLS_DIR
+        if user_skills_dir is None:
+            self._user_skills_dir = _configured_user_skills_dir()
+            self._legacy_user_skills_dir = USER_SKILLS_DIR
+        else:
+            self._user_skills_dir = Path(user_skills_dir)
+            self._legacy_user_skills_dir = None
         self.skills: List[Skill] = []
         self._load()
 

@@ -7,7 +7,8 @@ import time
 import bcrypt
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING, ReturnDocument
+from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
 
 from app.core.config import settings
@@ -32,6 +33,13 @@ class UserService:
         self.client = MongoClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
         self.users_collection = self.db.users
+        try:
+            self.users_collection.create_index([("username", ASCENDING)], unique=True)
+            self.users_collection.create_index([("email", ASCENDING)], unique=True)
+            self.db.refresh_sessions.create_index([("jti", ASCENDING)], unique=True)
+            self.db.refresh_sessions.create_index([("user_id", ASCENDING), ("revoked", ASCENDING)])
+        except Exception as exc:
+            logger.warning("无法创建用户唯一索引: %s", exc)
 
     def close(self):
         """关闭数据库连接"""
@@ -60,6 +68,9 @@ class UserService:
     async def create_user(self, user_data: UserCreate) -> Optional[User]:
         """创建用户"""
         try:
+            if self.validate_password(user_data.password):
+                logger.warning("用户注册被拒绝: 密码不符合策略")
+                return None
             # 检查用户名是否已存在
             existing_user = self.users_collection.find_one({"username": user_data.username})
             if existing_user:
@@ -80,6 +91,7 @@ class UserService:
                 "is_active": True,
                 "is_verified": False,
                 "is_admin": False,
+                "token_version": 0,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
                 "last_login": None,
@@ -116,9 +128,25 @@ class UserService:
             logger.info(f"✅ 用户创建成功: {user_data.username}")
             return User(**user_doc)
             
+        except DuplicateKeyError:
+            logger.warning("用户注册被拒绝: 用户名或邮箱已存在")
+            return None
         except Exception as e:
             logger.error(f"❌ 创建用户失败: {e}")
             return None
+
+    @staticmethod
+    def validate_password(password: str) -> Optional[str]:
+        """Return a validation message, or None when the password is valid."""
+        if len(password) < settings.AUTH_PASSWORD_MIN_LENGTH:
+            return f"密码长度不能少于 {settings.AUTH_PASSWORD_MIN_LENGTH} 位"
+        if len(password) > 128:
+            return "密码长度不能超过 128 位"
+        if not any(char.isalpha() for char in password):
+            return "密码必须包含字母"
+        if not any(char.isdigit() for char in password):
+            return "密码必须包含数字"
+        return None
     
     async def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """用户认证"""
@@ -136,12 +164,7 @@ class UserService:
             logger.info(f"🔍 [authenticate_user] 用户信息: username={user_doc.get('username')}, email={user_doc.get('email')}, is_active={user_doc.get('is_active')}")
 
             # 验证密码
-            input_password_hash = self.hash_password(password)
             stored_password_hash = user_doc["hashed_password"]
-            logger.info(f"🔍 [authenticate_user] 密码哈希对比:")
-            logger.info(f"   输入密码哈希: {input_password_hash[:20]}...")
-            logger.info(f"   存储密码哈希: {stored_password_hash[:20]}...")
-            logger.info(f"   哈希匹配: {input_password_hash == stored_password_hash}")
 
             if not self.verify_password(password, user_doc["hashed_password"]):
                 logger.warning(f"❌ [authenticate_user] 密码错误: {username}")
@@ -246,6 +269,8 @@ class UserService:
     async def change_password(self, username: str, old_password: str, new_password: str) -> bool:
         """修改密码"""
         try:
+            if self.validate_password(new_password):
+                return False
             # 验证旧密码
             user = await self.authenticate_user(username, old_password)
             if not user:
@@ -260,7 +285,8 @@ class UserService:
                     "$set": {
                         "hashed_password": new_hashed_password,
                         "updated_at": datetime.utcnow()
-                    }
+                    },
+                    "$inc": {"token_version": 1}
                 }
             )
             
@@ -278,6 +304,8 @@ class UserService:
     async def reset_password(self, username: str, new_password: str) -> bool:
         """重置密码（管理员操作）"""
         try:
+            if self.validate_password(new_password):
+                return False
             new_hashed_password = self.hash_password(new_password)
             result = self.users_collection.update_one(
                 {"username": username},
@@ -285,7 +313,8 @@ class UserService:
                     "$set": {
                         "hashed_password": new_hashed_password,
                         "updated_at": datetime.utcnow()
-                    }
+                    },
+                    "$inc": {"token_version": 1}
                 }
             )
             
@@ -298,6 +327,51 @@ class UserService:
                 
         except Exception as e:
             logger.error(f"❌ 重置密码失败: {e}")
+            return False
+
+    async def revoke_tokens(self, username: str) -> bool:
+        """Invalidate all tokens issued for a user."""
+        try:
+            result = self.users_collection.update_one(
+                {"username": username},
+                {"$inc": {"token_version": 1}, "$set": {"updated_at": datetime.utcnow()}},
+            )
+            user = self.users_collection.find_one({"username": username}, {"_id": 1})
+            if user:
+                self.db.refresh_sessions.update_many({"user_id": str(user["_id"])}, {"$set": {"revoked": True}})
+            return result.matched_count == 1
+        except Exception as exc:
+            logger.error("❌ 撤销用户 Token 失败: %s", exc)
+            return False
+
+    async def create_refresh_session(self, *, user_id: str, jti: str, expires_at: datetime, metadata: Optional[dict] = None) -> bool:
+        try:
+            self.db.refresh_sessions.insert_one({
+                "user_id": user_id, "jti": jti, "expires_at": expires_at,
+                "revoked": False, **(metadata or {})
+            })
+            return True
+        except Exception as exc:
+            logger.error("创建刷新会话失败: %s", type(exc).__name__)
+            return False
+
+    async def rotate_refresh_session(self, *, user_id: str, old_jti: str, new_jti: str, expires_at: datetime) -> bool:
+        """Atomically consume one refresh token; replayed tokens cannot rotate."""
+        try:
+            consumed = self.db.refresh_sessions.find_one_and_update(
+                {"user_id": user_id, "jti": old_jti, "revoked": False, "expires_at": {"$gt": datetime.utcnow()}},
+                {"$set": {"revoked": True, "replaced_by": new_jti, "rotated_at": datetime.utcnow()}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if not consumed:
+                return False
+            self.db.refresh_sessions.insert_one({
+                "user_id": user_id, "jti": new_jti, "expires_at": expires_at,
+                "revoked": False, "parent_jti": old_jti
+            })
+            return True
+        except Exception as exc:
+            logger.error("轮换刷新会话失败: %s", type(exc).__name__)
             return False
     
     async def create_admin_user(self, username: str = "admin", password: str = "admin123", email: str = "admin@tradingagents.cn") -> Optional[User]:
@@ -317,6 +391,7 @@ class UserService:
                 "is_active": True,
                 "is_verified": True,
                 "is_admin": True,
+                "token_version": 0,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
                 "last_login": None,
@@ -340,8 +415,7 @@ class UserService:
             admin_doc["_id"] = result.inserted_id
             
             logger.info(f"✅ 管理员用户创建成功: {username}")
-            logger.info(f"   密码: {password}")
-            logger.info("   ⚠️  请立即修改默认密码！")
+            logger.info("   ⚠️  管理员初始密码已设置，请通过安全渠道交付并立即修改")
             
             return User(**admin_doc)
             
@@ -388,7 +462,8 @@ class UserService:
                     "$set": {
                         "is_active": False,
                         "updated_at": datetime.utcnow()
-                    }
+                    },
+                    "$inc": {"token_version": 1}
                 }
             )
             
@@ -412,7 +487,8 @@ class UserService:
                     "$set": {
                         "is_active": True,
                         "updated_at": datetime.utcnow()
-                    }
+                    },
+                    "$inc": {"token_version": 1}
                 }
             )
             
@@ -425,6 +501,18 @@ class UserService:
                 
         except Exception as e:
             logger.error(f"❌ 激活用户失败: {e}")
+            return False
+
+    async def set_admin_role(self, username: str, is_admin: bool) -> bool:
+        """Change a user's role and revoke existing sessions."""
+        try:
+            result = self.users_collection.update_one(
+                {"username": username},
+                {"$set": {"is_admin": bool(is_admin), "updated_at": datetime.utcnow()}, "$inc": {"token_version": 1}},
+            )
+            return result.modified_count == 1
+        except Exception as exc:
+            logger.error("更新用户角色失败: %s", type(exc).__name__)
             return False
 
 

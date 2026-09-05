@@ -9,6 +9,16 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 export default defineConfig({
   envDir: resolve(__dirname, '..'),
   plugins: [
+    ...(process.env.VITEST ? [{
+      name: 'css-stub',
+      enforce: 'pre' as const,
+      resolveId(source: string) {
+        if (source.endsWith('.css')) return '\0css:' + source
+      },
+      load(id: string) {
+        if (id.startsWith('\0css:')) return ''
+      }
+    }] : []),
     vue(),
     AutoImport({
       resolvers: [ElementPlusResolver()],
@@ -80,6 +90,13 @@ export default defineConfig({
     }
   },
   test: {
-    environment: 'node'
+    environment: 'node',
+    css: true,
+    setupFiles: ['./vitest.setup.ts'],
+    server: {
+      deps: {
+        inline: ['element-plus', 'nprogress']
+      }
+    }
   }
 })

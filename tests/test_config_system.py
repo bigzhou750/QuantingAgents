@@ -136,6 +136,36 @@ class TestStartupValidator:
         assert result.success is True
         assert len(result.warnings) > 0
         assert any("JWT_SECRET" in warning for warning in result.warnings)
+
+    def test_multi_account_settings_have_secure_defaults(self):
+        from app.core.config import settings
+
+        assert settings.AUTH_REGISTRATION_ENABLED is True
+        assert settings.AUTH_TOKEN_REVOCATION_ENABLED is True
+        assert settings.MULTI_ACCOUNT_ISOLATION_ENABLED is True
+        assert settings.USER_RUNTIME_ROOT
+
+    def test_production_requires_enforced_multi_account_isolation(self, monkeypatch):
+        from app.core.startup_validator import StartupValidator
+
+        monkeypatch.setenv("DEBUG", "false")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-with-enough-length")
+        monkeypatch.setenv("MONGODB_HOST", "localhost")
+        monkeypatch.setenv("MONGODB_PORT", "27017")
+        monkeypatch.setenv("MONGODB_DATABASE", "test")
+        monkeypatch.setenv("REDIS_HOST", "localhost")
+        monkeypatch.setenv("REDIS_PORT", "6379")
+        monkeypatch.setenv("MULTI_ACCOUNT_ISOLATION_ENABLED", "true")
+        monkeypatch.setenv("MULTI_ACCOUNT_ISOLATION_ENFORCE", "false")
+
+        # Settings is process-scoped; patch the values consumed by the
+        # validator to test the production safety gate deterministically.
+        from app.core.config import settings
+        monkeypatch.setattr(settings, "DEBUG", False)
+        monkeypatch.setattr(settings, "MULTI_ACCOUNT_ISOLATION_ENABLED", True)
+        monkeypatch.setattr(settings, "MULTI_ACCOUNT_ISOLATION_ENFORCE", False)
+        result = StartupValidator().validate()
+        assert any(item.key == "MULTI_ACCOUNT_ISOLATION_ENFORCE" for item, _ in result.invalid_configs)
     
     @patch.dict(os.environ, {
         "MONGODB_HOST": "localhost",
@@ -289,4 +319,3 @@ class TestConfigPriority:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
-

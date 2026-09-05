@@ -6,6 +6,7 @@
 
 import os
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -235,6 +236,57 @@ class StartupValidator:
         else:
             logger.info("ℹ️  开发环境模式（DEBUG=true）")
 
+        # Multi-account isolation must have a dedicated, writable root.  In
+        # production, a disabled isolation switch is a startup error rather
+        # than a warning because shared runtime state can leak user data.
+        if not settings.MULTI_ACCOUNT_ISOLATION_ENABLED:
+            message = "MULTI_ACCOUNT_ISOLATION_ENABLED=false 会禁用多账号隔离"
+            if settings.is_production:
+                self.result.invalid_configs.append((
+                    ConfigItem(
+                        key="MULTI_ACCOUNT_ISOLATION_ENABLED",
+                        level=ConfigLevel.REQUIRED,
+                        description="必须启用多账号隔离",
+                        example="true",
+                    ),
+                    message,
+                ))
+            else:
+                self.result.warnings.append("⚠️  " + message)
+
+        runtime_root = Path(os.path.expanduser(settings.USER_RUNTIME_ROOT))
+        if runtime_root.name in {"", ".", ".."} or runtime_root == Path("/"):
+            self.result.invalid_configs.append((
+                ConfigItem(
+                    key="USER_RUNTIME_ROOT",
+                    level=ConfigLevel.REQUIRED,
+                    description="用户运行时数据专用根目录",
+                    example="/var/lib/quantingagents/users",
+                ),
+                "用户运行时根目录不能是文件系统根目录",
+            ))
+        elif settings.is_production and not settings.MULTI_ACCOUNT_ISOLATION_ENFORCE:
+            self.result.invalid_configs.append((
+                ConfigItem(
+                    key="MULTI_ACCOUNT_ISOLATION_ENFORCE",
+                    level=ConfigLevel.REQUIRED,
+                    description="生产环境必须启用默认拒绝隔离模式",
+                    example="true",
+                ),
+                "生产环境不能在非强制隔离模式下启动",
+            ))
+
+        if settings.MULTI_ACCOUNT_ISOLATION_ENFORCE and settings.MULTI_ACCOUNT_MIGRATION_VERSION <= 0:
+            self.result.invalid_configs.append((
+                ConfigItem(
+                    key="MULTI_ACCOUNT_MIGRATION_VERSION",
+                    level=ConfigLevel.REQUIRED,
+                    description="强制隔离模式必须先完成并记录迁移版本",
+                    example="1",
+                ),
+                "MULTI_ACCOUNT_ISOLATION_ENFORCE=true 时必须配置正数迁移版本",
+            ))
+
         # 检查开发环境是否误连共享数据库
         db_identity = settings.MONGO_DB_IDENTITY
         if (
@@ -351,4 +403,3 @@ def validate_startup_config() -> ValidationResult:
     result = validator.validate()
     validator.raise_if_failed()
     return result
-

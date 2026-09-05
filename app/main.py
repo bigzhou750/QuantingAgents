@@ -26,7 +26,7 @@ import asyncio
 from pathlib import Path
 
 from app.core.config import settings
-from app.core.database import init_db, close_db
+from app.core.database import init_db, close_db, get_mongo_db
 from app.core.logging_config import setup_logging
 from app.routers import auth_db as auth, analysis, screening, queue, sse, health, favorites, config, reports, database, operation_logs, tags, tushare_init, akshare_init, baostock_init, historical_data, multi_period_sync, financial_data, news_data, social_media, internal_messages, usage_statistics, model_capabilities, cache, logs
 from app.routers import vibe_agent as vibe_agent_router
@@ -296,6 +296,8 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.vibe_agent.service import vibe_agent_service
         await vibe_agent_service.ensure_indexes()
+        from app.core.ownership import ensure_owner_indexes
+        await ensure_owner_indexes(get_mongo_db())
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
 

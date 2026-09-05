@@ -28,7 +28,7 @@ from .models import (
     new_id,
     utc_now,
 )
-from .paths import ensure_session_tree, session_runtime_root, vibe_runtime_base
+from .paths import ensure_session_tree, session_runtime_root, vibe_runtime_base, assert_within_user_scope
 from .protocol import encode_event_payload, session_event_channel
 
 # 个人投资助手上下文注入（可选）
@@ -385,6 +385,9 @@ class VibeAgentService:
             return {**task.model_dump(), "session_title": session.get("title")}
 
     async def _run_internal_task(self, command: VibeCommand) -> None:
+        # Runtime paths are persisted in the command, so validate them again
+        # at the async boundary instead of trusting a queued payload.
+        assert_within_user_scope(Path(command.runtime_root), command.user_id)
         await self.update_task_status(command.user_id, command.task_id, VibeTaskStatus.processing)
         try:
             runtime_task = asyncio.create_task(embedded_agent_runtime.run(

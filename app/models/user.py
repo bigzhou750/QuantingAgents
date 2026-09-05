@@ -79,6 +79,7 @@ class User(BaseModel):
     is_active: bool = True
     is_verified: bool = False
     is_admin: bool = False
+    token_version: int = 0
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
     last_login: Optional[datetime] = None

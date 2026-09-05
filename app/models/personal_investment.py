@@ -151,7 +151,7 @@ class StrategyDefinition(BaseModel):
     """策略定义"""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     strategy_id: str = Field(..., description="策略唯一标识")
-    user_id: str = Field(..., description="所属用户 ID")
+    user_id: str = Field(default="", description="所属用户 ID")
 
     # 基本信息
     name: str = Field(..., min_length=1, max_length=100, description="策略名称")
@@ -278,6 +278,7 @@ class ScreeningResult(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     result_id: str = Field(..., description="结果唯一标识")
     task_id: str = Field(..., description="关联任务 ID")
+    user_id: str = Field(default="", description="所属用户 ID")
 
     # 候选池
     candidates: List[ScreeningCandidate] = Field(default_factory=list, description="候选标的列表")
@@ -318,6 +319,7 @@ class CheckupResult(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     result_id: str = Field(..., description="结果唯一标识")
     task_id: str = Field(..., description="关联任务 ID")
+    user_id: str = Field(default="", description="所属用户 ID")
 
     # 适配度结论
     fitness_level: str = Field(default="unknown", description="适配度等级: high/medium/low/unknown")

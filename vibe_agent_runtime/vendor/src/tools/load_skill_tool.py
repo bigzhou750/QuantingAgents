@@ -185,13 +185,13 @@ class LoadSkillTool(BaseTool):
     }
     repeatable = True
 
-    def __init__(self, skills_loader: SkillsLoader | None = None) -> None:
+    def __init__(self, skills_loader: SkillsLoader | None = None, user_skills_dir: Path | None = None) -> None:
         """Initialize LoadSkillTool.
 
         Args:
             skills_loader: SkillsLoader instance; creates one automatically if omitted.
         """
-        self._loader = skills_loader or SkillsLoader()
+        self._loader = skills_loader or SkillsLoader(user_skills_dir=user_skills_dir)
 
     def execute(self, **kwargs: Any) -> str:
         """Load a skill as a skeleton, a named section, or a character page.

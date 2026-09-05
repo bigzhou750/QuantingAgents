@@ -6,13 +6,13 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timedelta
 
-from app.routers.auth_db import get_current_user
+from app.routers.auth_db import get_current_user, get_current_admin
 from app.core.response import ok
 from tradingagents.utils.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/cache", tags=["cache"])
+router = APIRouter(prefix="/api/cache", tags=["cache"], dependencies=[Depends(get_current_admin)])
 
 
 @router.get("/stats")
@@ -208,4 +208,3 @@ async def get_cache_backend_info(current_user: dict = Depends(get_current_user))
             status_code=500,
             detail=f"获取缓存后端信息失败: {str(e)}"
         )
-

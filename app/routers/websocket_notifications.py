@@ -10,6 +10,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPExcept
 from datetime import datetime
 
 from app.services.auth_service import AuthService
+from app.core.database import get_mongo_db
+from app.services.user_service import user_service
 
 router = APIRouter()
 logger = logging.getLogger("webapi.websocket")
@@ -136,8 +138,15 @@ async def websocket_notifications_endpoint(
     if not token_data:
         await websocket.close(code=1008, reason="Unauthorized")
         return
-    
-    user_id = "admin"  # 从 token_data 中获取
+    if token_data.token_type != "access":
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+
+    user_id = token_data.user_id or token_data.sub
+    account = await user_service.get_user_by_id(user_id)
+    if not account or not account.is_active or token_data.token_version != getattr(account, "token_version", 0):
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
     
     # 连接 WebSocket
     await manager.connect(websocket, user_id)
@@ -226,8 +235,22 @@ async def websocket_task_progress_endpoint(
     if not token_data:
         await websocket.close(code=1008, reason="Unauthorized")
         return
-    
-    user_id = "admin"
+    if token_data.token_type != "access":
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+
+    user_id = token_data.user_id or token_data.sub
+    account = await user_service.get_user_by_id(user_id)
+    if not account or not account.is_active or token_data.token_version != getattr(account, "token_version", 0):
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+    task = await get_mongo_db().analysis_tasks.find_one(
+        {"task_id": task_id, "$or": [{"user_id": user_id}, {"user": user_id}]},
+        {"_id": 1},
+    )
+    if not task:
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
     channel = f"task_progress:{task_id}"
     
     # 连接 WebSocket
@@ -301,4 +324,3 @@ async def send_task_progress_via_websocket(task_id: str, progress_data: dict):
     }
     # 广播给所有连接（生产环境应该只发给任务所属用户）
     await manager.broadcast(message)
-

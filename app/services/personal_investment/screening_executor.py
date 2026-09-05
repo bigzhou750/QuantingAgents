@@ -91,6 +91,7 @@ class ScreeningExecutor:
                 )
                 await task_service.save_screening_result(
                     task_id=task_id,
+                    user_id=user_id,
                     candidates=[],
                     overall_risks=gate_failures or ["股票池为空或数据不足"],
                     data_sources=["stock_basic_info"],
@@ -110,6 +111,7 @@ class ScreeningExecutor:
             # 7. 保存结果（含真实数据质量信息）
             result_summary = await task_service.save_screening_result(
                 task_id=task_id,
+                user_id=user_id,
                 candidates=candidates,
                 overall_risks=self._collect_overall_risks(candidates),
                 data_sources=["stock_basic_info", "kline_data"],

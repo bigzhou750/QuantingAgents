@@ -115,7 +115,7 @@ async def get_task_status_new(
         analysis_service = get_simple_analysis_service()
         logger.info(f"🔧 [NEW ROUTE] 获取分析服务实例: {id(analysis_service)}")
 
-        result = await analysis_service.get_task_status(task_id)
+        result = await analysis_service.get_task_status(task_id, user["id"])
         logger.info(f"📊 [NEW ROUTE] 查询结果: {result is not None}")
 
         if result:
@@ -132,7 +132,10 @@ async def get_task_status_new(
             db = get_mongo_db()
 
             # 首先从analysis_tasks集合中查找（正在进行的任务）
-            task_result = await db.analysis_tasks.find_one({"task_id": task_id})
+            task_result = await db.analysis_tasks.find_one({
+                "task_id": task_id,
+                "$or": [{"user_id": user["id"]}, {"user": user["id"]}],
+            })
 
             if task_result:
                 logger.info(f"✅ [STATUS] 从analysis_tasks找到任务: {task_id}")
@@ -172,7 +175,10 @@ async def get_task_status_new(
                 }
 
             # 如果analysis_tasks中没有找到，再从analysis_reports集合中查找（已完成的任务）
-            mongo_result = await db.analysis_reports.find_one({"task_id": task_id})
+            mongo_result = await db.analysis_reports.find_one({
+                "task_id": task_id,
+                "$or": [{"user_id": user["id"]}, {"user": user["id"]}],
+            })
 
             if mongo_result:
                 logger.info(f"✅ [STATUS] 从analysis_reports找到任务: {task_id}")
@@ -229,7 +235,7 @@ async def get_task_result(
         logger.info(f"👤 [RESULT] 用户: {user}")
 
         analysis_service = get_simple_analysis_service()
-        task_status = await analysis_service.get_task_status(task_id)
+        task_status = await analysis_service.get_task_status(task_id, user["id"])
 
         result_data = None
 
@@ -258,15 +264,27 @@ async def get_task_result(
             db = get_mongo_db()
 
             # 从analysis_reports集合中查找（优先使用 task_id 匹配）
-            mongo_result = await db.analysis_reports.find_one({"task_id": task_id})
+            mongo_result = await db.analysis_reports.find_one({
+                "task_id": task_id,
+                "$or": [{"user_id": user["id"]}, {"user": user["id"]}],
+            })
 
             if not mongo_result:
                 # 兼容旧数据：旧记录可能没有 task_id，但 analysis_id 存在于 analysis_tasks.result
-                tasks_doc_for_id = await db.analysis_tasks.find_one({"task_id": task_id}, {"result.analysis_id": 1})
+                tasks_doc_for_id = await db.analysis_tasks.find_one(
+                    {
+                        "task_id": task_id,
+                        "$or": [{"user_id": user["id"]}, {"user": user["id"]}],
+                    },
+                    {"result.analysis_id": 1},
+                )
                 analysis_id = tasks_doc_for_id.get("result", {}).get("analysis_id") if tasks_doc_for_id else None
                 if analysis_id:
                     logger.info(f"🔎 [RESULT] 按analysis_id兜底查询 analysis_reports: {analysis_id}")
-                    mongo_result = await db.analysis_reports.find_one({"analysis_id": analysis_id})
+                    mongo_result = await db.analysis_reports.find_one({
+                        "analysis_id": analysis_id,
+                        "$or": [{"user_id": user["id"]}, {"user": user["id"]}],
+                    })
 
             if mongo_result:
                 logger.info(f"✅ [RESULT] 从MongoDB找到结果: {task_id}")
@@ -305,7 +323,7 @@ async def get_task_result(
             else:
                 # 兜底：analysis_tasks 集合中的 result 字段
                 tasks_doc = await db.analysis_tasks.find_one(
-                    {"task_id": task_id},
+                    {"task_id": task_id, "$or": [{"user_id": user["id"]}, {"user": user["id"]}]},
                     {"result": 1, "symbol": 1, "stock_code": 1, "created_at": 1, "completed_at": 1}
                 )
                 if tasks_doc and tasks_doc.get("result"):
@@ -717,7 +735,8 @@ async def list_all_tasks(
         tasks = await get_simple_analysis_service().list_all_tasks(
             status=status,
             limit=limit,
-            offset=offset
+            offset=offset,
+            user_id=user["id"]
         )
 
         return {
@@ -954,11 +973,11 @@ async def cancel_task(
     """取消任务"""
     try:
         # 验证任务所有权
-        task = await svc.get_task(task_id)
-        if not task or task.get("user") != user["id"]:
+        task = await svc.get_user_task(task_id, user["id"])
+        if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
 
-        success = await svc.cancel_task(task_id)
+        success = await svc.cancel_task(task_id, user_id=user["id"])
         if success:
             return {"success": True, "message": "任务已取消"}
         else:
@@ -1121,7 +1140,7 @@ async def get_zombie_tasks(
     僵尸任务：长时间处于 processing/running/pending 状态的任务
     """
     # 检查管理员权限
-    if user.get("username") != "admin":
+    if not user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="仅管理员可访问")
 
     try:
@@ -1149,12 +1168,12 @@ async def cleanup_zombie_tasks(
     将长时间处于 processing/running/pending 状态的任务标记为失败
     """
     # 检查管理员权限
-    if user.get("username") != "admin":
+    if not user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="仅管理员可访问")
 
     try:
         svc = get_simple_analysis_service()
-        result = await svc.cleanup_zombie_tasks(max_running_hours)
+        result = await svc.cleanup_zombie_tasks(max_running_hours, user_id=user["id"])
 
         return {
             "success": True,
@@ -1234,7 +1253,7 @@ async def delete_task(
         svc = get_simple_analysis_service()
 
         # 从内存中删除任务
-        await svc.memory_manager.remove_task(task_id)
+        await svc.memory_manager.remove_task(task_id, user_id=user["id"])
 
         # 从 MongoDB 中删除任务
         from app.core.database import get_mongo_db

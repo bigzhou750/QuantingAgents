@@ -339,6 +339,10 @@ class EmbeddedAgentRuntime:
                     store=store_module.SessionStore(user_root / "sessions"),
                     event_bus=event_bus,
                     runs_dir=session_root / "runs",
+                    memory_dir=user_root / "memory",
+                    search_index=service_module.SessionSearchIndex(
+                        user_root / "session_search.db"
+                    ),
                 )
                 event_bus.add_listener(lambda event: self._on_event(event, task_id, sink))
                 await self.ensure_session(service, models, session_id, title, user_id, username)

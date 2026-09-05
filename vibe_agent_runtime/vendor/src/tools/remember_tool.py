@@ -77,7 +77,9 @@ class RememberTool(BaseTool):
         Args:
             memory: PersistentMemory instance (auto-created if omitted).
         """
-        self._memory = memory or PersistentMemory()
+        if memory is None:
+            raise RuntimeError("remember tool requires scoped persistent memory")
+        self._memory = memory
         self._lifecycle = MemoryLifecycle(self._memory)
 
     def execute(self, **kwargs: Any) -> str:

@@ -28,7 +28,14 @@ const loadStoredUser = (): User | null => {
   if (!raw) return null
 
   try {
-    return JSON.parse(raw) as User
+    const user = JSON.parse(raw) as User
+    // Local storage is a cache only. Roles/permissions must come from the
+    // authenticated server response or a token-bearing /auth/me call.
+    if (user) {
+      user.is_admin = false
+      user.roles = ['user']
+    }
+    return user
   } catch {
     localStorage.removeItem('user-info')
     return null
@@ -71,10 +78,8 @@ export const useAuthStore = defineStore('auth', {
 
       user: validToken ? storedUser : null,
 
-      permissions: validToken && storedUser?.is_admin ? ['*'] : [],
-      roles: validToken
-        ? (storedUser?.is_admin ? ['admin'] : (storedUser?.roles || ['user']))
-        : [],
+      permissions: [],
+      roles: validToken ? ['user'] : [],
 
       loginLoading: false,
       redirectPath: '/'
@@ -282,6 +287,12 @@ export const useAuthStore = defineStore('auth', {
     
     // 刷新Token
     async refreshAccessToken() {
+      if ((this as any)._refreshPromise) return (this as any)._refreshPromise
+      ;(this as any)._refreshPromise = this._refreshAccessTokenOnce()
+      try { return await (this as any)._refreshPromise } finally { delete (this as any)._refreshPromise }
+    },
+
+    async _refreshAccessTokenOnce() {
       try {
         console.log('🔄 开始刷新Token...')
 
@@ -308,7 +319,11 @@ export const useAuthStore = defineStore('auth', {
         if (response.success) {
           const { access_token, refresh_token } = response.data
           console.log('✅ Token刷新成功')
-          this.setAuthInfo(access_token, refresh_token)
+          this.setAuthInfo(access_token, refresh_token || this.refreshToken)
+          if (refresh_token) {
+            this.refreshToken = refresh_token
+          }
+          await this.fetchUserInfo()
           return true
         } else {
           console.error('❌ Token刷新失败:', response.message)
@@ -318,7 +333,7 @@ export const useAuthStore = defineStore('auth', {
         console.error('❌ Token刷新异常:', error)
 
         // 如果是网络错误或服务器错误，不要立即清除认证信息
-        if (error.code === 'NETWORK_ERROR' || error.response?.status >= 500) {
+        if (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message === 'Network Error' || error?.response?.status >= 500 || error?.response?.status === undefined) {
           console.warn('⚠️ 网络或服务器错误，保留认证信息')
           return false
         }

@@ -10,10 +10,12 @@ from pydantic import BaseModel
 
 from app.services.multi_source_basics_sync_service import get_multi_source_sync_service
 from app.services.data_sources.manager import DataSourceManager
+from app.routers.auth_db import get_current_admin
+from fastapi import Depends
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/sync/multi-source", tags=["Multi-Source Sync"])
+router = APIRouter(prefix="/api/sync/multi-source", tags=["Multi-Source Sync"], dependencies=[Depends(get_current_admin)])
 
 
 class SyncRequest(BaseModel):
