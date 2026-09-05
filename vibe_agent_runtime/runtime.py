@@ -119,7 +119,7 @@ class EmbeddedAgentRuntime:
         default_model = (
             unified_config.get_default_model()
             or unified_config.get_quick_analysis_model()
-            or "qwen-turbo"
+            or "deepseek-chat"
         ).strip()
         provider = self._default_provider_for_model(default_model)
         api_key = ""

@@ -1,0 +1,53 @@
+# Backend 基础镜像 - 系统依赖层
+# 构建一次后缓存，日常开发无需重建
+# 构建命令: docker build -f Dockerfile.backend.base -t backend-base:latest .
+
+FROM python:3.10-slim-bookworm
+
+ARG TARGETARCH
+
+ENV TZ=Asia/Shanghai
+
+WORKDIR /app
+
+# 切换为国内镜像源（腾讯云）
+RUN echo 'deb https://mirrors.tencent.com/debian/ bookworm main contrib non-free non-firmware' > /etc/apt/sources.list && \
+    echo 'deb https://mirrors.tencent.com/debian/ bookworm-updates main contrib non-free non-firmware' >> /etc/apt/sources.list && \
+    echo 'deb https://mirrors.tencent.com/debian-security/ bookworm-security main contrib non-free non-firmware' >> /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/debian.sources && \
+    apt-get update
+
+# 安装系统依赖 + pandoc + wkhtmltopdf + 字体
+# 使用 policy-rc.d 禁止自动触发服务启动，dpkg-divert 跳过 libc-bin trigger 加速构建
+RUN mkdir -p /app/logs /app/data /app/config && \
+    echo '#!/bin/sh\nexit 101' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d && \
+    dpkg-divert --add --rename --divert /usr/sbin/ldconfig.real /usr/sbin/ldconfig && \
+    ln -sf /bin/true /usr/sbin/ldconfig && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        fontconfig \
+        fonts-noto-cjk \
+        wget \
+        xvfb && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        PANDOC_ARCH="arm64"; \
+        WKHTMLTOPDF_ARCH="arm64"; \
+    else \
+        PANDOC_ARCH="amd64"; \
+        WKHTMLTOPDF_ARCH="amd64"; \
+    fi && \
+    wget -q https://ghfast.top/https://github.com/jgm/pandoc/releases/download/3.8.2.1/pandoc-3.8.2.1-1-${PANDOC_ARCH}.deb && \
+    dpkg -i pandoc-3.8.2.1-1-${PANDOC_ARCH}.deb && \
+    rm pandoc-3.8.2.1-1-${PANDOC_ARCH}.deb && \
+    wget -q https://ghfast.top/https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.bookworm_${WKHTMLTOPDF_ARCH}.deb && \
+    apt-get install -y --no-install-recommends \
+        ./wkhtmltox_0.12.6.1-3.bookworm_${WKHTMLTOPDF_ARCH}.deb && \
+    rm wkhtmltox_0.12.6.1-3.bookworm_${WKHTMLTOPDF_ARCH}.deb && \
+    # 恢复 ldconfig 并执行一次确保运行时正常
+    rm /usr/sbin/ldconfig && \
+    dpkg-divert --remove --rename /usr/sbin/ldconfig && \
+    ldconfig && \
+    rm /usr/sbin/policy-rc.d && \
+    fc-cache -fs && \
+    rm -rf /var/lib/apt/lists/*

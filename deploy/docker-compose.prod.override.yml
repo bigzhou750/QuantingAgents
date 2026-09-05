@@ -1,0 +1,24 @@
+# TradingAgents-CN 生产环境 Docker Compose 覆盖文件
+# 用法: docker compose -f docker-compose.hub.nginx.yml -f deploy/docker-compose.prod.override.yml up -d
+#
+# 此文件覆盖安全相关配置，确保数据库和缓存不暴露到公网
+# 注意: docker compose override 会合并 ports，不会替换
+# 因此需要在主文件中将 mongodb/redis 的 ports 改为仅绑定 127.0.0.1
+
+services:
+  # MongoDB - 限制为本地访问（覆盖端口绑定）
+  mongodb:
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  # Redis - 限制为本地访问
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # Nginx - 唯一对外暴露的入口
+  nginx:
+    ports:
+      - "80:80"
+      # 如需 HTTPS，取消注释并配置证书:
+      # - "443:443"
