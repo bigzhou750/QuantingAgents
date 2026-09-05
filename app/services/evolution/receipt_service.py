@@ -30,6 +30,8 @@ class ReceiptService:
         await db[self.COLLECTION].create_index("receipt_id", unique=True)
         await db[self.COLLECTION].create_index("proposal_id")
         await db[self.COLLECTION].create_index("final_action")
+        await db[self.COLLECTION].create_index("artifact_id")
+        await db[self.COLLECTION].create_index("release_status")
         await db[self.COLLECTION].create_index("created_at")
         await db[self.COLLECTION].create_index([("idempotency_key", 1)], unique=True, sparse=True)
         self._initialized = True
@@ -72,6 +74,21 @@ class ReceiptService:
         """列出回执"""
         db = get_mongo_db()
         cursor = db[self.COLLECTION].find().skip(skip).limit(limit).sort("created_at", -1)
+        results = []
+        async for doc in cursor:
+            results.append(EvolutionReceipt(**doc))
+        return results
+
+    async def list_by_artifact(self, artifact_id: str, skip: int = 0, limit: int = 50) -> List[EvolutionReceipt]:
+        """列出某个 artifact 的发布/回滚回执"""
+        db = get_mongo_db()
+        cursor = (
+            db[self.COLLECTION]
+            .find({"artifact_id": artifact_id})
+            .skip(skip)
+            .limit(limit)
+            .sort("created_at", -1)
+        )
         results = []
         async for doc in cursor:
             results.append(EvolutionReceipt(**doc))

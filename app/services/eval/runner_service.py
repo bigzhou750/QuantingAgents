@@ -511,21 +511,26 @@ class EvalRunnerService:
     async def _score_and_export_trial(self, trial_id: str, case: Dict[str, Any]) -> None:
         """Run scorers and optional observability export for every terminal trial."""
         try:
-            from app.services.eval.trace_adapter import trace_adapter
             from app.services.eval.scorer_hub import scorer_hub
-            from app.services.eval.observability_adapter import observability_adapter
 
             trial_data = await self.get_trial(trial_id)
             if not trial_data:
                 return
 
-            trace_events = await trace_adapter.get_trace_events(trial_id, limit=1000)
+            # Trace persistence is diagnostic data. It must not prevent the
+            # authoritative scorer pipeline from running for candidate runs.
+            trace_events: List[Dict[str, Any]] = []
+            try:
+                from app.services.eval.trace_adapter import trace_adapter
+
+                trace_events = await trace_adapter.get_trace_events(trial_id, limit=1000)
+            except Exception:
+                logger.warning(f"Failed to load trace for trial {trial_id}; scoring without trace", exc_info=True)
+
             case_config = case.get("scoring_criteria", {}) or {}
             run_id = trial_data.get("run_id", "")
             run_doc = await self.get_run(run_id) if run_id else None
-            scorer_names = []
-            if run_doc:
-                scorer_names = (run_doc.get("config") or {}).get("scorer_names") or []
+            scorer_names = (run_doc.get("config") or {}).get("scorer_names") if run_doc else []
 
             scores = await scorer_hub.score_trial(
                 trial_id=trial_id,
@@ -534,12 +539,19 @@ class EvalRunnerService:
                 scorer_names=scorer_names or None,
                 case_config=case_config,
             )
-            await observability_adapter.export_trial(
-                trial_id=trial_id,
-                trial_data=trial_data,
-                trace_events=trace_events,
-                scores=scores,
-            )
+
+            # Observability export is best-effort after score persistence.
+            try:
+                from app.services.eval.observability_adapter import observability_adapter
+
+                await observability_adapter.export_trial(
+                    trial_id=trial_id,
+                    trial_data=trial_data,
+                    trace_events=trace_events,
+                    scores=scores,
+                )
+            except Exception:
+                logger.warning(f"Failed to export scored trial {trial_id}", exc_info=True)
         except Exception:
             logger.warning(f"Failed to score/export trial {trial_id}", exc_info=True)
 

@@ -20,6 +20,7 @@ from app.models.evolution import (
 )
 from app.services.evolution.artifact_registry import artifact_registry
 from app.services.evolution.clustering import identify_primary_failure_surface
+from app.services.evolution.content_diff import build_structured_diff
 from app.services.evolution.governance_service import governance_service
 from app.utils.timezone import now_tz
 
@@ -78,6 +79,19 @@ class ProposalService:
         duplicate = await governance_service.find_active_duplicate(fingerprint)
         if duplicate:
             return Proposal(**duplicate)
+        cooldown = await governance_service.check_cooldown(target_artifact_id, fingerprint)
+        if cooldown:
+            await self._log_event("proposal_cooldown_blocked", "", {
+                "target_artifact_id": target_artifact_id,
+                "fingerprint": fingerprint,
+                "cooldown_minutes": cooldown.get("cooldown_minutes"),
+                "latest_proposal_id": cooldown.get("latest_proposal_id"),
+            })
+            logger.info(
+                "[Evolution] Proposal generation suppressed by cooldown for %s",
+                target_artifact_id,
+            )
+            return None
         if not forbidden:
             entry = await artifact_registry.get_registry_entry(target_artifact_id)
             if not entry:
@@ -89,8 +103,29 @@ class ProposalService:
                 diff.get("sections_affected", []),
             )
             governance_service.validate_change_budget(diff)
+            baseline_version = await artifact_registry.get_version(
+                target_artifact_id,
+                entry.current_version,
+            )
+            source_snapshot = baseline_version.content_snapshot if baseline_version else {}
+            candidate_snapshot = self._build_candidate_snapshot(
+                artifact_type,
+                target_artifact_id,
+                source_snapshot,
+                diff,
+            )
+            structured_diff = build_structured_diff(
+                artifact_id=target_artifact_id,
+                artifact_type=artifact_type.value,
+                source_version=entry.current_version,
+                source_snapshot=source_snapshot,
+                candidate_snapshot=candidate_snapshot,
+                requested_sections=diff.get("sections_affected", []),
+                description=diff.get("change_description", ""),
+            )
         else:
             entry = None
+            structured_diff = {}
 
         # 评估风险等级
         risk_level = self._assess_risk(trigger_info, artifact_type)
@@ -104,6 +139,8 @@ class ProposalService:
             target_artifact_id=target_artifact_id,
             target_artifact_type=artifact_type,
             diff=diff,
+            structured_diff=structured_diff,
+            content_diff_status=structured_diff.get("content_diff_status", "legacy_incomplete"),
             reason=self._build_reason(target_surface, trigger_info),
             sample_failure_ids=sample_failure_ids[:20],
             impact_estimate=self._estimate_impact(artifact_type, target_artifact_id),
@@ -139,6 +176,32 @@ class ProposalService:
 
         logger.info(f"[Evolution] Created proposal {proposal_id} for {target_artifact_id} ({'FORBIDDEN' if forbidden else 'pending verify'})")
         return proposal
+
+    def _build_candidate_snapshot(
+        self,
+        artifact_type: ArtifactType,
+        artifact_id: str,
+        source_snapshot: Dict[str, Any],
+        diff: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """从基线快照构建可审计候选快照。"""
+        if diff.get("candidate_snapshot"):
+            return diff["candidate_snapshot"]
+        candidate = dict(source_snapshot or {})
+        if artifact_type == ArtifactType.SKILL:
+            content = str(candidate.get("content", "") or "")
+            sections = diff.get("sections_affected", [])
+            addition = "\n\n## Evolution Update\n"
+            addition += f"Change: {diff.get('change_description', 'Automated evolution update')}\n"
+            if sections:
+                addition += f"Sections affected: {', '.join(sections)}\n"
+            candidate["content"] = content + addition
+        else:
+            candidate.update({
+                "evolution_change_description": diff.get("change_description", ""),
+                "evolution_parameters": diff.get("parameters", {}),
+            })
+        return candidate
 
     def _surface_to_artifact_type(self, surface: str) -> ArtifactType:
         """将失败面映射到 artifact 类型"""

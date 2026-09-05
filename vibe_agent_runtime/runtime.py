@@ -230,6 +230,12 @@ class EmbeddedAgentRuntime:
             runtime_root = (vibe_runtime_base() / "embedded").resolve()
             runtime_root.mkdir(parents=True, exist_ok=True)
             os.environ["VIBE_TRADING_HOME"] = str(runtime_root)
+            try:
+                from app.services.evolution.artifact_publisher import evolution_artifact_runtime_root
+
+                os.environ["EVOLUTION_SKILL_RUNTIME_ROOT"] = str(evolution_artifact_runtime_root())
+            except Exception:
+                logger.debug("Evolution artifact runtime root injection skipped", exc_info=True)
             os.environ["QUANTINGAGENTS_DISABLED_VIBE_TOOLS"] = ",".join(
                 sorted(disabled_tool_names())
             )
@@ -395,20 +401,37 @@ class EmbeddedAgentRuntime:
         root = Path(str(overlay.get("sandbox_path", ""))).expanduser().resolve()
         if not root.is_dir():
             raise RuntimeError(f"candidate overlay does not exist: {root}")
+        violations = EmbeddedAgentRuntime._validate_overlay_boundary(root)
+        if violations:
+            logger.warning("Candidate overlay boundary violations: %s", violations)
+            raise RuntimeError("candidate overlay violates runtime isolation boundary")
 
         sections: list[str] = []
         loaded_files: list[str] = []
-        for path in sorted(root.rglob("*")):
-            if not path.is_file() or path.suffix not in {".md", ".json", ".yaml", ".yml"}:
-                continue
-            relative = path.relative_to(root)
-            if len(str(relative)) > 240:
-                continue
-            content = path.read_text(encoding="utf-8")
-            if len(content) > 12000:
-                content = content[:12000] + "\n[overlay content truncated]"
-            sections.append(f"### Candidate artifact: {relative}\n{content}")
-            loaded_files.append(str(relative))
+        max_files = int(getattr(settings, "EVOLUTION_OVERLAY_MAX_FILES", 32) or 32)
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            for name in sorted(dirnames + filenames):
+                path = Path(dirpath) / name
+                if path.is_symlink():
+                    violation = f"symlink not allowed: {path.relative_to(root)}"
+                    logger.warning("Overlay boundary violation: %s", violation)
+                    raise RuntimeError("candidate overlay contains symlink")
+            for name in sorted(filenames):
+                path = Path(dirpath) / name
+                if path.suffix not in {".md", ".json", ".yaml", ".yml"}:
+                    continue
+                if len(loaded_files) >= max_files:
+                    raise RuntimeError(
+                        f"candidate overlay exceeds max file limit: {max_files}"
+                    )
+                relative = path.relative_to(root)
+                if len(str(relative)) > 240:
+                    continue
+                content = path.read_text(encoding="utf-8")
+                if len(content) > 12000:
+                    content = content[:12000] + "\n[overlay content truncated]"
+                sections.append(f"### Candidate artifact: {relative}\n{content}")
+                loaded_files.append(str(relative))
 
         if not sections:
             raise RuntimeError(f"candidate overlay is empty: {root}")
@@ -425,7 +448,39 @@ class EmbeddedAgentRuntime:
             "baseline_version": overlay.get("baseline_version", ""),
             "candidate_version": overlay.get("candidate_version", ""),
             "loaded_files": loaded_files,
+            "boundary_checks": {
+                "root": str(root),
+                "passed": True,
+                "violations": [],
+            },
         }
+
+    @staticmethod
+    def _validate_overlay_boundary(root: Path) -> list[str]:
+        """校验候选 overlay 不指向正式 runtime 或源码树。"""
+        project_root = Path(__file__).resolve().parents[1]
+        forbidden_roots: list[Path] = [project_root]
+        try:
+            from app.services.vibe_agent.paths import vibe_runtime_base
+            forbidden_roots.append(vibe_runtime_base())
+        except Exception:
+            pass
+        try:
+            from app.services.evolution.artifact_publisher import evolution_artifact_runtime_root
+            forbidden_roots.append(evolution_artifact_runtime_root())
+        except Exception:
+            pass
+        forbidden_roots.append(Path.home() / ".vibe-trading")
+
+        violations: list[str] = []
+        resolved = root.resolve()
+        for forbidden in forbidden_roots:
+            forbidden = forbidden.resolve()
+            if resolved == forbidden or forbidden in resolved.parents:
+                violations.append(f"overlay root is inside protected root: {forbidden}")
+        if resolved.is_symlink():
+            violations.append("overlay root is a symlink")
+        return violations
 
     async def cancel(self, session_id: str) -> bool:
         active = self._active.get(session_id)

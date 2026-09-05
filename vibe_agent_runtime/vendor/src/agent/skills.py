@@ -14,6 +14,7 @@ Uses progressive disclosure at two levels:
 from __future__ import annotations
 
 import re
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -97,6 +98,13 @@ def _load_skill_dir(dir_path: Path) -> Optional[Skill]:
 USER_SKILLS_DIR = Path.home() / ".vibe-trading" / "skills" / "user"
 
 
+def _configured_user_skills_dir() -> Path:
+    configured = os.getenv("EVOLUTION_SKILL_RUNTIME_ROOT", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve() / "skills" / "user"
+    return USER_SKILLS_DIR
+
+
 class SkillsLoader:
     """Load skills from bundled skills/ directory and user skills directory.
 
@@ -113,7 +121,8 @@ class SkillsLoader:
             user_skills_dir: User-created skills directory; defaults to ~/.vibe-trading/skills/user/.
         """
         self.skills_dir = skills_dir or Path(__file__).resolve().parents[1] / "skills"
-        self._user_skills_dir = user_skills_dir or USER_SKILLS_DIR
+        self._user_skills_dir = user_skills_dir or _configured_user_skills_dir()
+        self._legacy_user_skills_dir = USER_SKILLS_DIR
         self.skills: List[Skill] = []
         self._load()
 
@@ -124,7 +133,7 @@ class SkillsLoader:
         (e.g. after patch_skill copies and modifies a bundled skill).
         """
         seen_names: set[str] = set()
-        for directory in (self._user_skills_dir, self.skills_dir):
+        for directory in (self._user_skills_dir, self._legacy_user_skills_dir, self.skills_dir):
             if not directory or not directory.exists():
                 continue
             for path in sorted(directory.iterdir()):
@@ -179,8 +188,10 @@ class SkillsLoader:
                 return f'<skill name="{name}">\n{skill.body}\n</skill>'
 
         # Fallback: check user skills directory on disk (mid-session created skills)
-        if self._user_skills_dir:
-            skill = _load_skill_dir(self._user_skills_dir / name)
+        for directory in (self._user_skills_dir, self._legacy_user_skills_dir):
+            if not directory:
+                continue
+            skill = _load_skill_dir(directory / name)
             if skill:
                 self.skills.append(skill)
                 return f'<skill name="{name}">\n{skill.body}\n</skill>'

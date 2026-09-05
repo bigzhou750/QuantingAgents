@@ -12,8 +12,9 @@ import logging
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.core.database import get_mongo_db
 from app.core.config import settings
 from app.routers.auth_db import get_current_user
 from app.services.eval.dataset_service import dataset_service
@@ -21,6 +22,7 @@ from app.services.eval.runner_service import runner_service
 from app.services.eval.trace_adapter import trace_adapter
 from app.services.eval.scorer_hub import scorer_hub
 from app.services.eval.metrics_service import metrics_service
+from app.models.eval import ClaimTruthLabel, HallucinationType
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -753,6 +755,63 @@ class HumanReviewRequest(BaseModel):
     comment: str = ""
     action: str = "adjust_score"  # approve / reject / adjust_score / add_bad_case / reflow
     target_dataset_id: Optional[str] = None  # for reflow action
+
+
+class ClaimAnnotationRequest(BaseModel):
+    score_id: str = Field(..., min_length=1)
+    claim_id: str = Field(..., min_length=1)
+    truth_label: ClaimTruthLabel
+    hallucination_type: Optional[HallucinationType] = None
+    label_version: str = Field(..., min_length=1)
+    comment: str = ""
+
+
+@router.post("/scores/claims/annotation", dependencies=[Depends(verify_eval_access)])
+async def annotate_claim(
+    request: ClaimAnnotationRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """保存 Claim 级人工真值，供幻觉分类指标使用。"""
+    try:
+        from app.core.database import get_mongo_db
+
+        db = get_mongo_db()
+        score_doc = await db["eval_scores"].find_one({
+            "score_id": request.score_id,
+            "claims.claim_id": request.claim_id,
+        })
+        if not score_doc:
+            raise HTTPException(status_code=404, detail="Score 或 Claim 不存在")
+
+        now = now_tz()
+        update = {
+            "claims.$.truth_label": request.truth_label.value,
+            "claims.$.truth_source": request.comment or current_user.get("username", "unknown"),
+            "claims.$.hallucination_type": (
+                request.hallucination_type.value if request.hallucination_type else None
+            ),
+            "claims.$.label_version": request.label_version,
+            "updated_at": now,
+        }
+        await db["eval_scores"].update_one(
+            {"score_id": request.score_id, "claims.claim_id": request.claim_id},
+            {"$set": update},
+        )
+        return ApiResponse(
+            success=True,
+            data={
+                "score_id": request.score_id,
+                "claim_id": request.claim_id,
+                "truth_label": request.truth_label.value,
+                "label_version": request.label_version,
+            },
+            message="Claim 标注已保存",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to annotate claim: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/scores/human-review", dependencies=[Depends(verify_eval_access)])

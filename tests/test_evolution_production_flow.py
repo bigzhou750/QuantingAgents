@@ -88,8 +88,20 @@ class TestProductionFlow:
             diff={"type": "skill", "change_description": "change", "sections_affected": ["tool_selection"]},
             status=ProposalStatus.APPROVED,
         )
-        failed_version = MagicMock(artifact_type="skill", content_snapshot={"content": ""})
+        failed_version = MagicMock(
+            artifact_id="art_skill_research",
+            artifact_type="skill",
+            version="1.0.1",
+            content_snapshot={"content": ""},
+            environment="default",
+            source_proposal_id="p1",
+            status="pending",
+        )
         settings = MagicMock(EVOLUTION_HUMAN_GATE=False, EVOLUTION_REQUIRE_SMOKE_TEST=True)
+        version_collection = MagicMock()
+        version_collection.update_one = AsyncMock()
+        db = MagicMock()
+        db.__getitem__ = MagicMock(return_value=version_collection)
         latest_verification = MagicMock(
             status="completed",
             cleanup_status="cleaned",
@@ -103,15 +115,18 @@ class TestProductionFlow:
                     with patch("app.services.evolution.approval_service.approval_service.get_records", new=AsyncMock(return_value=[{"action": "approve"}])):
                         with patch("app.services.evolution.verification_service.verification_service.list_by_proposal", new=AsyncMock(return_value=[latest_verification])):
                             with patch("app.services.evolution.artifact_registry.artifact_registry.get_registry_entry", new=AsyncMock(return_value=MagicMock(current_version="1.0.0"))):
-                                with patch("app.services.evolution.artifact_registry.artifact_registry.create_version", new=AsyncMock(return_value=failed_version)):
-                                    with patch.object(service, "_write_skill_to_disk", new=AsyncMock()):
-                                        with patch.object(service, "_run_promoted_smoke_test", new=AsyncMock(return_value={
-                                            "passed": False, "failures": ["empty"]
-                                        })):
-                                            with patch("app.services.evolution.artifact_registry.artifact_registry.rollback", new=AsyncMock()) as mock_rollback:
-                                                with pytest.raises(ValueError, match="smoke test failed"):
-                                                    await service.promote("p1", idempotency_key="")
-        mock_rollback.assert_awaited_once()
+                                with patch("app.services.evolution.artifact_registry.artifact_registry.get_current_version", new=AsyncMock(return_value=MagicMock(version="1.0.0"))):
+                                    with patch("app.services.evolution.artifact_registry.artifact_registry.create_version_record", new=AsyncMock(return_value=failed_version)):
+                                        with patch("app.services.evolution.artifact_publisher.artifact_publisher.materialize", new=AsyncMock(return_value={"files": ["SKILL.md"]})):
+                                            with patch.object(service, "_run_promoted_smoke_test", new=AsyncMock(return_value={
+                                                "passed": False, "failures": ["empty"]
+                                            })):
+                                                with patch("app.services.evolution.promote_service.get_mongo_db", return_value=db):
+                                                    with patch("app.services.evolution.artifact_registry.artifact_registry.mark_version_failed", new=AsyncMock()) as mock_mark_failed:
+                                                        with patch.object(service, "_log_event", new=AsyncMock()):
+                                                            with pytest.raises(ValueError, match="smoke test failed"):
+                                                                await service.promote("p1", idempotency_key="")
+        mock_mark_failed.assert_awaited_once()
 
 
 class TestPostReleaseRollbackSuggestion:

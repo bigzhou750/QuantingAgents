@@ -19,6 +19,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="promoted_version" label="发布版本" width="120" />
+        <el-table-column prop="release_status" label="发布状态" width="110">
+          <template #default="{ row }">
+            <el-tag size="small" :type="releaseStatusTagType(row.release_status)">{{ releaseStatusLabel(row.release_status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="environment" label="环境" width="100">
+          <template #default="{ row }">{{ row.environment || 'default' }}</template>
+        </el-table-column>
+        <el-table-column prop="before_version" label="切换前" width="100" />
+        <el-table-column prop="after_version" label="切换后" width="100" />
         <el-table-column prop="stop_reason" label="停止原因" width="150">
           <template #default="{ row }">{{ row.stop_reason || '-' }}</template>
         </el-table-column>
@@ -45,8 +55,27 @@
         <el-descriptions-item label="候选版本">{{ selectedReceipt.candidate_version || selectedReceipt.promoted_version || '—' }}</el-descriptions-item>
         <el-descriptions-item label="Gate" :span="2">{{ selectedReceipt.gate_result?.passed === true ? '通过' : selectedReceipt.gate_result?.passed === false ? '失败' : '未记录' }}</el-descriptions-item>
         <el-descriptions-item label="Smoke Test" :span="2">{{ selectedReceipt.smoke_test_result?.passed === true ? '通过' : selectedReceipt.smoke_test_result?.passed === false ? '失败' : '未记录' }}</el-descriptions-item>
+        <el-descriptions-item label="发布状态" :span="2">{{ releaseStatusLabel(selectedReceipt.release_status) }}</el-descriptions-item>
+        <el-descriptions-item label="环境" :span="2">{{ selectedReceipt.environment || 'default' }}</el-descriptions-item>
+        <el-descriptions-item label="切换前版本">{{ selectedReceipt.before_version || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="切换后版本">{{ selectedReceipt.after_version || selectedReceipt.promoted_version || '—' }}</el-descriptions-item>
         <el-descriptions-item label="停止原因" :span="2">{{ selectedReceipt.stop_reason || '—' }}</el-descriptions-item>
       </el-descriptions>
+      <template v-if="selectedReceipt?.operation_records?.length">
+        <el-divider />
+        <h4 class="receipt-section-title">发布 / 回滚阶段记录</h4>
+        <el-table :data="selectedReceipt.operation_records" size="small" border>
+          <el-table-column prop="phase" label="阶段" min-width="180" />
+          <el-table-column prop="status" label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.status === 'ok' ? 'success' : 'danger'">{{ row.status === 'ok' ? '成功' : row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="error" label="错误信息" min-width="160">
+            <template #default="{ row }">{{ row.error || '—' }}</template>
+          </el-table-column>
+        </el-table>
+      </template>
       <pre v-if="selectedReceipt" class="receipt-json">{{ JSON.stringify(selectedReceipt, null, 2) }}</pre>
     </el-dialog>
   </div>
@@ -75,6 +104,8 @@ const loadReceipts = async () => {
 
 const actionTagType = (a: string): any => ({ promoted: 'success', rejected: 'danger', stopped: 'warning', rollback: 'info' }[a] || '')
 const actionLabel = (a: string) => ({ promoted: '已发布', rejected: '已拒绝', stopped: '已停止', rollback: '已回滚' }[a] || a)
+const releaseStatusLabel = (status: string) => ({ succeeded: '成功', compensated: '已补偿', failed: '失败' }[status] || '未记录')
+const releaseStatusTagType = (status: string): any => ({ succeeded: 'success', compensated: 'warning', failed: 'danger' }[status] || 'info')
 const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 const openDetail = (receipt: any) => {
   selectedReceipt.value = receipt
@@ -86,4 +117,5 @@ onMounted(loadReceipts)
 
 <style scoped>
 .link { color: #409eff; text-decoration: none; }
+.receipt-section-title { margin: 4px 0 10px; font-size: 14px; }
 </style>

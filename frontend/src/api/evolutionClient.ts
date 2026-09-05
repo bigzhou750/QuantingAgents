@@ -22,6 +22,9 @@ export const evolutionApi = {
   async getArtifactVersions(artifactId: string, params?: Record<string, any>) {
     return { data: await ApiClient.get(`/api/evolution/artifacts/${artifactId}/versions`, params) }
   },
+  async getArtifactReleaseHistory(artifactId: string) {
+    return { data: await ApiClient.get(`/api/evolution/artifacts/${artifactId}/release-history`) }
+  },
   async rollbackArtifact(artifactId: string, data: any) {
     return { data: await ApiClient.post(`/api/evolution/artifacts/${artifactId}/rollback`, data) }
   },
@@ -76,5 +79,8 @@ export const evolutionApi = {
   },
   async getAuditLog(params?: Record<string, any>) {
     return { data: await ApiClient.get('/api/evolution/audit-log', params) }
+  },
+  async getFollowUpActions(params?: Record<string, any>) {
+    return { data: await ApiClient.get('/api/evolution/follow-up-actions', params) }
   },
 }

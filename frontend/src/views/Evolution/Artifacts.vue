@@ -31,6 +31,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="current_version" label="当前版本" width="120" />
+        <el-table-column prop="environments.default" label="默认环境" width="110">
+          <template #default="{ row }">{{ row.environments?.default || row.current_version || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="owner" label="负责人" width="120" />
         <el-table-column prop="rollback_strategy" label="回滚策略" width="150" />
         <el-table-column label="操作" width="120" fixed="right">
@@ -43,12 +46,19 @@
     </el-card>
 
     <!-- 版本历史弹窗 -->
-    <el-dialog v-model="versionDialogVisible" :title="'版本历史: ' + selectedArtifact?.artifact_id" width="700px">
+    <el-dialog v-model="versionDialogVisible" :title="'版本历史: ' + selectedArtifact?.artifact_id" width="820px">
       <el-table :data="versions" v-loading="versionsLoading" stripe>
         <el-table-column prop="version" label="版本" width="100" />
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.status === 'active' ? 'success' : 'info'">{{ row.status }}</el-tag>
+            <el-tag size="small" :type="versionStatusTagType(row.status)">{{ versionStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="environment" label="环境" width="90" />
+        <el-table-column prop="published_environments" label="已发布环境" min-width="130">
+          <template #default="{ row }">
+            <el-tag v-for="env in (row.published_environments || [])" :key="env" size="small" class="tag-gap">{{ env }}</el-tag>
+            <span v-if="!row.published_environments?.length">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="owner" label="创建者" width="120" />
@@ -63,6 +73,22 @@
           </template>
         </el-table-column>
       </el-table>
+      <template v-if="releaseReceipts.length">
+        <el-divider />
+        <h4 class="receipt-title">发布 / 回滚回执</h4>
+        <el-table :data="releaseReceipts" size="small" stripe>
+          <el-table-column prop="receipt_id" label="回执 ID" width="150" />
+          <el-table-column prop="release_status" label="发布状态" width="110">
+            <template #default="{ row }">
+              <el-tag size="small" :type="releaseStatusTagType(row.release_status)">{{ releaseStatusLabel(row.release_status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="before_version" label="切换前" width="100" />
+          <el-table-column prop="after_version" label="切换后" width="100" />
+          <el-table-column prop="environment" label="环境" width="100" />
+        </el-table>
+      </template>
+      <el-empty v-if="!versions.length && !versionsLoading" description="暂无版本记录" />
     </el-dialog>
   </div>
 </template>
@@ -78,7 +104,36 @@ const filterType = ref('')
 const versionDialogVisible = ref(false)
 const versionsLoading = ref(false)
 const versions = ref<any[]>([])
+const releaseReceipts = ref<any[]>([])
 const selectedArtifact = ref<any>(null)
+
+const versionStatusLabel = (status: string) => ({
+  pending: '待生效',
+  active: '生效中',
+  failed: '失败',
+  superseded: '已替代',
+  rolled_back: '已回滚',
+}[status] || status)
+
+const versionStatusTagType = (status: string): any => ({
+  pending: 'warning',
+  active: 'success',
+  failed: 'danger',
+  superseded: 'info',
+  rolled_back: 'warning',
+}[status] || 'info')
+
+const releaseStatusLabel = (status: string) => ({
+  succeeded: '成功',
+  compensated: '已补偿',
+  failed: '失败',
+}[status] || '未记录')
+
+const releaseStatusTagType = (status: string): any => ({
+  succeeded: 'success',
+  compensated: 'warning',
+  failed: 'danger',
+}[status] || 'info')
 
 const loadArtifacts = async () => {
   loading.value = true
@@ -99,8 +154,12 @@ const showVersions = async (artifact: any) => {
   versionDialogVisible.value = true
   versionsLoading.value = true
   try {
-    const res = await evolutionApi.getArtifactVersions(artifact.artifact_id)
-    versions.value = res.data?.data?.items || []
+    const [versionsRes, historyRes] = await Promise.all([
+      evolutionApi.getArtifactVersions(artifact.artifact_id),
+      evolutionApi.getArtifactReleaseHistory(artifact.artifact_id),
+    ])
+    versions.value = versionsRes.data?.data?.items || []
+    releaseReceipts.value = historyRes.data?.data?.receipts || []
   } catch (e) {
     console.error('Failed to load versions', e)
   } finally {
@@ -122,3 +181,14 @@ const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 
 onMounted(loadArtifacts)
 </script>
+
+<style scoped>
+.tag-gap {
+  margin-right: 4px;
+}
+
+.receipt-title {
+  margin: 4px 0 10px;
+  font-size: 14px;
+}
+</style>

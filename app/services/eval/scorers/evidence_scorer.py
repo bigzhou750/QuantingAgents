@@ -32,7 +32,7 @@ class EvidenceQualityScorer(BaseScorer):
 
     @property
     def version(self) -> str:
-        return "2.0.0"
+        return "2.1.0"
 
     async def score(
         self,
@@ -205,6 +205,9 @@ class EvidenceQualityScorer(BaseScorer):
         - 根据相似度阈值判定 supported / weakly_supported / unsupported
         """
         if not evidence_events:
+            for claim in claims:
+                claim.prediction_label = True
+                claim.prediction_reason = "未找到可用证据"
             return claims
 
         # 构建证据索引
@@ -267,5 +270,12 @@ class EvidenceQualityScorer(BaseScorer):
                 claim.verdict = ClaimVerdict.UNSUPPORTED
                 claim.confidence = 0.8
                 claim.reason = "未在可用证据中找到支撑信息"
+
+            # 预测标签与人工真值分离，避免评分器 verdict 被误当成 ground truth。
+            claim.prediction_label = claim.verdict in (
+                ClaimVerdict.UNSUPPORTED,
+                ClaimVerdict.CONTRADICTED,
+            )
+            claim.prediction_reason = claim.reason
 
         return claims

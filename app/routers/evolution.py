@@ -42,6 +42,7 @@ class RollbackRequest(BaseModel):
     reason: str = ""
     request_id: str = ""
     idempotency_key: str = ""
+    environment: str = "default"
 
 
 class ApprovalRequest(BaseModel):
@@ -216,6 +217,24 @@ async def list_artifact_versions(artifact_id: str, skip: int = 0, limit: int = 5
     })
 
 
+@router.get("/artifacts/{artifact_id}/release-history", dependencies=[Depends(verify_evolution_access)])
+async def get_artifact_release_history(artifact_id: str, skip: int = 0, limit: int = 50):
+    """查看 artifact 的版本历史、当前生效状态和发布/回滚回执。"""
+    from app.services.evolution.artifact_registry import artifact_registry
+    from app.services.evolution.receipt_service import receipt_service
+
+    entry = await artifact_registry.get_registry_entry(artifact_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    versions = await artifact_registry.list_versions(artifact_id, skip, limit)
+    receipts = await receipt_service.list_by_artifact(artifact_id, skip, limit)
+    return ApiResponse(success=True, data={
+        "artifact": entry.model_dump(by_alias=True, exclude={"id"}),
+        "versions": [v.model_dump(by_alias=True, exclude={"id"}) for v in versions],
+        "receipts": [r.model_dump(by_alias=True, exclude={"id"}) for r in receipts],
+    })
+
+
 @router.post("/artifacts/{artifact_id}/rollback", dependencies=[Depends(verify_evolution_access)])
 async def rollback_artifact(artifact_id: str, request: RollbackRequest, user: dict = Depends(verify_evolution_access)):
     """回滚 artifact 到指定版本"""
@@ -227,6 +246,7 @@ async def rollback_artifact(artifact_id: str, request: RollbackRequest, user: di
             rolled_back_by=user.get("username", "admin"),
             request_id=request.request_id,
             idempotency_key=request.idempotency_key,
+            environment=request.environment,
         )
         return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message=f"Rolled back to {request.target_version}")
     except ValueError as e:
@@ -347,6 +367,7 @@ async def promote_proposal(
     proposal_id: str,
     request_id: Optional[str] = Query(None),
     idempotency_key: Optional[str] = Query(None),
+    environment: str = Query("default"),
     user: dict = Depends(verify_evolution_access),
 ):
     """将候选发布为正式版本"""
@@ -357,6 +378,7 @@ async def promote_proposal(
             promoted_by=user.get("username", "admin"),
             request_id=request_id or "",
             idempotency_key=idempotency_key or "",
+            environment=environment,
         )
         return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message="Proposal promoted")
     except ValueError as e:
@@ -387,13 +409,27 @@ async def observe_post_release(request: PostReleaseObservationRequest):
     receipt = await receipt_service.get(request.receipt_id)
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
-    result = governance_service.evaluate_post_release(request.metrics)
+    result = await governance_service.route_post_release_observation(receipt, request.metrics)
     if result["rollback_suggestion"]:
         result["suggested_rollback"] = {
             "artifact_id": receipt.artifact_id,
             "target_version": receipt.baseline_artifact_version,
         }
     return ApiResponse(success=True, data=result, message="发布后观测完成")
+
+
+@router.get("/follow-up-actions", dependencies=[Depends(verify_evolution_access)])
+async def list_follow_up_actions(
+    artifact_id: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+):
+    """查看自进化自动回流产生的后续动作候选。"""
+    from app.services.evolution.governance_service import governance_service
+
+    items = await governance_service.list_follow_up_actions(artifact_id, status, skip, limit)
+    return ApiResponse(success=True, data={"items": items, "total": len(items)})
 
 
 @router.post("/notifications/retry", dependencies=[Depends(verify_evolution_access)])

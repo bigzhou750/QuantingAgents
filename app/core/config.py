@@ -217,6 +217,22 @@ class Settings(BaseSettings):
     EVOLUTION_CHANGE_BUDGET_CHARS: int = Field(default=20000, ge=100, le=200000, description="单提案最大变更字符数")
     EVOLUTION_DAILY_COST_BUDGET_USD: float = Field(default=10.0, ge=0, le=100000, description="每日验证成本预算")
     EVOLUTION_REQUIRE_SMOKE_TEST: bool = Field(default=True, description="发布后是否必须通过 smoke test")
+    EVOLUTION_ARTIFACT_RUNTIME_ROOT: str = Field(
+        default="~/.quantingagents/runtime/evolution-artifacts",
+        description="自进化 artifact 的正式 materialization 根目录",
+    )
+    EVOLUTION_FOLLOW_UP_WINDOW_MINUTES: int = Field(
+        default=60,
+        ge=5,
+        le=10080,
+        description="高风险发布反馈升级统计窗口",
+    )
+    EVOLUTION_OVERLAY_MAX_FILES: int = Field(
+        default=32,
+        ge=1,
+        le=200,
+        description="候选 overlay 最大可加载文件数",
+    )
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)

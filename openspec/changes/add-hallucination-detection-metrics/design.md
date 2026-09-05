@@ -26,7 +26,7 @@
 
 ### 2. Define hallucination mapping explicitly
 
-默认将 `unsupported`、`contradicted` 映射为幻觉，将 `supported` 映射为非幻觉；`weakly_supported` 由评测配置决定，默认排除并单独统计，避免阈值争议污染主指标。
+默认将 `unsupported`、`contradicted` 映射为幻觉，将 `supported` 映射为非幻觉；`weakly_supported` 由评测配置决定，默认排除并单独统计，避免阈值争议污染主指标。无证据放行率只使用真值为 `unsupported` 的 Claim 计算，避免和证据冲突漏检混在一起。
 
 ### 3. Add pure metric aggregation
 

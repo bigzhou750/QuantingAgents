@@ -98,6 +98,24 @@ class ClaimVerdict(str, Enum):
     CONTRADICTED = "contradicted"
 
 
+class ClaimTruthLabel(str, Enum):
+    """人工复核后的 Claim 真值。"""
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    CONTRADICTED = "contradicted"
+    EXCLUDED = "excluded"
+
+
+class HallucinationType(str, Enum):
+    """幻觉 Claim 的业务分类。"""
+    ENTITY = "entity"
+    NUMERIC = "numeric"
+    SOURCE = "source"
+    TEMPORAL = "temporal"
+    CONTRADICTION = "contradiction"
+    OTHER = "other"
+
+
 # ==================== Claim-Evidence 结构 ====================
 
 class ClaimEvidence(BaseModel):
@@ -115,6 +133,12 @@ class ClaimEvidence(BaseModel):
     evidence_source: Optional[str] = Field(default=None, description="证据来源（如检索工具名、文档ID）")
     trace_event_id: Optional[str] = Field(default=None, description="关联的 trace 事件 ID")
     conflicting_evidence: Optional[str] = Field(default=None, description="冲突证据（仅 contradicted 时）")
+    truth_label: Optional[ClaimTruthLabel] = Field(default=None, description="人工真值标签")
+    truth_source: Optional[str] = Field(default=None, description="真值来源")
+    hallucination_type: Optional[HallucinationType] = Field(default=None, description="幻觉类型")
+    prediction_label: Optional[bool] = Field(default=None, description="系统预测是否为幻觉")
+    prediction_reason: Optional[str] = Field(default=None, description="系统预测原因")
+    label_version: Optional[str] = Field(default=None, description="标注版本")
 
 
 # ==================== 运行快照结构 ====================

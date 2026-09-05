@@ -125,6 +125,37 @@
           </el-col>
         </el-row>
       </div>
+
+      <div v-if="metrics.claim_summary?.hallucination_metrics" class="hallucination-summary">
+        <div class="metric-label" style="margin-bottom: 8px">幻觉检测指标</div>
+        <el-row :gutter="12">
+          <el-col :span="5" v-for="item in hallucinationMetricItems" :key="item.key">
+            <div class="score-dimension">
+              <span class="score-name">{{ item.label }}</span>
+              <el-tag v-if="item.value !== null" :type="item.value >= 0.8 ? 'success' : 'warning'" size="small">
+                {{ (item.value * 100).toFixed(1) }}%
+              </el-tag>
+              <el-tag v-else type="info" size="small">暂无真值</el-tag>
+            </div>
+          </el-col>
+        </el-row>
+        <el-table
+          v-if="metrics.claim_summary.claims?.length"
+          :data="metrics.claim_summary.claims"
+          size="small"
+          stripe
+          style="margin-top: 12px"
+          max-height="260"
+        >
+          <el-table-column prop="claim_text" label="Claim" min-width="260" show-overflow-tooltip />
+          <el-table-column prop="truth_label" label="真值" width="110" />
+          <el-table-column prop="prediction_label" label="预测幻觉" width="110">
+            <template #default="{ row }">{{ row.prediction_label === true ? '是' : row.prediction_label === false ? '否' : '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="hallucination_type" label="类型" width="110" />
+          <el-table-column prop="evidence_source" label="证据来源" min-width="160" show-overflow-tooltip />
+        </el-table>
+      </div>
     </el-card>
 
     <!-- Trial 列表 -->
@@ -316,6 +347,14 @@ const run = ref<any>({})
 const trials = ref<any[]>([])
 const loadingTrials = ref(false)
 const metrics = ref<any>(null)
+const hallucinationMetricItems = computed(() => {
+  const data = metrics.value?.claim_summary?.hallucination_metrics || {}
+  return [
+    { key: 'precision', label: 'Precision', value: data.precision ?? null },
+    { key: 'recall', label: 'Recall', value: data.recall ?? null },
+    { key: 'f1', label: 'F1', value: data.f1 ?? null },
+  ]
+})
 
 // Trial detail
 const trialDetailVisible = ref(false)

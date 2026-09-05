@@ -6,10 +6,10 @@
 
 ### Requirement: Claim truth annotation
 
-评测系统 MUST 支持为每条 Claim 保存人工或复核后的真值标签、幻觉类型、证据引用、标注来源和标注版本。未完成真值标注的 Claim MUST NOT 参与 Recall、Precision 或 F1 计算。
+评测系统 MUST 支持为每条 Claim 保存人工或复核后的真值标签（`supported`、`unsupported`、`contradicted` 或 `excluded`）、幻觉类型、证据引用、标注来源和标注版本。未完成真值标注的 Claim MUST NOT 参与 Recall、Precision 或 F1 计算。
 
 #### Scenario: Save a labeled claim
-- **WHEN** 评测人员提交 Claim 的 `supported`、`unsupported` 或 `contradicted` 标签及其证据依据
+- **WHEN** 评测人员提交 Claim 的真值标签及其证据依据
 - **THEN** 系统保存标签、标注信息和版本，并允许后续评分使用该 Claim
 
 #### Scenario: Exclude unlabeled claim
@@ -22,7 +22,7 @@
 
 #### Scenario: Predict hallucination from unsupported claim
 - **WHEN** Claim-Evidence 评分将 Claim 判定为 `unsupported` 或 `contradicted`
-- **THEN** 系统按当前评测配置生成 `hallucinated` 预测，并记录对应证据匹配信息
+- **THEN** 系统生成“预测为幻觉”的布尔标签，并记录对应证据匹配信息
 
 #### Scenario: Preserve weak support
 - **WHEN** Claim 被判定为 `weakly_supported`

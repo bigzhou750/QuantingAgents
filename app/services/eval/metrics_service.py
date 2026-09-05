@@ -25,6 +25,115 @@ logger = logging.getLogger(__name__)
 class MetricsService:
     """评测指标聚合服务"""
 
+    @staticmethod
+    def compute_hallucination_metrics(
+        claims: List[Dict[str, Any]],
+        *,
+        weakly_supported: str = "exclude",
+    ) -> Dict[str, Any]:
+        """计算 Claim 级幻觉分类指标。
+
+        truth_label 是人工真值；prediction_label 是评分器预测。
+        weakly_supported 仅影响缺失 truth_label 的旧 verdict 映射，默认排除。
+        """
+        confusion = {key: 0 for key in ("tp", "fp", "fn", "tn")}
+        by_type: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        eligible = 0
+        excluded = 0
+
+        normalized_claims: List[Dict[str, Any]] = []
+        for original_claim in claims:
+            claim = dict(original_claim)
+            truth = claim.get("truth_label")
+            prediction = claim.get("prediction_label")
+            if truth is None and claim.get("verdict") == "weakly_supported":
+                if weakly_supported == "unsupported":
+                    truth = "unsupported"
+                elif weakly_supported == "supported":
+                    truth = "supported"
+            if truth is None or prediction is None:
+                excluded += 1
+                continue
+            if isinstance(truth, dict):
+                truth = truth.get("value") or truth.get("name")
+            if truth == "excluded":
+                excluded += 1
+                continue
+            if truth not in ("supported", "unsupported", "contradicted"):
+                excluded += 1
+                continue
+            claim["truth_label"] = truth
+            normalized_claims.append(claim)
+
+            truth_hallucinated = truth in ("unsupported", "contradicted")
+            predicted_hallucinated = bool(prediction)
+            if truth_hallucinated and predicted_hallucinated:
+                confusion["tp"] += 1
+            elif not truth_hallucinated and predicted_hallucinated:
+                confusion["fp"] += 1
+            elif truth_hallucinated:
+                confusion["fn"] += 1
+            else:
+                confusion["tn"] += 1
+            eligible += 1
+            claim_type = claim.get("hallucination_type") or "all"
+            if isinstance(claim_type, dict):
+                claim_type = claim_type.get("value") or claim_type.get("name") or "other"
+            by_type[str(claim_type)].append(claim)
+
+        def calculate(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+            matrix = {key: 0 for key in ("tp", "fp", "fn", "tn")}
+            for item in items:
+                truth = item.get("truth_label")
+                prediction = bool(item.get("prediction_label"))
+                if isinstance(truth, dict):
+                    truth = truth.get("value") or truth.get("name")
+                if truth in ("unsupported", "contradicted") and prediction:
+                    matrix["tp"] += 1
+                elif truth == "supported" and prediction:
+                    matrix["fp"] += 1
+                elif truth in ("unsupported", "contradicted"):
+                    matrix["fn"] += 1
+                elif truth == "supported":
+                    matrix["tn"] += 1
+            precision_denominator = matrix["tp"] + matrix["fp"]
+            recall_denominator = matrix["tp"] + matrix["fn"]
+            precision = matrix["tp"] / precision_denominator if precision_denominator else None
+            recall = matrix["tp"] / recall_denominator if recall_denominator else None
+            f1 = (
+                2 * precision * recall / (precision + recall)
+                if precision is not None and recall is not None and precision + recall
+                else None
+            )
+            return {
+                **matrix,
+                "samples": sum(matrix.values()),
+                "precision": round(precision, 4) if precision is not None else None,
+                "recall": round(recall, 4) if recall is not None else None,
+                "f1": round(f1, 4) if f1 is not None else None,
+                "status": "available" if sum(matrix.values()) else "not_available",
+            }
+
+        result = calculate(normalized_claims)
+        unsupported_claims = [c for c in normalized_claims if c["truth_label"] == "unsupported"]
+        contradicted_claims = [c for c in normalized_claims if c["truth_label"] == "contradicted"]
+        unsupported_fn = sum(1 for c in unsupported_claims if not c.get("prediction_label"))
+        contradicted_fn = sum(1 for c in contradicted_claims if not c.get("prediction_label"))
+        result.update({
+            "eligible_claims": eligible,
+            "excluded_claims": excluded,
+            "weakly_supported_policy": weakly_supported,
+            "metric_definition": {
+                "positive_class": ["unsupported", "contradicted"],
+                "unsupported_pass_rate": "unsupported FN / unsupported total",
+                "contradicted_pass_rate": "contradicted FN / contradicted total",
+            },
+            "unsupported_pass_rate": round(unsupported_fn / len(unsupported_claims), 4) if unsupported_claims else None,
+            "contradicted_pass_rate": round(contradicted_fn / len(contradicted_claims), 4) if contradicted_claims else None,
+            "by_type": {key: calculate(value) for key, value in by_type.items() if key != "all"},
+        })
+        return result
+
     async def compute_run_metrics(self, run_id: str) -> Dict[str, Any]:
         """计算单个 run 的聚合指标"""
         db = get_mongo_db()
@@ -200,10 +309,8 @@ class MetricsService:
 
         # 聚合评分
         pipeline = [
-            # skipped/not_configured/error 不是低分，不应污染聚合或 Release Gate。
             {"$match": {
                 "trial_id": {"$in": trial_ids},
-                "status": {"$nin": ["skipped", "not_configured", "error"]},
             }},
             {"$group": {
                 "_id": "$score_name",
@@ -212,6 +319,8 @@ class MetricsService:
                 "max_score": {"$max": "$score"},
                 "count": {"$sum": 1},
                 "passed_count": {"$sum": {"$cond": [{"$eq": ["$passed", True]}, 1, 0]}},
+                "statuses": {"$addToSet": "$status"},
+                "reasons": {"$addToSet": "$reason"},
             }},
             {"$sort": {"_id": 1}},
         ]
@@ -220,6 +329,25 @@ class MetricsService:
         async for doc in db["eval_scores"].aggregate(pipeline):
             name = doc["_id"]
             count = doc["count"]
+            statuses = [status for status in doc.get("statuses", []) if status]
+            effective = any(status in {"passed", "failed"} for status in statuses) or not statuses
+            unavailable_status = next(
+                (status for status in ("not_configured", "skipped", "error") if status in statuses),
+                None,
+            )
+            if unavailable_status and not effective:
+                score_stats[name] = {
+                    "avg_score": 0.0,
+                    "min_score": 0.0,
+                    "max_score": 0.0,
+                    "count": 0,
+                    "passed_count": 0,
+                    "pass_rate": 0.0,
+                    "variance": 0.0,
+                    "status": unavailable_status,
+                    "reason": next((reason for reason in doc.get("reasons", []) if reason), ""),
+                }
+                continue
             score_stats[name] = {
                 "avg_score": round(doc["avg_score"], 4),
                 "min_score": round(doc["min_score"], 4),
@@ -230,7 +358,11 @@ class MetricsService:
                 "variance": round(
                     (doc["max_score"] - doc["min_score"]) ** 2 / 12, 4
                 ),  # 近似方差（均匀分布假设）
+                "status": "available",
+                "reason": "",
             }
+
+        run_doc = await db["eval_runs"].find_one({"run_id": run_id}, {"dataset_version": 1})
 
         return {
             "run_id": run_id,
@@ -258,6 +390,11 @@ class MetricsService:
                 "weakly_supported": 0,
                 "unsupported": 0,
                 "contradicted": 0,
+                "hallucination_metrics": {
+                    "status": "not_available",
+                    "eligible_claims": 0,
+                    "excluded_claims": 0,
+                },
             }
 
         # 使用 aggregation 展开 claims 数组并按 verdict 分组
@@ -277,12 +414,32 @@ class MetricsService:
 
         total = sum(verdict_counts.values())
 
+        claim_cursor = db["eval_scores"].find(
+            {"trial_id": {"$in": trial_ids}, "claims": {"$ne": None}},
+            {"claims": 1},
+        )
+        claims: List[Dict[str, Any]] = []
+        async for score_doc in claim_cursor:
+            claims.extend(score_doc.get("claims") or [])
+
+        label_versions = sorted({
+            str(claim.get("label_version"))
+            for claim in claims
+            if claim.get("label_version")
+        })
+        run_doc = await db["eval_runs"].find_one({"run_id": run_id}, {"dataset_version": 1})
+
         return {
             "total_claims": total,
             "supported": verdict_counts.get("supported", 0),
             "weakly_supported": verdict_counts.get("weakly_supported", 0),
             "unsupported": verdict_counts.get("unsupported", 0),
             "contradicted": verdict_counts.get("contradicted", 0),
+            "hallucination_metrics": self.compute_hallucination_metrics(claims),
+            "claims": claims,
+            "dataset_version": (run_doc or {}).get("dataset_version", ""),
+            "label_versions": label_versions,
+            "scorer_version": "2.1.0",
         }
 
     @staticmethod

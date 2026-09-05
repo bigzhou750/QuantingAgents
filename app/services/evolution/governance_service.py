@@ -2,8 +2,9 @@
 
 import hashlib
 import json
+import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.core.config import get_settings
 from app.core.database import get_mongo_db
@@ -20,6 +21,7 @@ class EvolutionGovernanceService:
     CONFIG_COLLECTION = "evolution_governance_config"
     LOCK_COLLECTION = "evolution_trigger_locks"
     NOTIFICATION_COLLECTION = "evolution_notification_deliveries"
+    FOLLOW_UP_COLLECTION = "evolution_follow_up_actions"
 
     TRANSITIONS = {
         ProposalStatus.DRAFT.value: {ProposalStatus.PENDING_VERIFY.value, ProposalStatus.STOPPED.value},
@@ -43,6 +45,10 @@ class EvolutionGovernanceService:
         await db[self.LOCK_COLLECTION].create_index("lock_key", unique=True)
         await db[self.LOCK_COLLECTION].create_index("expires_at", expireAfterSeconds=0)
         await db[self.NOTIFICATION_COLLECTION].create_index("created_at")
+        await db[self.FOLLOW_UP_COLLECTION].create_index("action_id", unique=True)
+        await db[self.FOLLOW_UP_COLLECTION].create_index("artifact_id")
+        await db[self.FOLLOW_UP_COLLECTION].create_index([("artifact_id", 1), ("created_at", -1)])
+        await db[self.FOLLOW_UP_COLLECTION].create_index("status")
 
     async def notify(self, event: str, detail: Dict[str, Any]) -> Dict[str, Any]:
         """写入通知投递记录，并尽力复用现有站内通知服务。"""
@@ -193,6 +199,178 @@ class EvolutionGovernanceService:
             "status": {"$in": [ProposalStatus.DRAFT.value, ProposalStatus.PENDING_VERIFY.value, ProposalStatus.VERIFYING.value, ProposalStatus.VERIFIED.value, ProposalStatus.APPROVED.value]},
         })
 
+    async def check_cooldown(self, target_artifact_id: str, fingerprint: str) -> Optional[Dict[str, Any]]:
+        """检查同一目标是否仍在冷却窗口内。"""
+        settings = get_settings()
+        minutes = int(settings.EVOLUTION_COOLDOWN_MINUTES or 0)
+        if minutes <= 0:
+            return None
+        db = get_mongo_db()
+        cutoff = now_tz() - timedelta(minutes=minutes)
+        recent = await db[self.PROPOSAL_COLLECTION].find_one(
+            {
+                "target_artifact_id": target_artifact_id,
+                "created_at": {"$gte": cutoff},
+            },
+            sort=[("created_at", -1)],
+        )
+        if not recent:
+            return None
+        return {
+            "blocked": True,
+            "target_artifact_id": target_artifact_id,
+            "fingerprint": fingerprint,
+            "cooldown_minutes": minutes,
+            "latest_proposal_id": recent.get("proposal_id", ""),
+            "latest_created_at": recent.get("created_at"),
+        }
+
+    async def create_follow_up_action(
+        self,
+        action_type: str,
+        source: str,
+        artifact_id: str,
+        receipt_id: str = "",
+        proposal_id: str = "",
+        detail: Optional[Dict[str, Any]] = None,
+        severity: str = "warning",
+    ) -> Dict[str, Any]:
+        """创建可追踪的后续自动动作候选，并记录事件链路。"""
+        db = get_mongo_db()
+        settings = get_settings()
+        window_minutes = int(settings.EVOLUTION_FOLLOW_UP_WINDOW_MINUTES or 60)
+        cutoff = now_tz() - timedelta(minutes=window_minutes)
+        recent_count = await db[self.FOLLOW_UP_COLLECTION].count_documents({
+            "artifact_id": artifact_id,
+            "created_at": {"$gte": cutoff},
+        })
+        escalation_level = int(recent_count) + 1
+        action_id = f"evact_{uuid.uuid4().hex[:12]}"
+        doc = {
+            "action_id": action_id,
+            "action_type": action_type,
+            "source": source,
+            "artifact_id": artifact_id,
+            "receipt_id": receipt_id,
+            "proposal_id": proposal_id,
+            "severity": severity,
+            "escalation_level": escalation_level,
+            "status": "pending",
+            "detail": detail or {},
+            "created_at": now_tz(),
+        }
+        await db[self.FOLLOW_UP_COLLECTION].insert_one(doc)
+        await db[self.EVENT_COLLECTION].insert_one({
+            "event": f"follow_up_{action_type}",
+            "artifact_id": artifact_id,
+            "proposal_id": proposal_id,
+            "receipt_id": receipt_id,
+            "detail": {
+                "action_id": action_id,
+                "source": source,
+                "escalation_level": escalation_level,
+                "severity": severity,
+            },
+            "created_at": now_tz(),
+        })
+        await db["evolution_event_log"].insert_one({
+            "event_type": "follow_up_action_created",
+            "proposal_id": proposal_id,
+            "artifact_id": artifact_id,
+            "actor": "system",
+            "detail": {
+                "action_id": action_id,
+                "action_type": action_type,
+                "source": source,
+                "escalation_level": escalation_level,
+            },
+            "created_at": now_tz(),
+        })
+        return doc
+
+    async def route_post_release_observation(
+        self,
+        receipt,
+        metrics: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """把发布后观测结果自动写入后续动作候选，并支持升级为 stop。"""
+        result = self.evaluate_post_release(metrics)
+        actions = []
+        failures = result.get("failures", [])
+        artifact_id = receipt.artifact_id or ""
+        severity = "critical" if "safety" in failures or len(failures) >= 3 else "warning"
+
+        if result.get("rollback_suggestion"):
+            actions.append(await self.create_follow_up_action(
+                action_type="rollback",
+                source="post_release_observe",
+                artifact_id=artifact_id,
+                receipt_id=receipt.receipt_id,
+                proposal_id=receipt.proposal_id,
+                detail={
+                    "rollback_target_version": receipt.baseline_artifact_version,
+                    "failures": failures,
+                    "metrics": {key: metrics.get(key) for key in list(metrics)[:12]},
+                },
+                severity=severity,
+            ))
+
+        if failures and len(actions) == 0:
+            actions.append(await self.create_follow_up_action(
+                action_type="bad_case",
+                source="post_release_observe",
+                artifact_id=artifact_id,
+                receipt_id=receipt.receipt_id,
+                proposal_id=receipt.proposal_id,
+                detail={
+                    "failures": failures,
+                    "metrics": {key: metrics.get(key) for key in list(metrics)[:12]},
+                },
+                severity=severity,
+            ))
+
+        latest_action = actions[-1] if actions else {}
+        if latest_action.get("escalation_level", 0) >= 3:
+            actions.append(await self.create_follow_up_action(
+                action_type="stop",
+                source="post_release_observe_escalation",
+                artifact_id=artifact_id,
+                receipt_id=receipt.receipt_id,
+                proposal_id=receipt.proposal_id,
+                detail={
+                    "auto_stop_candidate": True,
+                    "failures": failures,
+                    "escalation_level": latest_action["escalation_level"],
+                },
+                severity="critical",
+            ))
+
+        result["follow_up_actions"] = actions
+        result["event_chain"] = [
+            {"event": "post_release_observed", "rollback_suggestion": result.get("rollback_suggestion")},
+        ] + [{"event": "follow_up_action_created", "action_id": action.get("action_id")} for action in actions]
+        return result
+
+    async def list_follow_up_actions(
+        self,
+        artifact_id: Optional[str] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        db = get_mongo_db()
+        query: Dict[str, Any] = {}
+        if artifact_id:
+            query["artifact_id"] = artifact_id
+        if status:
+            query["status"] = status
+        cursor = db[self.FOLLOW_UP_COLLECTION].find(query).skip(skip).limit(limit).sort("created_at", -1)
+        results = []
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            results.append(doc)
+        return results
+
     async def acquire_window_lock(self, lock_key: str, ttl_seconds: int = 300) -> bool:
         """为定时 trigger 获取短期窗口锁，重复执行时直接跳过。"""
         from pymongo.errors import DuplicateKeyError
@@ -287,7 +465,7 @@ class EvolutionGovernanceService:
         db = get_mongo_db()
         count = await db[self.PROPOSAL_COLLECTION].count_documents({
             "fingerprint": fingerprint,
-            "artifact_id": artifact_id,
+            "target_artifact_id": artifact_id,
         })
         if count >= 3:
             await self.stop(
