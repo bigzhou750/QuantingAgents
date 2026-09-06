@@ -56,6 +56,7 @@ class VibeAgentService:
     def __init__(self) -> None:
         self._background_tasks: set[asyncio.Task] = set()
         self._message_submit_lock = asyncio.Lock()
+        self._trace_sequence: Dict[str, int] = {}
 
     async def ensure_indexes(self) -> None:
         db = get_mongo_db()
@@ -65,6 +66,14 @@ class VibeAgentService:
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True)
         await db[self.event_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("sequence", ASCENDING)], unique=True)
         await db[self.feedback_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("task_id", ASCENDING)])
+        try:
+            from app.services.explainability.metrics_service import decision_metrics_service
+            from app.services.explainability.record_service import decision_record_store
+
+            await decision_record_store.initialize()
+            await decision_metrics_service.initialize()
+        except Exception:
+            logger.warning("failed to initialize decision explainability indexes", exc_info=True)
         await self.recover_orphaned_tasks()
 
     async def recover_orphaned_tasks(self) -> None:
@@ -469,6 +478,12 @@ class VibeAgentService:
                         {"message": assistant_message.model_dump()},
                         command.task_id,
                     )
+            await self._finalize_task_explainability(
+                command.user_id,
+                command.session_id,
+                command.task_id,
+                content,
+            )
             current = await self.get_task(command.user_id, command.task_id)
             if current.get("status") not in {
                 VibeTaskStatus.completed.value,
@@ -631,6 +646,10 @@ class VibeAgentService:
             output_data={"content": assistant.get("content", "")} if assistant else None,
             failure_reason=content or feedback_type,
             risk_level="medium",
+            business_id=task_id,
+            task_id=task_id,
+            session_id=session_id,
+            decision_chain_ref=f"task_{task_id}",
             failure_family=FailureFamily.USER_FEEDBACK.value,
             detection_signals=[
                 DetectionSignal(
@@ -773,6 +792,144 @@ class VibeAgentService:
             "is_admin": bool(user.get("is_admin", False)),
         }
 
+    def _next_trace_sequence(self, task_id: str) -> int:
+        current = self._trace_sequence.get(task_id, 0)
+        self._trace_sequence[task_id] = current + 1
+        return current + 1
+
+    async def _save_standardized_trace(
+        self,
+        raw_type: str,
+        payload: Dict[str, Any],
+        user_id: str,
+        session_id: str,
+        task_id: str,
+    ) -> None:
+        if not settings.DECISION_AUDIT_ENABLED:
+            return
+        try:
+            from app.services.eval.trace_adapter import trace_adapter
+
+            sequence = self._next_trace_sequence(task_id)
+            vibe_event = {
+                "type": raw_type,
+                "business_id": task_id,
+                "task_id": task_id,
+                "session_id": session_id,
+                "data": payload,
+            }
+            event = trace_adapter.adapt_vibe_event(
+                vibe_event,
+                trial_id=f"task_{task_id}",
+                sequence=sequence,
+                business_id=task_id,
+                task_id=task_id,
+                session_id=session_id,
+            )
+            if event:
+                await trace_adapter.save_single_event(event)
+        except Exception:
+            logger.debug("failed to save standardized Vibe trace", exc_info=True)
+
+    async def _persist_decision_record(
+        self,
+        raw_type: str,
+        payload: Dict[str, Any],
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        parent_decision_id: Optional[str] = None,
+    ) -> None:
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        try:
+            from app.services.explainability.record_service import (
+                decision_record_store,
+                decision_trace_event,
+                normalize_event_to_decision,
+            )
+
+            record = normalize_event_to_decision(
+                raw_type,
+                payload,
+                user_id=user_id,
+                session_id=session_id,
+                task_id=task_id,
+                business_id=task_id,
+                parent_decision_id=parent_decision_id,
+            )
+            await decision_record_store.save_decision_record(record)
+            await self._save_standardized_trace(
+                "decision",
+                decision_trace_event(record),
+                user_id,
+                session_id,
+                task_id,
+            )
+        except Exception:
+            logger.warning("failed to persist decision record", exc_info=True)
+
+    async def _finalize_task_explainability(
+        self,
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        content: str,
+    ) -> None:
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        try:
+            from app.services.explainability.explanation_service import explanation_service
+            from app.services.explainability.metrics_service import decision_metrics_service
+            from app.services.explainability.record_service import decision_record_store
+            from app.services.explainability.validation_service import explanation_validator
+
+            records = await decision_record_store.list_decision_records(task_id=task_id)
+            if not records:
+                await self._persist_decision_record(
+                    "attempt.completed",
+                    {
+                        "scenario": "任务完成结论",
+                        "conclusion": content,
+                        "risk_level": "low",
+                        "sequence": self._next_trace_sequence(task_id),
+                    },
+                    user_id,
+                    session_id,
+                    task_id,
+                )
+                records = await decision_record_store.list_decision_records(task_id=task_id)
+
+            for record in records:
+                explanation = explanation_service.generate(record, output_text=content)
+                await decision_record_store.save_explanation(explanation)
+                validation = explanation_validator.validate(
+                    explanation,
+                    record,
+                    output_text=content,
+                )
+                await decision_record_store.save_validation(validation)
+                if explanation_validator.should_require_review(
+                    validation,
+                    str(record.get("risk_level") or "low"),
+                ):
+                    await decision_record_store.create_review(
+                        business_id=record.get("business_id"),
+                        task_id=task_id,
+                        session_id=session_id,
+                        decision_id=record.get("decision_id"),
+                        action="inconsistent_explanation",
+                        reason=validation.reason,
+                    )
+
+            await decision_metrics_service.record_task_metrics(
+                task_id=task_id,
+                session_id=session_id,
+                task_type="vibe_agent",
+            )
+        except Exception:
+            logger.warning("failed to finalize explainability artifacts", exc_info=True)
+
     async def ingest_worker_event(self, event: Dict[str, Any]) -> None:
         """Persist and fan out a normalized event emitted by the embedded runtime."""
         user_id = str(event.get("user_id") or "")
@@ -862,6 +1019,33 @@ class VibeAgentService:
             payload = {"phase": raw_type, **payload}
         elif raw_type.startswith("attempt."):
             payload = {"phase": raw_type, **payload}
+
+        if task_id and raw_type != "text_delta":
+            await self._save_standardized_trace(
+                raw_type,
+                payload,
+                user_id,
+                session_id,
+                str(task_id),
+            )
+
+        if task_id and raw_type in {
+            "tool_call",
+            "tool_result",
+            "evidence",
+            "react_summary",
+            "swarm_status",
+            "goal.updated",
+            "attempt.completed",
+            "attempt.failed",
+        }:
+            await self._persist_decision_record(
+                raw_type,
+                payload,
+                user_id,
+                session_id,
+                str(task_id),
+            )
 
         await self.append_event(user_id, session_id, event_type, payload, task_id)
 

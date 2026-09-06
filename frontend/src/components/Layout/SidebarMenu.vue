@@ -82,6 +82,7 @@
         <span>Agent 评测</span>
       </template>
       <el-menu-item index="/evaluation/dashboard">评测概览</el-menu-item>
+      <el-menu-item index="/evaluation/decision-audit">决策审计</el-menu-item>
       <el-menu-item index="/evaluation/datasets">评测集管理</el-menu-item>
       <el-menu-item index="/evaluation/runs">评测运行</el-menu-item>
       <el-menu-item index="/evaluation/trends">质量趋势</el-menu-item>

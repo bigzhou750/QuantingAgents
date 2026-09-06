@@ -132,6 +132,18 @@
                     <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
                   </div>
                 </div>
+                <div v-if="isActivityOpen(activityFor(message.task_id)) && decisionChainFor(message.task_id).length" class="decision-panel">
+                  <div class="decision-panel-title">决策依据</div>
+                  <div v-for="item in decisionChainFor(message.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                    <div class="decision-row-head">
+                      <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                      <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                    </div>
+                    <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                    <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                    <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
+                  </div>
+                </div>
               </div>
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
@@ -185,6 +197,18 @@
                   <span class="step-title">{{ step.title }}<template v-if="step.count && step.count > 1"> ×{{ step.count }}</template></span>
                   <span v-if="step.action" class="step-action">{{ step.action }}</span>
                   <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
+                </div>
+              </div>
+              <div v-if="isActivityOpen(activityFor(activeTask.task_id)) && decisionChainFor(activeTask.task_id).length" class="decision-panel">
+                <div class="decision-panel-title">决策依据</div>
+                <div v-for="item in decisionChainFor(activeTask.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                  <div class="decision-row-head">
+                    <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                    <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                  </div>
+                  <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                  <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                  <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
                 </div>
               </div>
               <div v-if="streamTextFor(activeTask.task_id)" class="streaming-response">
@@ -258,6 +282,7 @@ import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStr
 import { formatDateTime } from '@/utils/datetime'
 import {
   buildWorkbenchActivity,
+  buildDecisionChain,
   formatActivityElapsed,
   stepElapsedText
 } from './workbench'
@@ -328,6 +353,9 @@ const activityFor = (taskId: string) => buildWorkbenchActivity(
   events.value,
   activeTask.value?.task_id === taskId ? activeTask.value.status : undefined
 )
+
+const decisionChainFor = (taskId: string) => buildDecisionChain(events.value)
+  .filter(event => String(event.task_id || '') === taskId)
 
 const isActivityOpen = (activity: ReturnType<typeof buildWorkbenchActivity>) => (
   activity.state === 'running' || activityOpen.value[activity.taskId] === true
@@ -1317,6 +1345,56 @@ onUnmounted(() => {
 
 .compact-section {
   margin-top: 18px;
+}
+
+.decision-panel {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.decision-panel-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.decision-row + .decision-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+}
+
+.decision-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.decision-status {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+}
+
+.decision-status.requires_review {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.decision-line {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-regular);
+  word-break: break-all;
 }
 
 @keyframes activity-pulse {

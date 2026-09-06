@@ -544,6 +544,17 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'decision-audit',
+        name: 'DecisionAudit',
+        component: () => import('@/views/Evaluation/DecisionAudit.vue'),
+        meta: {
+          title: '决策审计',
+          requiresAuth: true,
+          requiresAdmin: true,
+          requiresEvalPlatform: true
+        }
+      },
+      {
         path: 'datasets',
         name: 'EvalDatasets',
         component: () => import('@/views/Evaluation/Datasets.vue'),

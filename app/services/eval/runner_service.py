@@ -49,10 +49,48 @@ def _make_trace_sink(trial_id: str):
                 "data": payload if isinstance(payload, dict) else {"raw": payload},
             }
             trace_event = trace_adapter.adapt_vibe_event(
-                vibe_event, trial_id=trial_id, sequence=sequence_counter["n"]
+                vibe_event,
+                trial_id=trial_id,
+                sequence=sequence_counter["n"],
+                business_id=f"task_{trial_id}",
+                task_id=f"task_{trial_id}",
             )
             if trace_event:
                 await trace_adapter.save_single_event(trace_event)
+
+            if event_type in {
+                "tool_call",
+                "tool_result",
+                "evidence",
+                "react_summary",
+                "swarm_status",
+                "goal.updated",
+                "attempt.completed",
+                "attempt.failed",
+            }:
+                from app.services.explainability.record_service import (
+                    decision_record_store,
+                    decision_trace_event,
+                    normalize_event_to_decision,
+                )
+
+                record = normalize_event_to_decision(
+                    event_type,
+                    payload if isinstance(payload, dict) else {},
+                    task_id=f"task_{trial_id}",
+                    business_id=f"task_{trial_id}",
+                    session_id=f"eval_{trial_id}",
+                )
+                await decision_record_store.save_decision_record(record)
+                decision_event = trace_adapter.adapt_vibe_event(
+                    decision_trace_event(record),
+                    trial_id=trial_id,
+                    sequence=sequence_counter["n"] + 1,
+                    business_id=f"task_{trial_id}",
+                    task_id=f"task_{trial_id}",
+                )
+                if decision_event:
+                    await trace_adapter.save_single_event(decision_event)
         except Exception:
             # trace 记录失败不应该影响 trial 本身的执行
             logger.warning(f"Failed to record trace event for trial {trial_id}", exc_info=True)
@@ -528,6 +566,10 @@ class EvalRunnerService:
             trial_data = await self.get_trial(trial_id)
             if not trial_data:
                 return
+            try:
+                await self._finalize_trial_explainability(trial_data)
+            except Exception:
+                logger.warning(f"Failed to finalize explainability for trial {trial_id}", exc_info=True)
 
             # Trace persistence is diagnostic data. It must not prevent the
             # authoritative scorer pipeline from running for candidate runs.
@@ -572,6 +614,51 @@ class EvalRunnerService:
                 logger.warning(f"Failed to export scored trial {trial_id}", exc_info=True)
         except Exception:
             logger.warning(f"Failed to score/export trial {trial_id}", exc_info=True)
+
+    async def _finalize_trial_explainability(
+        self,
+        trial_data: Dict[str, Any],
+    ) -> None:
+        """为评测 trial 生成解释与校验结果。"""
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        from app.services.explainability.explanation_service import explanation_service
+        from app.services.explainability.metrics_service import decision_metrics_service
+        from app.services.explainability.record_service import decision_record_store
+        from app.services.explainability.validation_service import explanation_validator
+
+        trial_id = str(trial_data.get("trial_id") or "")
+        task_id = f"task_{trial_id}"
+        records = await decision_record_store.list_decision_records(task_id=task_id)
+        if not records:
+            return
+        output_data = trial_data.get("output_data") or {}
+        output_text = str(output_data.get("content") or output_data.get("result") or "")
+        for record in records:
+            explanation = explanation_service.generate(record, output_text=output_text)
+            await decision_record_store.save_explanation(explanation)
+            validation = explanation_validator.validate(
+                explanation,
+                record,
+                output_text=output_text,
+            )
+            await decision_record_store.save_validation(validation)
+            if explanation_validator.should_require_review(
+                validation,
+                str(record.get("risk_level") or "low"),
+            ):
+                await decision_record_store.create_review(
+                    business_id=record.get("business_id"),
+                    task_id=task_id,
+                    session_id=record.get("session_id"),
+                    decision_id=record.get("decision_id"),
+                    action="inconsistent_explanation",
+                    reason=validation.reason,
+                )
+        await decision_metrics_service.record_task_metrics(
+            task_id=task_id,
+            task_type="eval_trial",
+        )
 
     async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         """获取评测运行"""

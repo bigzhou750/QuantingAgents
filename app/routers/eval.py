@@ -23,6 +23,7 @@ from app.services.eval.runner_service import runner_service
 from app.services.eval.trace_adapter import trace_adapter
 from app.services.eval.scorer_hub import scorer_hub
 from app.services.eval.metrics_service import metrics_service
+from app.services.explainability.record_service import decision_record_store
 from app.models.eval import ClaimTruthLabel, HallucinationType
 from app.utils.timezone import now_tz
 
@@ -723,6 +724,31 @@ async def get_trace_summary(trial_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/trials/{trial_id}/explainability", dependencies=[Depends(verify_eval_access)])
+async def get_trial_explainability(trial_id: str):
+    """获取 trial 的决策链、解释、校验和复核结果。"""
+    try:
+        task_id = f"task_{trial_id}"
+        records = await decision_record_store.list_decision_records(task_id=task_id)
+        explanations = await decision_record_store.list_explanations(task_id=task_id)
+        validations = await decision_record_store.list_validations(task_id=task_id)
+        reviews = await decision_record_store.list_reviews(task_id=task_id)
+        return ApiResponse(
+            success=True,
+            data={
+                "decision_chain": records,
+                "explanations": explanations,
+                "validations": validations,
+                "reviews": reviews,
+                "status": "complete" if records else "legacy_unverified",
+            },
+            message="trial 可解释性结果已返回",
+        )
+    except Exception as e:
+        logger.error(f"Failed to get trial explainability: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 评分 API ====================
 
 @router.get("/trials/{trial_id}/scores", dependencies=[Depends(verify_eval_access)])
@@ -1240,6 +1266,10 @@ class OnlineSampleRequest(BaseModel):
     risk_level: str = "medium"
     tags: List[str] = []
     session_id: Optional[str] = None
+    task_id: Optional[str] = None
+    business_id: Optional[str] = None
+    decision_chain_ref: Optional[str] = None
+    explanation_status: Optional[str] = None
     user_feedback: Optional[str] = None
     source_trace_id: Optional[str] = None
     release_receipt_id: Optional[str] = None
@@ -1268,6 +1298,11 @@ async def submit_online_sample(request: OnlineSampleRequest):
             source_trace_id=request.source_trace_id,
             release_receipt_id=request.release_receipt_id,
             artifact_version=request.artifact_version,
+            business_id=request.business_id or request.task_id,
+            task_id=request.task_id,
+            session_id=request.session_id,
+            decision_chain_ref=request.decision_chain_ref,
+            explanation_status=request.explanation_status,
         )
         return ApiResponse(success=True, data=result, message="线上样本已收录")
     except Exception as e:

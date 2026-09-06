@@ -224,6 +224,32 @@ class Settings(BaseSettings):
         description="评测集分层用途（逗号分隔）",
     )
 
+    # ==================== Agent 决策可解释与审计配置 ====================
+    EXPLAINABILITY_ENABLED: bool = Field(
+        default=True,
+        description="是否启用 Agent 决策链、解释校验与审计能力",
+    )
+    DECISION_AUDIT_ENABLED: bool = Field(
+        default=True,
+        description="是否启用按业务 ID 的统一决策审计查询",
+    )
+    EXPLAINABILITY_MODE: str = Field(
+        default="strict",
+        description="解释降级模式: strict/relaxed（strict 下高风险任务解释故障时暂停）",
+    )
+    EXPLAINABILITY_HIGH_RISK_THRESHOLD: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="高风险决策阈值",
+    )
+    EXPLAINABILITY_ALERT_THRESHOLD: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="解释不一致率或决策链完整率告警阈值",
+    )
+
     # ==================== Agent 自进化配置 ====================
     EVOLUTION_ENABLED: bool = Field(default=False, description="是否启用 Agent 自进化闭环（默认关闭）")
     EVOLUTION_AUTOMATION_MODE: str = Field(default="manual", description="自动化模式: manual/semi-auto/auto")

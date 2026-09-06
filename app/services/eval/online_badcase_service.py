@@ -473,6 +473,7 @@ class OnlineBadcaseCollector:
 
             source_context = BadCaseSourceContext(
                 user_id_hash=hash_user_id(user_id),
+                business_id=task_id,
                 session_id=session_id,
                 task_id=task_id,
                 trace_id=f"online_{task_id}",
@@ -487,6 +488,10 @@ class OnlineBadcaseCollector:
                 source="online_sampling",
                 input_data={"prompt": prompt},
                 output_data=output_data,
+                business_id=task_id,
+                task_id=task_id,
+                session_id=session_id,
+                decision_chain_ref=f"task_{task_id}",
                 failure_reason=(
                     error_message
                     or next((signal.reason for signal in signals if signal.reason), None)

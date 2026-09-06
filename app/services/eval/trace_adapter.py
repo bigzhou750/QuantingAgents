@@ -22,6 +22,7 @@ class TraceEventType(str, Enum):
     """Trace 事件类型"""
     LLM_CALL = "llm_call"
     TOOL_CALL = "tool_call"
+    DECISION = "decision"
     SKILL_ROUTE = "skill_route"
     SKILL_EXECUTE = "skill_execute"
     SWARM_STEP = "swarm_step"
@@ -50,6 +51,11 @@ VIBE_EVENT_TYPE_MAPPING = {
     "tool_result": TraceEventType.TOOL_CALL,
     "tool_progress": TraceEventType.TOOL_CALL,
     "tool_heartbeat": TraceEventType.TOOL_CALL,
+
+    # === 决策节点 ===
+    "decision": TraceEventType.DECISION,
+    "decision.record": TraceEventType.DECISION,
+    "decision_node": TraceEventType.DECISION,
 
     # === Skill ===
     "skill_route": TraceEventType.SKILL_ROUTE,
@@ -139,6 +145,12 @@ class TraceAdapter:
         await db[self.COLLECTION_EVENTS].create_index([("trial_id", 1), ("sequence", 1)])
         await db[self.COLLECTION_EVENTS].create_index("event_type")
         await db[self.COLLECTION_EVENTS].create_index("timestamp")
+        await db[self.COLLECTION_EVENTS].create_index("business_id")
+        await db[self.COLLECTION_EVENTS].create_index("task_id")
+        await db[self.COLLECTION_EVENTS].create_index("session_id")
+        await db[self.COLLECTION_EVENTS].create_index(
+            [("task_id", 1), ("sequence", 1)]
+        )
 
         self._initialized = True
         logger.info("TraceAdapter initialized with indexes")
@@ -148,6 +160,9 @@ class TraceAdapter:
         vibe_event: Dict[str, Any],
         trial_id: str,
         sequence: int,
+        business_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> Optional[TraceEventDoc]:
         """将 Vibe Agent runtime 事件转换为标准 trace 事件文档"""
         event_type_str = vibe_event.get("type", "").lower()
@@ -176,6 +191,10 @@ class TraceAdapter:
         if not isinstance(data, dict):
             data = {"raw": data}
 
+        business_id = business_id or vibe_event.get("business_id") or data.get("business_id")
+        task_id = task_id or vibe_event.get("task_id") or data.get("task_id")
+        session_id = session_id or vibe_event.get("session_id") or data.get("session_id")
+
         # 添加元数据
         data["_meta"] = {
             "original_type": event_type_str,
@@ -187,6 +206,9 @@ class TraceAdapter:
         return TraceEventDoc(
             event_id=event_id,
             trial_id=trial_id,
+            business_id=str(business_id) if business_id else None,
+            task_id=str(task_id) if task_id else None,
+            session_id=str(session_id) if session_id else None,
             event_type=event_type.value,
             sequence=sequence,
             timestamp=ts,
@@ -238,11 +260,20 @@ class TraceAdapter:
         cursor: Optional[int] = None,
         limit: int = 100,
         event_types: Optional[List[str]] = None,
+        business_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """获取某个 trial 的 trace 事件"""
         db = get_mongo_db()
 
         query = {"trial_id": trial_id}
+        if business_id:
+            query["business_id"] = business_id
+        if task_id:
+            query["task_id"] = task_id
+        if session_id:
+            query["session_id"] = session_id
         if cursor is not None:
             query["sequence"] = {"$gt": cursor}
         if event_types:

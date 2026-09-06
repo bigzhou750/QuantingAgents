@@ -295,6 +295,47 @@
             查看 Trace
           </el-button>
         </div>
+
+        <!-- 决策链与解释校验 -->
+        <div style="margin-top: 16px">
+          <div class="section-title">决策链与解释校验</div>
+          <el-alert
+            v-if="trialExplainability?.status === 'legacy_unverified' || trialExplainability?.status === 'unavailable'"
+            :title="trialExplainability?.status === 'legacy_unverified' ? '旧 trial 无决策链，保留原始 trace' : '暂无决策链数据'"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <template v-else-if="trialExplainability">
+            <el-table :data="trialExplainability.decision_chain || []" size="small" stripe style="margin-top: 8px">
+              <el-table-column prop="scenario" label="场景" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="selected_option" label="选择" width="120" show-overflow-tooltip />
+              <el-table-column prop="selection_reason" label="依据" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="status" label="状态" width="110" />
+              <el-table-column prop="risk_level" label="风险" width="80" />
+            </el-table>
+            <el-descriptions v-if="trialExplainability.validations?.length" :column="3" border size="small" style="margin-top: 12px">
+              <el-descriptions-item v-for="item in trialExplainability.validations" :key="item.validation_id" :label="item.status" :span="1">
+                {{ item.reason }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <el-table
+              v-if="trialExplainability.explanations?.length"
+              :data="trialExplainability.explanations"
+              size="small"
+              stripe
+              style="margin-top: 12px"
+            >
+              <el-table-column prop="version" label="版本" width="90" />
+              <el-table-column label="用户解释" min-width="260">
+                <template #default="{ row }">{{ row.user?.text || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="业务解释" min-width="260">
+                <template #default="{ row }">{{ row.business?.text || '-' }}</template>
+              </el-table-column>
+            </el-table>
+          </template>
+        </div>
       </div>
     </el-drawer>
 
@@ -361,6 +402,7 @@ const hallucinationMetricItems = computed(() => {
 const trialDetailVisible = ref(false)
 const selectedTrial = ref<any>(null)
 const trialScores = ref<any[]>([])
+const trialExplainability = ref<any>(null)
 
 // Trace
 const traceDrawerVisible = ref(false)
@@ -440,6 +482,7 @@ const loadTrials = async () => {
 const openTrialDetail = async (trial: any) => {
   selectedTrial.value = trial
   trialDetailVisible.value = true
+  trialExplainability.value = null
 
   // Load scores for this trial
   try {
@@ -447,6 +490,13 @@ const openTrialDetail = async (trial: any) => {
     trialScores.value = res.data?.data?.items || []
   } catch {
     trialScores.value = []
+  }
+
+  try {
+    const res = await axios.get(`/api/eval/trials/${trial.trial_id}/explainability`)
+    trialExplainability.value = res.data?.data || null
+  } catch {
+    trialExplainability.value = { status: 'unavailable' }
   }
 }
 
@@ -544,6 +594,7 @@ const getTraceEventTagType = (eventType: string): 'primary' | 'success' | 'warni
     error: 'danger',
     llm_call: 'primary',
     tool_call: 'warning',
+    decision: 'success',
     lifecycle: 'info',
     streaming: 'success',
     evidence: 'success',
@@ -559,6 +610,7 @@ const getTraceGroupLabel = (eventType: string) => {
   const map: Record<string, string> = {
     llm_call: '🤖 LLM 调用',
     tool_call: '🔧 Tool 调用',
+    decision: '🧭 Decision',
     evidence: '📎 Evidence',
     retrieval: '🔍 Retrieval',
     citation: '📝 Citation',

@@ -301,6 +301,9 @@ class TraceEventDoc(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     event_id: str = Field(..., description="事件唯一标识")
     trial_id: str = Field(..., description="关联的 trial ID")
+    business_id: Optional[str] = Field(default=None, description="业务 ID")
+    task_id: Optional[str] = Field(default=None, description="任务 ID")
+    session_id: Optional[str] = Field(default=None, description="会话 ID")
     event_type: str = Field(..., description="事件类型")
     sequence: int = Field(default=0, description="事件序号")
     timestamp: datetime = Field(default_factory=now_tz)
@@ -406,6 +409,7 @@ class DetectionSignal(BaseModel):
 class BadCaseSourceContext(BaseModel):
     """Bad Case 线上来源上下文"""
     user_id_hash: str = Field(default="", description="脱敏用户标识")
+    business_id: Optional[str] = Field(default=None, description="业务 ID")
     session_id: str = Field(default="", description="来源会话 ID")
     task_id: str = Field(default="", description="来源任务 ID")
     trace_id: str = Field(default="", description="来源 trace ID")
@@ -419,6 +423,11 @@ class EvalBadCase(BaseModel):
     """Bad Case"""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     bad_case_id: str = Field(..., description="Bad Case 唯一标识")
+    business_id: Optional[str] = Field(default=None, description="业务 ID")
+    task_id: Optional[str] = Field(default=None, description="来源任务 ID")
+    session_id: Optional[str] = Field(default=None, description="来源会话 ID")
+    decision_chain_ref: Optional[str] = Field(default=None, description="决策链引用")
+    explanation_status: Optional[str] = Field(default=None, description="解释校验状态")
     source: BadCaseSource = Field(..., description="来源")
     source_trial_id: Optional[str] = Field(default=None, description="来源 trial ID")
     source_run_id: Optional[str] = Field(default=None, description="来源 run ID")

@@ -141,6 +141,11 @@
           <el-descriptions-item label="检测状态">{{ selectedBadCase.detection_status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="复核状态">{{ selectedBadCase.review_status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="失败原因" :span="2">{{ selectedBadCase.failure_reason }}</el-descriptions-item>
+          <el-descriptions-item label="业务 ID">{{ selectedBadCase.business_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="任务 ID">{{ selectedBadCase.task_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="会话 ID">{{ selectedBadCase.session_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="决策链引用">{{ selectedBadCase.decision_chain_ref || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="解释校验">{{ selectedBadCase.explanation_status || '-' }}</el-descriptions-item>
         </el-descriptions>
         <h4 style="margin: 16px 0 8px">输入数据</h4>
         <pre class="json-block">{{ JSON.stringify(selectedBadCase.input_data, null, 2) }}</pre>
@@ -216,6 +221,15 @@
         </el-form-item>
         <el-form-item label="Session ID">
           <el-input v-model="onlineSampleForm.session_id" placeholder="可选，关联的会话ID" />
+        </el-form-item>
+        <el-form-item label="任务 ID">
+          <el-input v-model="onlineSampleForm.task_id" placeholder="可选，关联的任务ID" />
+        </el-form-item>
+        <el-form-item label="业务 ID">
+          <el-input v-model="onlineSampleForm.business_id" placeholder="可选，业务ID通常等同任务ID" />
+        </el-form-item>
+        <el-form-item label="决策链引用">
+          <el-input v-model="onlineSampleForm.decision_chain_ref" placeholder="可选，例如 task_xxx" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -340,6 +354,9 @@ const onlineSampleForm = ref({
   output_data_json: '',
   failure_reason: '',
   session_id: '',
+  task_id: '',
+  business_id: '',
+  decision_chain_ref: '',
 })
 
 const submitOnlineSample = async () => {
@@ -376,6 +393,15 @@ const submitOnlineSample = async () => {
     if (onlineSampleForm.value.session_id) {
       payload.session_id = onlineSampleForm.value.session_id
     }
+    if (onlineSampleForm.value.task_id) {
+      payload.task_id = onlineSampleForm.value.task_id
+    }
+    if (onlineSampleForm.value.business_id) {
+      payload.business_id = onlineSampleForm.value.business_id
+    }
+    if (onlineSampleForm.value.decision_chain_ref) {
+      payload.decision_chain_ref = onlineSampleForm.value.decision_chain_ref
+    }
 
     await axios.post('/api/eval/online-sample', payload)
     ElMessage.success('样本已入池')
@@ -388,6 +414,9 @@ const submitOnlineSample = async () => {
       output_data_json: '',
       failure_reason: '',
       session_id: '',
+      task_id: '',
+      business_id: '',
+      decision_chain_ref: '',
     }
     await loadBadCases()
   } catch (error: any) {
