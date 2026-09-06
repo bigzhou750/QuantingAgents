@@ -59,13 +59,13 @@
           </el-col>
           <el-col :span="4">
             <div class="metric-item">
-              <div class="metric-label">pass@{{ passK }}</div>
+              <div class="metric-label">质量 pass@{{ passK }}</div>
               <div class="metric-value">{{ pct(passMetrics.pass_at_k) }}</div>
             </div>
           </el-col>
           <el-col :span="4">
             <div class="metric-item">
-              <div class="metric-label">pass^{{ passK }}</div>
+              <div class="metric-label">质量 pass^{{ passK }}</div>
               <div class="metric-value">{{ pct(passMetrics.pass_pow_k) }}</div>
             </div>
           </el-col>
@@ -101,6 +101,13 @@
           <el-table-column prop="count" label="样本数" width="80" />
           <el-table-column prop="pass_rate" label="通过率" width="100">
             <template #default="{ row }">{{ pct(row.pass_rate) }}</template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.status === 'unscorable'" type="info" size="small">不可评分</el-tag>
+              <el-tag v-else-if="row.status === 'not_applicable'" type="info" size="small">不适用</el-tag>
+              <el-tag v-else size="small">{{ row.status || 'available' }}</el-tag>
+            </template>
           </el-table-column>
         </el-table>
       </el-card>
@@ -222,6 +229,7 @@ const scoreTableData = computed(() => {
     max_score: data.max_score || 0,
     count: data.count || 0,
     pass_rate: data.pass_rate || 0,
+    status: data.status || 'available',
   }))
 })
 

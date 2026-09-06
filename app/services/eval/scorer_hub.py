@@ -85,7 +85,9 @@ class ScorerHub:
 
             self.register_scorer(RuleBasedScorer())
             self.register_scorer(OutputCompletenessScorer())
-            registered.extend(["rule_based", "output_completeness"])
+            from app.services.eval.scorers.expected_content_scorer import ExpectedContentScorer
+            self.register_scorer(ExpectedContentScorer())
+            registered.extend(["rule_based", "output_completeness", "expected_content"])
         except ImportError as e:
             logger.warning(f"Failed to import base scorers: {e}")
 
@@ -187,6 +189,7 @@ class ScorerHub:
         trace_events: List[Dict[str, Any]],
         scorer_names: Optional[List[str]] = None,
         case_config: Optional[Dict[str, Any]] = None,
+        run_config: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         对 trial 执行评分并保存结果
@@ -238,13 +241,26 @@ class ScorerHub:
                 })
                 continue
 
+            active_scorer = scorer
+            if scorer.name == "llm_judge" and run_config:
+                try:
+                    from app.services.eval.scorers.llm_judge_scorer import LLMJudgeScorer
+
+                    active_scorer = LLMJudgeScorer(
+                        judge_model=run_config.get("judge_model") or getattr(scorer, "_judge_model", "qwen-plus"),
+                        rubric=run_config.get("rubric") or getattr(scorer, "_rubric", None),
+                        version=run_config.get("rubric_version") or getattr(scorer, "_version", "1.0.0"),
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to build run-scoped judge scorer: {exc}")
+
             # 检查外部库适配器是否可用 → not_configured
             is_available = True
-            if hasattr(scorer, '_available'):
-                is_available = bool(scorer._available)
-            elif hasattr(scorer, 'is_available'):
+            if hasattr(active_scorer, '_available'):
+                is_available = bool(active_scorer._available)
+            elif hasattr(active_scorer, 'is_available'):
                 try:
-                    is_available = bool(scorer.is_available)
+                    is_available = bool(active_scorer.is_available)
                 except Exception:
                     is_available = False
 
@@ -279,7 +295,7 @@ class ScorerHub:
                 continue
 
             try:
-                result = await scorer.score(trial_data, trace_events, case_config)
+                result = await active_scorer.score(trial_data, trace_events, case_config)
 
                 # 转换为字典格式
                 if hasattr(result, 'to_dict'):
@@ -291,7 +307,22 @@ class ScorerHub:
                 score_id = f"score_{uuid.uuid4().hex[:12]}"
 
                 # 根据分数和通过状态确定 score status
-                score_status = ScoreStatus.PASSED if result_dict.get("passed", False) else ScoreStatus.FAILED
+                status_value = result_dict.get("scoring_status") or result_dict.get("status")
+                if status_value:
+                    try:
+                        score_status = ScoreStatus(status_value)
+                    except ValueError:
+                        score_status = (
+                            ScoreStatus.PASSED
+                            if result_dict.get("passed", False)
+                            else ScoreStatus.FAILED
+                        )
+                else:
+                    score_status = (
+                        ScoreStatus.PASSED
+                        if result_dict.get("passed", False)
+                        else ScoreStatus.FAILED
+                    )
 
                 # 解析 claims（如果评分器返回了 claim-evidence 结构）
                 from app.models.eval import ClaimEvidence
@@ -318,7 +349,7 @@ class ScorerHub:
                     reason=result_dict["reason"],
                     confidence=result_dict.get("confidence", 1.0),
                     source=ScoreSource(result_dict["source"]),
-                    scorer_version=result_dict.get("version", "1.0.0"),
+                    scorer_version=result_dict.get("version", active_scorer.version),
                     evidence_refs=result_dict.get("evidence_refs", []),
                     claims=claims,
                     raw_output=result_dict.get("raw_output"),
@@ -332,10 +363,10 @@ class ScorerHub:
                 result_dict["status"] = score_status.value
                 results.append(result_dict)
 
-                logger.debug(f"Scored trial {trial_id} with {scorer.name}: {result_dict['score']:.2f}")
+                logger.debug(f"Scored trial {trial_id} with {active_scorer.name}: {result_dict['score']:.2f}")
 
             except Exception as e:
-                logger.error(f"Scorer {key} failed for trial {trial_id}: {e}")
+                logger.error(f"Scorer {active_scorer.name} failed for trial {trial_id}: {e}")
                 # 评分器执行出错 → error 状态，持久化到数据库
                 score_id = f"score_{uuid.uuid4().hex[:12]}"
                 error_doc = EvalScore(
@@ -404,6 +435,8 @@ class ScorerHub:
         skipped_scores = [s for s in scores if s.get("status") == ScoreStatus.SKIPPED.value]
         nc_scores = [s for s in scores if s.get("status") == ScoreStatus.NOT_CONFIGURED.value]
         error_scores = [s for s in scores if s.get("status") == ScoreStatus.ERROR.value]
+        unscorable_scores = [s for s in scores if s.get("status") == ScoreStatus.UNSCORABLE.value]
+        not_applicable_scores = [s for s in scores if s.get("status") == ScoreStatus.NOT_APPLICABLE.value]
 
         # 旧数据可能没有 status 字段，兼容处理
         no_status_scores = [s for s in scores if "status" not in s or s.get("status") is None]
@@ -423,10 +456,12 @@ class ScorerHub:
             "average_score": avg_score,
             "passed_count": passed_count,
             "failed_count": failed_count,
-            "skipped_count": len(skipped_scores),
-            "not_configured_count": len(nc_scores),
-            "error_count": len(error_scores),
-            "by_source": {
+                "skipped_count": len(skipped_scores),
+                "not_configured_count": len(nc_scores),
+                "error_count": len(error_scores),
+                "unscorable_count": len(unscorable_scores),
+                "not_applicable_count": len(not_applicable_scores),
+                "by_source": {
                 source: {
                     "count": len([s for s in effective_scores if s["source"] == source]),
                     "avg_score": round(

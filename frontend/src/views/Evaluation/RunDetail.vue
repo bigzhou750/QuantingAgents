@@ -87,13 +87,13 @@
         </el-col>
         <el-col :span="4" v-if="run.num_trials_per_case > 1">
           <div class="metric-item">
-            <div class="metric-label">pass@{{ metrics.pass_k || 3 }}</div>
+            <div class="metric-label">质量 pass@{{ metrics.pass_k || 3 }}</div>
             <div class="metric-value">{{ ((metrics.pass_at_k || 0) * 100).toFixed(1) }}%</div>
           </div>
         </el-col>
         <el-col :span="4" v-if="run.num_trials_per_case > 1">
           <div class="metric-item">
-            <div class="metric-label">pass^{{ metrics.pass_k || 3 }}</div>
+            <div class="metric-label">质量 pass^{{ metrics.pass_k || 3 }}</div>
             <div class="metric-value">{{ ((metrics.pass_pow_k || 0) * 100).toFixed(1) }}%</div>
           </div>
         </el-col>
@@ -118,9 +118,10 @@
           <el-col :span="6" v-for="(scoreData, scoreName) in metrics.score_aggregation" :key="scoreName">
             <div class="score-dimension">
               <span class="score-name">{{ scoreName }}</span>
-              <el-tag :type="scoreData.avg_score >= 0.7 ? 'success' : scoreData.avg_score >= 0.5 ? 'warning' : 'danger'" size="small">
+              <el-tag v-if="scoreData.status !== 'unscorable' && scoreData.status !== 'not_applicable'" :type="scoreData.avg_score >= 0.7 ? 'success' : scoreData.avg_score >= 0.5 ? 'warning' : 'danger'" size="small">
                 {{ (scoreData.avg_score * 100).toFixed(0) }}%
               </el-tag>
+              <el-tag v-else type="info" size="small">{{ scoreData.status === 'unscorable' ? '不可评分' : '不适用' }}</el-tag>
             </div>
           </el-col>
         </el-row>
@@ -525,7 +526,7 @@ const getTrialStatusLabel = (status: string) => {
 
 const getScoreStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    passed: 'success', failed: 'danger', skipped: 'info', not_configured: 'warning', error: 'danger',
+    passed: 'success', failed: 'danger', skipped: 'info', not_configured: 'warning', error: 'danger', unscorable: 'info', not_applicable: 'info',
   }
   return map[status] || 'info'
 }

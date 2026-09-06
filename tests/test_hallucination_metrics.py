@@ -34,10 +34,10 @@ def test_claim_annotation_requires_label_version():
 
 def test_hallucination_metrics_calculate_confusion_matrix_and_scores():
     claims = [
-        {"truth_label": "unsupported", "prediction_label": True},
-        {"truth_label": "contradicted", "prediction_label": False},
-        {"truth_label": "supported", "prediction_label": True},
-        {"truth_label": "supported", "prediction_label": False},
+        {"truth_label": "unsupported", "prediction_label": True, "truth_source": "r1", "label_version": "1.0"},
+        {"truth_label": "contradicted", "prediction_label": False, "truth_source": "r1", "label_version": "1.0"},
+        {"truth_label": "supported", "prediction_label": True, "truth_source": "r1", "label_version": "1.0"},
+        {"truth_label": "supported", "prediction_label": False, "truth_source": "r1", "label_version": "1.0"},
     ]
 
     result = MetricsService.compute_hallucination_metrics(claims)
@@ -60,11 +60,15 @@ def test_hallucination_metrics_exclude_unlabeled_and_group_by_type():
             "truth_label": "unsupported",
             "prediction_label": True,
             "hallucination_type": "numeric",
+            "truth_source": "r1",
+            "label_version": "1.0",
         },
         {
             "truth_label": "supported",
             "prediction_label": False,
             "hallucination_type": "numeric",
+            "truth_source": "r1",
+            "label_version": "1.0",
         },
         {"truth_label": None, "prediction_label": True, "hallucination_type": "entity"},
         {"truth_label": "excluded", "prediction_label": False, "hallucination_type": "entity"},
@@ -80,7 +84,7 @@ def test_hallucination_metrics_exclude_unlabeled_and_group_by_type():
 
 def test_hallucination_metrics_are_not_available_without_positive_samples():
     result = MetricsService.compute_hallucination_metrics([
-        {"truth_label": "supported", "prediction_label": False},
+        {"truth_label": "supported", "prediction_label": False, "truth_source": "r1", "label_version": "1.0"},
     ])
 
     assert result["status"] == "available"
@@ -109,6 +113,6 @@ async def test_evidence_scorer_emits_prediction_without_overwriting_verdict():
     )
 
     assert result.claims
-    assert result.claims[0].verdict.value == "unsupported"
-    assert result.claims[0].prediction_label is True
+    assert result.claims[0].verdict.value == "unscorable"
+    assert result.claims[0].prediction_label is None
     assert result.claims[0].prediction_reason

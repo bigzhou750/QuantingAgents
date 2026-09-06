@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import logging
+import uuid
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -772,6 +773,7 @@ class ClaimAnnotationRequest(BaseModel):
     claim_id: str = Field(..., min_length=1)
     truth_label: ClaimTruthLabel
     hallucination_type: Optional[HallucinationType] = None
+    evidence_refs: List[str] = Field(default_factory=list, description="结构化证据引用")
     label_version: str = Field(..., min_length=1)
     comment: str = ""
 
@@ -794,26 +796,46 @@ async def annotate_claim(
             raise HTTPException(status_code=404, detail="Score 或 Claim 不存在")
 
         now = now_tz()
+        annotation_id = f"annotation_{uuid.uuid4().hex[:12]}"
+        annotation = {
+            "annotation_id": annotation_id,
+            "reviewer": current_user.get("username", "unknown"),
+            "truth_label": request.truth_label.value,
+            "hallucination_type": (
+                request.hallucination_type.value if request.hallucination_type else None
+            ),
+            "evidence_refs": request.evidence_refs,
+            "comment": request.comment,
+            "label_version": request.label_version,
+            "timestamp": now,
+        }
         update = {
             "claims.$.truth_label": request.truth_label.value,
-            "claims.$.truth_source": request.comment or current_user.get("username", "unknown"),
+            "claims.$.truth_source": current_user.get("username", "unknown"),
             "claims.$.hallucination_type": (
                 request.hallucination_type.value if request.hallucination_type else None
             ),
             "claims.$.label_version": request.label_version,
             "updated_at": now,
         }
-        await db["eval_scores"].update_one(
+        update_result = await db["eval_scores"].update_one(
             {"score_id": request.score_id, "claims.claim_id": request.claim_id},
-            {"$set": update},
+            {
+                "$set": update,
+                "$push": {"claims.$.annotation_history": annotation},
+            },
         )
+        if update_result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Score 或 Claim 不存在")
         return ApiResponse(
             success=True,
             data={
                 "score_id": request.score_id,
                 "claim_id": request.claim_id,
+                "annotation_id": annotation_id,
                 "truth_label": request.truth_label.value,
                 "label_version": request.label_version,
+                "evidence_refs": request.evidence_refs,
             },
             message="Claim 标注已保存",
         )
@@ -939,7 +961,7 @@ async def list_pending_reviews(
         query = {
             "human_reviewed": {"$ne": True},
             # 排除非真实评分状态，避免未启用/出错的评分器进入待复核队列
-            "status": {"$nin": ["skipped", "not_configured", "error"]},
+            "status": {"$nin": ["skipped", "not_configured", "error", "unscorable", "not_applicable"]},
             "$or": [
                 {"confidence": {"$lt": low_confidence_threshold}},
                 {"score": {"$lt": 0.5}},
@@ -998,11 +1020,14 @@ async def get_run_metrics(run_id: str, k: int = 3):
     """
     try:
         base_metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k, mode="quality")
+        execution_pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k, mode="execution")
         score_agg = await metrics_service.get_score_aggregation(run_id)
         claim_summary = await metrics_service.get_claim_summary(run_id)
 
         combined = {**base_metrics, **pass_metrics}
+        combined["quality_pass_at_k"] = pass_metrics
+        combined["execution_pass_at_k"] = execution_pass_metrics
         combined["score_aggregation"] = score_agg.get("scores", {})
         combined["claim_summary"] = claim_summary
 
@@ -1332,7 +1357,8 @@ async def generate_run_report(run_id: str):
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
         metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="quality")
+        execution_pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="execution")
         score_agg = await metrics_service.get_score_aggregation(run_id)
 
         report = {
@@ -1343,6 +1369,7 @@ async def generate_run_report(run_id: str):
             "created_at": str(run.get("created_at", "")),
             "metrics": metrics,
             "pass_at_k": pass_metrics,
+            "execution_pass_at_k": execution_pass_metrics,
             "score_summary": score_agg.get("scores", {}),
             "generated_at": now_tz().isoformat(),
         }
@@ -1400,7 +1427,7 @@ async def check_release_gate(run_id: str):
             })
 
         metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=3)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=3, mode="quality")
 
         checks = []
         failures = []
@@ -1430,6 +1457,7 @@ async def check_release_gate(run_id: str):
             "enabled": True,
             "checks": checks,
             "failures": failures,
+            "pass_mode": pass_metrics.get("mode", "quality"),
         })
     except Exception as e:
         logger.error(f"Failed to check release gate: {e}")
@@ -1468,7 +1496,7 @@ async def get_quality_trends(
             run_id = run.get("run_id")
             metrics = await metrics_service.compute_run_metrics(run_id)
             score_agg = await metrics_service.get_score_aggregation(run_id)
-            pass_metrics = await metrics_service.compute_pass_at_k(run_id)
+            pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="quality")
 
             latency = metrics.get("latency", {}) or {}
             cost = metrics.get("cost", {}) or {}
@@ -1485,6 +1513,7 @@ async def get_quality_trends(
                 "pass_at_k": pass_metrics.get("pass_at_k", 0),
                 "pass_pow_k": pass_metrics.get("pass_pow_k", 0),
                 "pass_k": pass_metrics.get("k", 3),
+                "pass_mode": pass_metrics.get("mode", "quality"),
                 "score_summary": {
                     name: data.get("avg_score", 0)
                     for name, data in score_agg.get("scores", {}).items()

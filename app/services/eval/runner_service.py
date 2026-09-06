@@ -248,10 +248,7 @@ class EvalRunnerService:
 
             evolution_config = run_doc.get("config") or {}
 
-            # 按创建运行时记录的版本获取 case，确保可复现
-            cases = await dataset_service.list_cases(
-                dataset_id, limit=1000, version=dataset_version
-            )
+            cases = await self._resolve_run_cases(run_doc, dataset_id, dataset_version)
             self._validate_evolution_scope(evolution_config, cases, dataset_version)
 
             # 为每个 case 创建并执行 trial
@@ -270,6 +267,7 @@ class EvalRunnerService:
                         "tags": case.get("tags", []),
                         "difficulty": case.get("difficulty", "medium"),
                         "category": case.get("category", "general"),
+                        "dataset_version": dataset_version,
                     }
                     trial = EvalTrial(
                         trial_id=trial_id,
@@ -279,13 +277,20 @@ class EvalRunnerService:
                         status=TrialStatus.PENDING,
                         input_data=case.get("input", {}),
                         case_snapshot=case_snap,
+                        snapshot_version=dataset_version,
                     )
 
                     trial_doc = trial.model_dump(by_alias=True, exclude={"id"})
                     await db[self.COLLECTION_TRIALS].insert_one(trial_doc)
 
                     # 执行 trial
-                    await self._execute_trial(run_id, trial_id, case, timeout_seconds)
+                    await self._execute_trial(
+                        run_id,
+                        trial_id,
+                        case,
+                        timeout_seconds,
+                        dataset_version,
+                    )
 
             # 完成运行
             completed_count = await db[self.COLLECTION_TRIALS].count_documents({
@@ -357,7 +362,14 @@ class EvalRunnerService:
         if forbidden_cases:
             raise ValueError("candidate verification cannot access test/holdout cases")
 
-    async def _execute_trial(self, run_id: str, trial_id: str, case: Dict[str, Any], timeout_seconds: int):
+    async def _execute_trial(
+        self,
+        run_id: str,
+        trial_id: str,
+        case: Dict[str, Any],
+        timeout_seconds: int,
+        dataset_version: Optional[str] = None,
+    ):
         """执行单个 trial"""
         db = get_mongo_db()
         case_id = case.get("case_id", "")
@@ -527,10 +539,15 @@ class EvalRunnerService:
             except Exception:
                 logger.warning(f"Failed to load trace for trial {trial_id}; scoring without trace", exc_info=True)
 
-            case_config = case.get("scoring_criteria", {}) or {}
+            case_config = dict(case.get("scoring_criteria", {}) or {})
+            if case.get("expected_output") is not None:
+                case_config["expected_output"] = case["expected_output"]
+            if case.get("input") is not None:
+                case_config["case_input"] = case["input"]
             run_id = trial_data.get("run_id", "")
             run_doc = await self.get_run(run_id) if run_id else None
-            scorer_names = (run_doc.get("config") or {}).get("scorer_names") if run_doc else []
+            run_config = (run_doc or {}).get("config") or {}
+            scorer_names = run_config.get("scorer_names")
 
             scores = await scorer_hub.score_trial(
                 trial_id=trial_id,
@@ -538,6 +555,7 @@ class EvalRunnerService:
                 trace_events=trace_events,
                 scorer_names=scorer_names or None,
                 case_config=case_config,
+                run_config=run_config,
             )
 
             # Observability export is best-effort after score persistence.
@@ -562,6 +580,20 @@ class EvalRunnerService:
         if doc:
             doc["id"] = str(doc.pop("_id"))
         return doc
+
+    @staticmethod
+    async def _resolve_run_cases(
+        run_doc: Dict[str, Any],
+        dataset_id: str,
+        dataset_version: str,
+    ) -> List[Dict[str, Any]]:
+        """优先使用创建时锁定的 snapshot，确保 case 后续修改/删除不影响该 run。"""
+        snapshot_case_contents = (run_doc.get("snapshot") or {}).get("case_contents") or {}
+        if snapshot_case_contents:
+            return list(snapshot_case_contents.values())
+        return await dataset_service.list_cases(
+            dataset_id, limit=1000, version=dataset_version
+        )
 
     async def list_runs(
         self,

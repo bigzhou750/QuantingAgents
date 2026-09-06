@@ -97,6 +97,8 @@ class ScoreStatus(str, Enum):
     SKIPPED = "skipped"               # 评分器已注册但本次运行未选择
     NOT_CONFIGURED = "not_configured"   # 评分器依赖未安装或未启用
     ERROR = "error"                     # 评分器执行出错
+    UNSCORABLE = "unscorable"           # 缺少必要证据或输出，无法形成确定结论
+    NOT_APPLICABLE = "not_applicable"   # 当前 case 不适用该评分维度
 
 
 class ClaimVerdict(str, Enum):
@@ -105,6 +107,7 @@ class ClaimVerdict(str, Enum):
     WEAKLY_SUPPORTED = "weakly_supported"
     UNSUPPORTED = "unsupported"
     CONTRADICTED = "contradicted"
+    UNSCORABLE = "unscorable"
 
 
 class ClaimTruthLabel(str, Enum):
@@ -123,6 +126,20 @@ class HallucinationType(str, Enum):
     TEMPORAL = "temporal"
     CONTRADICTION = "contradiction"
     OTHER = "other"
+
+
+# ==================== Claim 人工标注 ====================
+
+class ClaimAnnotation(BaseModel):
+    """Claim 的单个真值标注记录。"""
+    annotation_id: str = Field(..., description="标注记录唯一标识")
+    reviewer: str = Field(..., description="标注人")
+    truth_label: ClaimTruthLabel = Field(..., description="真值标签")
+    hallucination_type: Optional[HallucinationType] = Field(default=None, description="幻觉类型")
+    evidence_refs: List[str] = Field(default_factory=list, description="结构化证据引用")
+    comment: str = Field(default="", description="标注说明或依据")
+    label_version: str = Field(..., description="标注版本")
+    timestamp: datetime = Field(default_factory=now_tz, description="标注时间")
 
 
 # ==================== Claim-Evidence 结构 ====================
@@ -148,6 +165,8 @@ class ClaimEvidence(BaseModel):
     prediction_label: Optional[bool] = Field(default=None, description="系统预测是否为幻觉")
     prediction_reason: Optional[str] = Field(default=None, description="系统预测原因")
     label_version: Optional[str] = Field(default=None, description="标注版本")
+    verification_method: Optional[str] = Field(default=None, description="判定方法，如 structured_numeric_check / lexical_only / entailment_judge")
+    annotation_history: List[ClaimAnnotation] = Field(default_factory=list, description="人工标注历史记录")
 
 
 # ==================== 运行快照结构 ====================
@@ -178,6 +197,7 @@ class EvalCase(BaseModel):
     expected_output: Optional[Dict[str, Any]] = Field(default=None, description="期望输出")
     scoring_criteria: Dict[str, Any] = Field(default_factory=dict, description="评分标准")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="回流来源和评测元数据")
+    archived: bool = Field(default=False, description="是否已归档（软删除）")
     tags: List[str] = Field(default_factory=list, description="标签")
     difficulty: str = Field(default="medium", description="难度级别: easy/medium/hard")
     category: str = Field(default="general", description="类别")
@@ -215,8 +235,11 @@ class EvalRunConfig(BaseModel):
     scorer_names: List[str] = Field(default_factory=list, description="指定评分器")
     judge_model: str = Field(default="", description="Judge 使用的模型")
     rubric_version: str = Field(default="", description="Rubric 版本")
+    rubric: Optional[Dict[str, Any]] = Field(default=None, description="Rubric 内容")
     low_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0, description="低置信度阈值")
     review_strategy: str = Field(default="auto", description="复核策略: auto/manual/all")
+    quality_pass_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="质量 pass 阈值")
+    required_scorers: List[str] = Field(default_factory=list, description="质量 pass 必须通过的 scorer")
     data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
     extra: Dict[str, Any] = Field(default_factory=dict, description="额外配置")
 
@@ -257,6 +280,7 @@ class EvalTrial(BaseModel):
     input_data: Dict[str, Any] = Field(default_factory=dict, description="实际输入")
     output_data: Optional[Dict[str, Any]] = Field(default=None, description="实际输出")
     case_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="运行时 case 内容快照")
+    snapshot_version: Optional[str] = Field(default=None, description="执行时使用的数据集快照版本")
     trace_ref: Optional[str] = Field(default=None, description="Trace 引用 ID")
     token_usage: Dict[str, int] = Field(default_factory=dict, description="Token 使用情况")
     latency_ms: int = Field(default=0, description="耗时（毫秒）")

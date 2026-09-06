@@ -270,3 +270,18 @@ pytest -q tests/test_hallucination_metrics.py tests/test_eval_phase2.py tests/te
 - `app/models/eval.py`
 - `app/routers/eval.py`
 - `docs/evaluation/agent-evaluation-platform-usage-and-gaps.md`
+
+## 11. 修复状态
+
+这些问题已整理为 OpenSpec change：
+
+`harden-eval-scoring-accuracy`
+
+对应规划文件：
+
+- `openspec/changes/harden-eval-scoring-accuracy/proposal.md`
+- `openspec/changes/harden-eval-scoring-accuracy/specs/agent-evaluation-platform/spec.md`
+- `openspec/changes/harden-eval-scoring-accuracy/design.md`
+- `openspec/changes/harden-eval-scoring-accuracy/tasks.md`
+
+当前状态以 `tasks.md` 的勾选和 OpenSpec 校验结果为准。实施完成后，本页结论需要随代码行为一起更新。

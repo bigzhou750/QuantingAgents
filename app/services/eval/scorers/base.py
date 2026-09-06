@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
-from app.models.eval import ScoreSource, ClaimEvidence, ClaimVerdict
+from app.models.eval import ScoreSource, ScoreStatus, ClaimEvidence, ClaimVerdict
 
 
 @dataclass
@@ -21,11 +21,17 @@ class ScoreResult:
     confidence: float = 1.0  # 0.0 - 1.0
     source: ScoreSource = ScoreSource.RULE_BASED
     version: str = "1.0.0"
+    status: Optional[ScoreStatus] = None
     evidence_refs: List[str] = field(default_factory=list)
     claims: List[ClaimEvidence] = field(default_factory=list)
     raw_output: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        scoring_status = (
+            self.status.value
+            if self.status is not None
+            else ("passed" if self.passed else "failed")
+        )
         result = {
             "score_name": self.score_name,
             "score": round(self.score, 4),
@@ -34,6 +40,8 @@ class ScoreResult:
             "confidence": round(self.confidence, 4),
             "source": self.source.value,
             "version": self.version,
+            "scoring_status": scoring_status,
+            "status": scoring_status,
             "evidence_refs": self.evidence_refs,
             "raw_output": self.raw_output,
         }

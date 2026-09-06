@@ -22,6 +22,22 @@ from app.core.database import get_mongo_db
 logger = logging.getLogger(__name__)
 
 
+def _annotation_consensus(claim: Dict[str, Any]) -> tuple[Optional[str], str]:
+    """从 annotation_history 解析多人标注一致性。"""
+    history = claim.get("annotation_history") or []
+    labels = [
+        annotation.get("truth_label")
+        for annotation in history
+        if annotation.get("truth_label")
+    ]
+    if not labels:
+        return None, "single"
+    normalized = {str(label).lower() for label in labels}
+    if len(normalized) == 1:
+        return str(labels[-1]).lower(), "agreed"
+    return None, "disputed"
+
+
 class MetricsService:
     """评测指标聚合服务"""
 
@@ -42,8 +58,17 @@ class MetricsService:
         excluded = 0
 
         normalized_claims: List[Dict[str, Any]] = []
+        annotation_consistency_counts = {"single": 0, "agreed": 0, "disputed": 0}
         for original_claim in claims:
             claim = dict(original_claim)
+            consensus_label, consistency = _annotation_consensus(claim)
+            claim["annotation_consistency"] = consistency
+            annotation_consistency_counts[consistency] = annotation_consistency_counts.get(consistency, 0) + 1
+            if consistency == "disputed":
+                excluded += 1
+                continue
+            if consensus_label is not None and claim.get("truth_label") is None:
+                claim["truth_label"] = consensus_label
             truth = claim.get("truth_label")
             prediction = claim.get("prediction_label")
             if truth is None and claim.get("verdict") == "weakly_supported":
@@ -51,7 +76,12 @@ class MetricsService:
                     truth = "unsupported"
                 elif weakly_supported == "supported":
                     truth = "supported"
-            if truth is None or prediction is None:
+            if (
+                truth is None
+                or prediction is None
+                or not claim.get("truth_source")
+                or not claim.get("label_version")
+            ):
                 excluded += 1
                 continue
             if isinstance(truth, dict):
@@ -122,6 +152,7 @@ class MetricsService:
         result.update({
             "eligible_claims": eligible,
             "excluded_claims": excluded,
+            "annotation_consistency": annotation_consistency_counts,
             "weakly_supported_policy": weakly_supported,
             "metric_definition": {
                 "positive_class": ["unsupported", "contradicted"],
@@ -205,13 +236,17 @@ class MetricsService:
         self,
         run_id: str,
         k: int = 3,
+        mode: str = "quality",
     ) -> Dict[str, Any]:
         """计算 pass@k 和 pass^k
 
-        pass@k: 对每个 case，k 次 trial 中至少通过一次的概率
-        pass^k: 对每个 case，k 次 trial 全部通过的概率
+        mode=quality 时按有效评分是否通过计算；mode=execution 时按 trial
+        是否正常完成计算。两种口径必须在响应中显式区分。
         """
         db = get_mongo_db()
+
+        if mode not in {"quality", "execution"}:
+            raise ValueError("mode must be quality or execution")
 
         # 按 case_id 分组
         cursor = db["eval_trials"].find({"run_id": run_id})
@@ -220,14 +255,47 @@ class MetricsService:
             case_trials[doc.get("case_id", "")].append(doc)
 
         if not case_trials:
-            return {"pass_at_k": 0.0, "pass_pow_k": 0.0, "k": k, "cases": 0}
+            return {"pass_at_k": 0.0, "pass_pow_k": 0.0, "k": k, "cases": 0, "mode": mode}
+
+        scores_by_trial: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        if mode == "quality":
+            trial_ids = [t.get("trial_id") for trials in case_trials.values() for t in trials if t.get("trial_id")]
+            score_cursor = db["eval_scores"].find({"trial_id": {"$in": trial_ids}})
+            async for score in score_cursor:
+                scores_by_trial[score.get("trial_id", "")].append(score)
+
+            run_doc = await db["eval_runs"].find_one({"run_id": run_id}, {"config": 1})
+            run_config = (run_doc or {}).get("config") or {}
+            required_scorers = run_config.get("required_scorers") or run_config.get("scorer_names") or []
+            quality_threshold = float(run_config.get("quality_pass_threshold", 0.6))
+
+        def trial_passed(trial: Dict[str, Any]) -> bool:
+            if mode == "execution":
+                return trial.get("status") == "completed"
+            if trial.get("status") != "completed":
+                return False
+            scores = [
+                score for score in scores_by_trial.get(trial.get("trial_id", ""), [])
+                if score.get("status") in {"passed", "failed"}
+            ]
+            if required_scorers:
+                scores = [score for score in scores if score.get("score_name") in required_scorers]
+                if {score.get("score_name") for score in scores} != set(required_scorers):
+                    return False
+            if not scores:
+                return False
+            return all(
+                score.get("passed") is True and float(score.get("score", 0.0)) >= quality_threshold
+                for score in scores
+            )
 
         pass_at_k_values = []
         pass_pow_k_values = []
+        per_case = {}
 
         for case_id, trials in case_trials.items():
             n = len(trials)
-            passed = sum(1 for t in trials if t.get("status") == "completed")
+            passed = sum(1 for t in trials if trial_passed(t))
             failed = n - passed
 
             if n < k:
@@ -251,25 +319,21 @@ class MetricsService:
 
             pass_at_k_values.append(max(0.0, min(1.0, pass_at_k)))
             pass_pow_k_values.append(max(0.0, min(1.0, pass_pow_k)))
+            per_case[case_id] = {
+                "pass_at_k": round(pass_at_k, 4),
+                "pass_pow_k": round(pass_pow_k, 4),
+                "trials": n,
+                "passed_trials": passed,
+                "failed_trials": failed,
+            }
 
         return {
             "pass_at_k": round(sum(pass_at_k_values) / len(pass_at_k_values), 4) if pass_at_k_values else 0.0,
             "pass_pow_k": round(sum(pass_pow_k_values) / len(pass_pow_k_values), 4) if pass_pow_k_values else 0.0,
             "k": k,
             "cases": len(case_trials),
-            "per_case": {
-                cid: {
-                    "pass_at_k": round(pak, 4),
-                    "pass_pow_k": round(ppk, 4),
-                    "trials": len(trials),
-                }
-                for cid, pak, ppk, trials in zip(
-                    case_trials.keys(),
-                    pass_at_k_values,
-                    pass_pow_k_values,
-                    case_trials.values(),
-                )
-            },
+            "mode": mode,
+            "per_case": per_case,
         }
 
     async def compare_runs(
@@ -318,6 +382,7 @@ class MetricsService:
                 "min_score": {"$min": "$score"},
                 "max_score": {"$max": "$score"},
                 "count": {"$sum": 1},
+                "effective_count": {"$sum": {"$cond": [{"$in": ["$status", ["passed", "failed"]]}, 1, 0]}},
                 "passed_count": {"$sum": {"$cond": [{"$eq": ["$passed", True]}, 1, 0]}},
                 "statuses": {"$addToSet": "$status"},
                 "reasons": {"$addToSet": "$reason"},
@@ -332,7 +397,11 @@ class MetricsService:
             statuses = [status for status in doc.get("statuses", []) if status]
             effective = any(status in {"passed", "failed"} for status in statuses) or not statuses
             unavailable_status = next(
-                (status for status in ("not_configured", "skipped", "error") if status in statuses),
+                (
+                    status
+                    for status in ("not_configured", "skipped", "error", "unscorable", "not_applicable")
+                    if status in statuses
+                ),
                 None,
             )
             if unavailable_status and not effective:
@@ -348,18 +417,21 @@ class MetricsService:
                     "reason": next((reason for reason in doc.get("reasons", []) if reason), ""),
                 }
                 continue
+            effective_count = doc.get("effective_count", doc.get("count", 0))
             score_stats[name] = {
                 "avg_score": round(doc["avg_score"], 4),
                 "min_score": round(doc["min_score"], 4),
                 "max_score": round(doc["max_score"], 4),
-                "count": count,
-                "passed_count": doc["passed_count"],
-                "pass_rate": round(doc["passed_count"] / max(1, count), 4),
+                "count": effective_count,
+                "passed_count": min(doc["passed_count"], effective_count),
+                "pass_rate": round(min(doc["passed_count"], effective_count) / max(1, effective_count), 4),
                 "variance": round(
                     (doc["max_score"] - doc["min_score"]) ** 2 / 12, 4
                 ),  # 近似方差（均匀分布假设）
                 "status": "available",
                 "reason": "",
+                "unscorable_count": statuses.count("unscorable"),
+                "not_applicable_count": statuses.count("not_applicable"),
             }
 
         run_doc = await db["eval_runs"].find_one({"run_id": run_id}, {"dataset_version": 1})

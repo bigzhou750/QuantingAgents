@@ -49,6 +49,7 @@ class TestLLMJudgeScorer:
                     "output_data": {"content": "贵州茅台是一只优质白酒股票..."},
                 },
                 trace_events=[],
+                case_config={"expected_output": {"must_include": ["营收", "风险"]}},
             )
             assert result.raw_output is not None
             assert "judge_model" in result.raw_output

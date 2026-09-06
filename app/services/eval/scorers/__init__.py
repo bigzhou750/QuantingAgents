@@ -7,10 +7,12 @@
 from app.services.eval.scorers.base import BaseScorer, ScoreResult
 from app.services.eval.scorers.rule_scorer import RuleBasedScorer
 from app.services.eval.scorers.output_scorer import OutputCompletenessScorer
+from app.services.eval.scorers.expected_content_scorer import ExpectedContentScorer
 
 __all__ = [
     "BaseScorer",
     "ScoreResult",
     "RuleBasedScorer",
     "OutputCompletenessScorer",
+    "ExpectedContentScorer",
 ]
