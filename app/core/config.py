@@ -212,6 +212,17 @@ class Settings(BaseSettings):
     EVAL_OBSERVABILITY_API_KEY: str = Field(default="", description="评测观测后端 API key")
     EVAL_OBSERVABILITY_HOST: str = Field(default="", description="评测观测后端地址")
     EVAL_OBSERVABILITY_PROJECT: str = Field(default="quantingagents-eval", description="评测观测项目名")
+    ONLINE_BADCASE_ENABLED: bool = Field(default=False, description="是否启用线上 Bad Case 自动发现")
+    ONLINE_BADCASE_ENABLE_JUDGE: bool = Field(default=False, description="是否对线上输出启用 LLM Judge 软信号")
+    ONLINE_BADCASE_SOFT_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0, description="软质量信号采样率")
+    ONLINE_BADCASE_CONFIDENCE_THRESHOLD: float = Field(default=0.8, ge=0.0, le=1.0, description="自动确认置信度阈值")
+    ONLINE_BADCASE_JUDGE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="LLM Judge 低分阈值")
+    ONLINE_BADCASE_EVIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="证据评分低分阈值")
+    ONLINE_BADCASE_MAX_CONTENT_LENGTH: int = Field(default=5000, ge=1000, le=200000, description="Bad Case 最大内容长度")
+    ONLINE_BADCASE_DATASET_PURPOSES: str = Field(
+        default="online_regression,review_queue,detector_eval,golden",
+        description="评测集分层用途（逗号分隔）",
+    )
 
     # ==================== Agent 自进化配置 ====================
     EVOLUTION_ENABLED: bool = Field(default=False, description="是否启用 Agent 自进化闭环（默认关闭）")

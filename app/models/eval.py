@@ -47,6 +47,15 @@ class DatasetStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class DatasetPurpose(str, Enum):
+    """评测集分层用途"""
+    GENERAL = "general"
+    ONLINE_REGRESSION = "online_regression"
+    REVIEW_QUEUE = "review_queue"
+    DETECTOR_EVAL = "detector_eval"
+    GOLDEN = "golden"
+
+
 class RunStatus(str, Enum):
     """评测运行状态"""
     PENDING = "pending"
@@ -168,6 +177,7 @@ class EvalCase(BaseModel):
     input: Dict[str, Any] = Field(..., description="输入数据")
     expected_output: Optional[Dict[str, Any]] = Field(default=None, description="期望输出")
     scoring_criteria: Dict[str, Any] = Field(default_factory=dict, description="评分标准")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="回流来源和评测元数据")
     tags: List[str] = Field(default_factory=list, description="标签")
     difficulty: str = Field(default="medium", description="难度级别: easy/medium/hard")
     category: str = Field(default="general", description="类别")
@@ -329,6 +339,58 @@ class BadCaseSource(str, Enum):
     ONLINE_SAMPLING = "online_sampling"
 
 
+class FailureFamily(str, Enum):
+    """线上 Bad Case 失败家族"""
+    EXECUTION = "execution"
+    TOOL_TRAJECTORY = "tool_trajectory"
+    SAFETY_COMPLIANCE = "safety_compliance"
+    EVIDENCE_HALLUCINATION = "evidence_hallucination"
+    OUTPUT_QUALITY = "output_quality"
+    USER_FEEDBACK = "user_feedback"
+    OPERATIONAL = "operational"
+
+
+class DetectionStatus(str, Enum):
+    """自动检测生命周期状态"""
+    CANDIDATE = "candidate"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
+class ReviewStatus(str, Enum):
+    """Bad Case 人工复核状态"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    AUTO_CONFIRMED = "auto_confirmed"
+    MANUAL = "manual"
+
+
+class DetectionSignal(BaseModel):
+    """单个自动检测信号"""
+    signal_type: str = Field(..., description="信号类型")
+    failure_family: Optional[FailureFamily] = Field(default=None, description="信号对应失败家族")
+    score: float = Field(default=0.0, ge=0.0, le=1.0, description="信号分数")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="信号置信度")
+    severity: str = Field(default="medium", description="严重级别: low/medium/high/critical")
+    reason: str = Field(default="", description="信号判定原因")
+    evidence_refs: List[str] = Field(default_factory=list, description="trace/score/session 引用")
+    detector_name: str = Field(default="", description="检测器名称")
+    detector_version: str = Field(default="1.0.0", description="检测器版本")
+
+
+class BadCaseSourceContext(BaseModel):
+    """Bad Case 线上来源上下文"""
+    user_id_hash: str = Field(default="", description="脱敏用户标识")
+    session_id: str = Field(default="", description="来源会话 ID")
+    task_id: str = Field(default="", description="来源任务 ID")
+    trace_id: str = Field(default="", description="来源 trace ID")
+    data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
+    artifact_versions: Dict[str, Any] = Field(default_factory=dict, description="运行时 artifact 版本")
+    release_receipt_id: Optional[str] = Field(default=None, description="发布回执 ID")
+    replayable: bool = Field(default=True, description="是否可完整回放")
+
+
 class EvalBadCase(BaseModel):
     """Bad Case"""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
@@ -348,5 +410,21 @@ class EvalBadCase(BaseModel):
     source_trace_id: Optional[str] = Field(default=None, description="来源 trace/session ID")
     release_receipt_id: Optional[str] = Field(default=None, description="来源发布回执")
     artifact_version: Optional[str] = Field(default=None, description="线上运行时 artifact 版本")
+    failure_family: Optional[FailureFamily] = Field(default=None, description="失败家族")
+    detection_signals: List[DetectionSignal] = Field(default_factory=list, description="自动检测信号列表")
+    detection_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="自动判定置信度")
+    detection_status: DetectionStatus = Field(default=DetectionStatus.CONFIRMED, description="检测生命周期状态")
+    review_status: ReviewStatus = Field(default=ReviewStatus.MANUAL, description="复核状态")
+    review_required: bool = Field(default=False, description="是否需要人工复核")
+    reviewer: Optional[str] = Field(default=None, description="复核人")
+    review_comment: Optional[str] = Field(default=None, description="复核意见")
+    dedup_key: Optional[str] = Field(default=None, description="去重指纹")
+    source_context: Optional[BadCaseSourceContext] = Field(default=None, description="线上来源上下文")
+    reflow_status: str = Field(default="pending", description="回流状态: pending/converted/failed")
+    occurrence_count: int = Field(default=1, ge=1, description="相同指纹出现次数")
+    affected_versions: List[str] = Field(default_factory=list, description="受影响的 artifact 版本")
+    truth_label: Optional[str] = Field(default=None, description="人工确认的真值标签")
+    hallucination_type: Optional[str] = Field(default=None, description="幻觉类型")
+    label_version: Optional[str] = Field(default=None, description="标签版本")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}

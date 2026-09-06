@@ -136,6 +136,29 @@
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
                 <div class="message-content markdown-body" v-html="renderMarkdown(message.content)"></div>
+                <div
+                  v-if="message.role === 'assistant' && message.task_id"
+                  class="message-actions"
+                >
+                  <el-button
+                    text
+                    size="small"
+                    :icon="CircleClose"
+                    :disabled="Boolean(feedbackedMessages[message.message_id])"
+                    @click="submitFeedback(message, 'wrong_answer')"
+                  >
+                    {{ feedbackedMessages[message.message_id] ? '已反馈' : '回答错误' }}
+                  </el-button>
+                  <el-button
+                    v-if="!feedbackedMessages[message.message_id]"
+                    text
+                    size="small"
+                    :icon="ChatLineSquare"
+                    @click="submitFeedback(message, 'not_useful')"
+                  >
+                    内容无用
+                  </el-button>
+                </div>
               </div>
             </div>
 
@@ -223,7 +246,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
+import { ChatLineSquare, CircleClose, Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { vibeAgentApi,
   type VibeEvent,
@@ -263,6 +286,7 @@ const streamError = ref('')
 const authRequired = ref(false)
 const chatScroll = ref()
 const activityOpen = ref<Record<string, boolean>>({})
+const feedbackedMessages = ref<Record<string, string>>({})
 let controller: AbortController | null = null
 let reconnectTimer: number | null = null
 let sessionLoadVersion = 0
@@ -634,6 +658,19 @@ const retryTask = async () => {
   await sendMessage()
 }
 
+const submitFeedback = async (message: VibeMessage, feedbackType: string) => {
+  if (!message.task_id || feedbackedMessages.value[message.message_id]) return
+  try {
+    await vibeAgentApi.submitFeedback(activeSessionId.value, message.task_id, {
+      feedback_type: feedbackType,
+    })
+    feedbackedMessages.value[message.message_id] = feedbackType
+    ElMessage.success('反馈已记录')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '反馈提交失败')
+  }
+}
+
 const canCancel = (status: string) => ['queued', 'processing', 'pending', 'running'].includes(status)
 const formatTime = (value: string) => (value ? formatDateTime(value) : '-')
 const scrollToBottom = () => {
@@ -974,6 +1011,14 @@ onUnmounted(() => {
 .message-row.user .message-bubble {
   background: var(--el-color-primary);
   color: #fff;
+}
+
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 4px;
 }
 
 .activity-line {

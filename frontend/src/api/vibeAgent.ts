@@ -66,6 +66,9 @@ export const vibeAgentApi = {
   sendMessage(sessionId: string, payload: { content: string; idempotency_key?: string; metadata?: Record<string, any>; profile_id?: string; strategy_id?: string }): Promise<ApiResponse<VibeTask>> {
     return request.post(`/api/vibe-agent/sessions/${sessionId}/messages`, payload)
   },
+  submitFeedback(sessionId: string, taskId: string, payload: { feedback_type: string; content?: string }): Promise<ApiResponse<any>> {
+    return request.post(`/api/vibe-agent/sessions/${sessionId}/tasks/${taskId}/feedback`, payload)
+  },
   listTasks(params?: { status?: string; session_id?: string; page?: number; page_size?: number }): Promise<ApiResponse<{ tasks: VibeTask[]; total: number }>> {
     return request.get('/api/vibe-agent/tasks', { params })
   },

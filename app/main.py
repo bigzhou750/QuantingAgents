@@ -301,18 +301,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
 
-    # 初始化 Agent 评测平台服务（仅当启用时）
-    if settings.EVAL_PLATFORM_ENABLED:
+    # 初始化 Agent 评测平台服务（评测平台或线上 Bad Case 采集启用时）
+    if settings.EVAL_PLATFORM_ENABLED or settings.ONLINE_BADCASE_ENABLED:
         try:
             from app.services.eval.dataset_service import dataset_service
             from app.services.eval.runner_service import runner_service
             from app.services.eval.trace_adapter import trace_adapter
             from app.services.eval.scorer_hub import scorer_hub
+            from app.services.eval.bad_case_service import bad_case_service
 
-            await dataset_service.initialize()
-            await runner_service.initialize()
-            await trace_adapter.initialize()
-            await scorer_hub.initialize()
+            if settings.EVAL_PLATFORM_ENABLED:
+                await dataset_service.initialize()
+                await runner_service.initialize()
+                await trace_adapter.initialize()
+                await scorer_hub.initialize()
+            await bad_case_service.initialize()
             logger.info("✅ Agent 评测平台服务已初始化")
         except Exception as e:
             logger.warning(f"Agent 评测平台初始化失败: {e}")

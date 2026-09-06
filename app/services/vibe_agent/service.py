@@ -51,6 +51,7 @@ class VibeAgentService:
     message_collection = "vibe_agent_messages"
     task_collection = "vibe_agent_tasks"
     event_collection = "vibe_agent_events"
+    feedback_collection = "vibe_agent_feedback"
 
     def __init__(self) -> None:
         self._background_tasks: set[asyncio.Task] = set()
@@ -63,6 +64,7 @@ class VibeAgentService:
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True)
         await db[self.event_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("sequence", ASCENDING)], unique=True)
+        await db[self.feedback_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("task_id", ASCENDING)])
         await self.recover_orphaned_tasks()
 
     async def recover_orphaned_tasks(self) -> None:
@@ -578,6 +580,87 @@ class VibeAgentService:
             raise HTTPException(status_code=404, detail="研究任务不存在")
         return self.task_center_row(task)
 
+    async def submit_feedback(
+        self,
+        user: Dict[str, Any],
+        session_id: str,
+        task_id: str,
+        feedback_type: str,
+        content: str = "",
+    ) -> Dict[str, Any]:
+        """保存用户反馈并创建待复核的线上 Bad Case 候选。"""
+        session = await self.get_session(user["id"], session_id)
+        task = await get_mongo_db()[self.task_collection].find_one(
+            {"user_id": user["id"], "session_id": session_id, "task_id": task_id},
+            {"_id": 0},
+        )
+        if not task:
+            raise HTTPException(status_code=404, detail="研究任务不存在")
+
+        assistant = await get_mongo_db()[self.message_collection].find_one(
+            {
+                "user_id": user["id"],
+                "session_id": session_id,
+                "task_id": task_id,
+                "role": "assistant",
+            },
+            {"_id": 0},
+            sort=[("created_at", DESCENDING)],
+        )
+        if not assistant and not str(content or "").strip():
+            raise HTTPException(status_code=400, detail="反馈缺少可关联的 Agent 输出")
+
+        from app.models.eval import BadCaseSourceContext, DetectionSignal, FailureFamily, DetectionStatus, ReviewStatus
+        from app.services.eval.bad_case_service import bad_case_service
+        from app.services.eval.badcase_fingerprint import hash_user_id
+
+        feedback_doc = {
+            "feedback_id": new_id("feedback"),
+            "user_id": user["id"],
+            "session_id": session_id,
+            "task_id": task_id,
+            "feedback_type": feedback_type,
+            "content": str(content or "")[:2000],
+            "created_at": utc_now(),
+        }
+        await get_mongo_db()[self.feedback_collection].insert_one(feedback_doc)
+
+        bad_case = await bad_case_service.create_online_bad_case(
+            source="user_feedback",
+            input_data={"prompt": task.get("prompt", "")},
+            output_data={"content": assistant.get("content", "")} if assistant else None,
+            failure_reason=content or feedback_type,
+            risk_level="medium",
+            failure_family=FailureFamily.USER_FEEDBACK.value,
+            detection_signals=[
+                DetectionSignal(
+                    signal_type="user.feedback",
+                    failure_family=FailureFamily.USER_FEEDBACK,
+                    score=0.0,
+                    confidence=0.7,
+                    severity="medium",
+                    reason=content or feedback_type,
+                    evidence_refs=[task_id, session_id],
+                    detector_name="user_feedback",
+                    detector_version="1.0.0",
+                )
+            ],
+            detection_confidence=0.7,
+            detection_status=DetectionStatus.CANDIDATE.value,
+            review_status=ReviewStatus.PENDING.value,
+            review_required=True,
+            source_context=BadCaseSourceContext(
+                user_id_hash=hash_user_id(user["id"]),
+                session_id=session_id,
+                task_id=task_id,
+                trace_id=f"online_{task_id}",
+                replayable=True,
+            ),
+            created_by=user.get("username", "user"),
+            tags=["user_feedback", f"feedback:{feedback_type}"],
+        )
+        return {"feedback": {key: value for key, value in feedback_doc.items() if key != "_id"}, "bad_case": bad_case, "session_id": session["session_id"]}
+
     async def list_tasks(
         self,
         user_id: str,
@@ -781,6 +864,26 @@ class VibeAgentService:
             payload = {"phase": raw_type, **payload}
 
         await self.append_event(user_id, session_id, event_type, payload, task_id)
+
+        # Online Bad Case detection is deliberately asynchronous: scoring and
+        # persistence must never delay the production event stream.
+        if task_id and raw_type in {"attempt.failed", "attempt.completed", "attempt.cancelled"}:
+            try:
+                from app.services.eval.online_badcase_service import online_badcase_collector
+
+                collection_task = asyncio.create_task(
+                    online_badcase_collector.collect_from_online_event(
+                        user_id=user_id,
+                        session_id=session_id,
+                        task_id=str(task_id),
+                        raw_type=raw_type,
+                        payload=payload,
+                    )
+                )
+                self._background_tasks.add(collection_task)
+                collection_task.add_done_callback(self._background_tasks.discard)
+            except Exception:
+                logger.warning("failed to schedule online Bad Case collection", exc_info=True)
 
 
 vibe_agent_service = VibeAgentService()

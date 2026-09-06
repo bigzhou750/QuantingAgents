@@ -14,7 +14,7 @@ import uuid
 from bson import ObjectId
 
 from app.core.database import get_mongo_db
-from app.models.eval import EvalDataset, EvalCase, DatasetStatus
+from app.models.eval import EvalDataset, EvalCase, DatasetStatus, DatasetPurpose
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -90,11 +90,15 @@ class EvalDatasetService:
         description: str = "",
         tags: Optional[List[str]] = None,
         created_by: str = "",
+        purpose: str = DatasetPurpose.GENERAL.value,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """创建评测集"""
         db = get_mongo_db()
 
         dataset_id = f"ds_{uuid.uuid4().hex[:12]}"
+        meta = dict(metadata or {})
+        meta["purpose"] = DatasetPurpose(purpose).value
         dataset = EvalDataset(
             dataset_id=dataset_id,
             name=name,
@@ -103,6 +107,7 @@ class EvalDatasetService:
             status=DatasetStatus.DRAFT,
             tags=tags or [],
             created_by=created_by,
+            metadata=meta,
         )
 
         doc = dataset.model_dump(by_alias=True, exclude={"id"})
@@ -125,6 +130,7 @@ class EvalDatasetService:
         limit: int = 20,
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
+        purpose: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """列出评测集"""
         db = get_mongo_db()
@@ -134,6 +140,8 @@ class EvalDatasetService:
             query["tags"] = {"$in": tags}
         if status:
             query["status"] = status
+        if purpose:
+            query["metadata.purpose"] = DatasetPurpose(purpose).value
 
         cursor = db[self.COLLECTION_DATASETS].find(query).sort("created_at", -1).skip(skip).limit(limit)
         results = []
@@ -149,6 +157,8 @@ class EvalDatasetService:
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
+        purpose: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """更新评测集"""
         db = get_mongo_db()
@@ -162,6 +172,10 @@ class EvalDatasetService:
             update_fields["tags"] = tags
         if status is not None:
             update_fields["status"] = status
+        if purpose is not None:
+            update_fields["metadata.purpose"] = DatasetPurpose(purpose).value
+        if metadata is not None:
+            update_fields["metadata"] = metadata
 
         result = await db[self.COLLECTION_DATASETS].update_one(
             {"dataset_id": dataset_id},
@@ -195,6 +209,7 @@ class EvalDatasetService:
         difficulty: str = "medium",
         category: str = "general",
         description: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """向评测集添加用例"""
         db = get_mongo_db()
@@ -212,6 +227,7 @@ class EvalDatasetService:
             input=input_data,
             expected_output=expected_output,
             scoring_criteria=scoring_criteria or {},
+            metadata=metadata or {},
             tags=tags or [],
             difficulty=difficulty,
             category=category,

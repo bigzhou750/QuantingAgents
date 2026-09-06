@@ -42,6 +42,8 @@ class DatasetCreateRequest(BaseModel):
     name: str
     description: str = ""
     tags: List[str] = []
+    purpose: str = "general"
+    metadata: dict = {}
 
 
 class DatasetUpdateRequest(BaseModel):
@@ -49,6 +51,8 @@ class DatasetUpdateRequest(BaseModel):
     description: Optional[str] = None
     tags: Optional[List[str]] = None
     status: Optional[str] = None
+    purpose: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class CaseCreateRequest(BaseModel):
@@ -131,6 +135,8 @@ async def create_dataset(request: DatasetCreateRequest):
             name=request.name,
             description=request.description,
             tags=request.tags,
+            purpose=request.purpose,
+            metadata=request.metadata,
         )
         return ApiResponse(success=True, data=result, message="评测集创建成功")
     except Exception as e:
@@ -144,6 +150,7 @@ async def list_datasets(
     limit: int = 20,
     tags: Optional[str] = None,
     status: Optional[str] = None,
+    purpose: Optional[str] = None,
 ):
     """列出评测集"""
     try:
@@ -153,6 +160,7 @@ async def list_datasets(
             limit=limit,
             tags=tag_list,
             status=status,
+            purpose=purpose,
         )
         return ApiResponse(success=True, data={"items": datasets, "count": len(datasets)})
     except Exception as e:
@@ -190,6 +198,8 @@ async def update_dataset(dataset_id: str, request: DatasetUpdateRequest):
             description=request.description,
             tags=request.tags,
             status=request.status,
+            purpose=request.purpose,
+            metadata=request.metadata,
         )
         if not result:
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
@@ -1029,10 +1039,19 @@ class BadCaseCreateRequest(BaseModel):
     failure_reason: str = ""
     risk_level: str = "medium"
     tags: List[str] = []
+    failure_family: Optional[str] = None
 
 
 class ConvertToCaseRequest(BaseModel):
     dataset_id: str
+
+
+class BadCaseReviewRequest(BaseModel):
+    action: str
+    comment: str = ""
+    failure_family: Optional[str] = None
+    tags: Optional[List[str]] = None
+    label_version: Optional[str] = None
 
 
 @router.get("/bad-cases", dependencies=[Depends(verify_eval_access)])
@@ -1041,11 +1060,20 @@ async def list_bad_cases(
     risk_level: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
+    detection_status: Optional[str] = None,
+    review_status: Optional[str] = None,
+    failure_family: Optional[str] = None,
 ):
     """列出 Bad Case 池"""
     try:
         items = await bad_case_service.list_bad_cases(
-            source=source, risk_level=risk_level, skip=skip, limit=limit
+            source=source,
+            risk_level=risk_level,
+            skip=skip,
+            limit=limit,
+            detection_status=detection_status,
+            review_status=review_status,
+            failure_family=failure_family,
         )
         stats = await bad_case_service.get_stats()
         return ApiResponse(success=True, data={"items": items, "count": len(items), "stats": stats})
@@ -1065,10 +1093,66 @@ async def create_bad_case(request: BadCaseCreateRequest):
             failure_reason=request.failure_reason,
             risk_level=request.risk_level,
             tags=request.tags,
+            failure_family=request.failure_family,
         )
         return ApiResponse(success=True, data=result, message="Bad Case 创建成功")
     except Exception as e:
         logger.error(f"Failed to create bad case: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/bad-cases/review-queue", dependencies=[Depends(verify_eval_access)])
+async def list_bad_case_review_queue(skip: int = 0, limit: int = 50):
+    """获取待复核 Bad Case"""
+    try:
+        items = await bad_case_service.list_review_queue(skip=skip, limit=limit)
+        return ApiResponse(success=True, data={"items": items, "count": len(items)})
+    except Exception as e:
+        logger.error(f"Failed to list bad case review queue: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/bad-cases/{bad_case_id}", dependencies=[Depends(verify_eval_access)])
+async def get_bad_case(bad_case_id: str):
+    """获取 Bad Case 详情"""
+    try:
+        result = await bad_case_service.get_bad_case(bad_case_id)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Bad case {bad_case_id} not found")
+        return ApiResponse(success=True, data=result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get bad case: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bad-cases/{bad_case_id}/review", dependencies=[Depends(verify_eval_access)])
+async def review_bad_case(
+    bad_case_id: str,
+    request: BadCaseReviewRequest,
+    user: dict = Depends(verify_eval_access),
+):
+    """复核 Bad Case"""
+    try:
+        result = await bad_case_service.review_bad_case(
+            bad_case_id=bad_case_id,
+            action=request.action,
+            reviewer=user.get("username", "unknown"),
+            comment=request.comment,
+            failure_family=request.failure_family,
+            tags=request.tags,
+            label_version=request.label_version,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Bad case {bad_case_id} not found")
+        return ApiResponse(success=True, data=result, message="Bad Case 复核完成")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to review bad case: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
