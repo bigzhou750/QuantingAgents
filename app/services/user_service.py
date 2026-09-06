@@ -3,16 +3,23 @@
 """
 
 import hashlib
-import time
+import re
 import bcrypt
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from pymongo import MongoClient, ASCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
 
 from app.core.config import settings
-from app.models.user import User, UserCreate, UserUpdate, UserResponse
+from app.models.user import (
+    User,
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserAdminResponse,
+    UserListResult,
+)
 
 # 尝试导入日志管理器
 try:
@@ -91,6 +98,7 @@ class UserService:
                 "is_active": True,
                 "is_verified": False,
                 "is_admin": False,
+                "is_archived": False,
                 "token_version": 0,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
@@ -184,6 +192,9 @@ class UserService:
             # 检查用户是否激活
             if not user_doc.get("is_active", True):
                 logger.warning(f"❌ [authenticate_user] 用户已禁用: {username}")
+                return None
+            if user_doc.get("is_archived", False):
+                logger.warning(f"❌ [authenticate_user] 用户已归档: {username}")
                 return None
 
             # 更新最后登录时间
@@ -391,6 +402,7 @@ class UserService:
                 "is_active": True,
                 "is_verified": True,
                 "is_admin": True,
+                "is_archived": False,
                 "token_version": 0,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
@@ -423,12 +435,40 @@ class UserService:
             logger.error(f"❌ 创建管理员用户失败: {e}")
             return None
     
-    async def list_users(self, skip: int = 0, limit: int = 100) -> List[UserResponse]:
-        """获取用户列表"""
+    async def list_users(
+        self,
+        keyword: Optional[str] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> UserListResult:
+        """获取用户列表，返回当前页和满足条件的总数。"""
         try:
-            cursor = self.users_collection.find().skip(skip).limit(limit)
+            query: Dict[str, Any] = {}
+            if keyword and keyword.strip():
+                pattern = re.escape(keyword.strip())
+                query["$or"] = [
+                    {"username": {"$regex": pattern, "$options": "i"}},
+                    {"email": {"$regex": pattern, "$options": "i"}},
+                ]
+            if status == "active":
+                query["is_active"] = True
+                query["is_archived"] = False
+            elif status == "disabled":
+                query["is_active"] = False
+                query["is_archived"] = False
+            elif status == "archived":
+                query["is_archived"] = True
+
+            total = self.users_collection.count_documents(query)
+            cursor = (
+                self.users_collection.find(query)
+                .sort([("created_at", -1), ("_id", -1)])
+                .skip(skip)
+                .limit(limit)
+            )
             users = []
-            
+
             for user_doc in cursor:
                 user = User(**user_doc)
                 users.append(UserResponse(
@@ -437,6 +477,8 @@ class UserService:
                     email=user.email,
                     is_active=user.is_active,
                     is_verified=user.is_verified,
+                    is_admin=user.is_admin,
+                    is_archived=user.is_archived,
                     created_at=user.created_at,
                     last_login=user.last_login,
                     preferences=user.preferences,
@@ -446,12 +488,73 @@ class UserService:
                     successful_analyses=user.successful_analyses,
                     failed_analyses=user.failed_analyses
                 ))
-            
-            return users
-            
+
+            return UserListResult(users=users, total=total)
+
         except Exception as e:
             logger.error(f"❌ 获取用户列表失败: {e}")
-            return []
+            return UserListResult(users=[], total=0)
+
+    async def get_user_admin_detail(self, username: str) -> Optional[UserAdminResponse]:
+        """获取单个用户的非敏感管理详情。"""
+        try:
+            user_doc = self.users_collection.find_one({"username": username})
+            if not user_doc:
+                return None
+            user = User(**user_doc)
+            return UserAdminResponse(
+                id=str(user.id),
+                username=user.username,
+                email=user.email,
+                is_active=user.is_active,
+                is_verified=user.is_verified,
+                is_admin=user.is_admin,
+                is_archived=user.is_archived,
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+                last_login=user.last_login,
+                preferences=user.preferences,
+                daily_quota=user.daily_quota,
+                concurrent_limit=user.concurrent_limit,
+                total_analyses=user.total_analyses,
+                successful_analyses=user.successful_analyses,
+                failed_analyses=user.failed_analyses,
+            )
+        except Exception as e:
+            logger.error(f"❌ 获取用户管理详情失败: {e}")
+            return None
+
+    async def update_user_admin(self, username: str, user_data: UserUpdate) -> Optional[UserAdminResponse]:
+        """管理员更新用户资料和配额，返回非敏感管理详情。"""
+        updated_user = await self.update_user(username, user_data)
+        if not updated_user:
+            return None
+        return await self.get_user_admin_detail(username)
+
+    async def archive_user(self, username: str) -> bool:
+        """安全归档账号：禁用登录并保留用户资源归属。"""
+        try:
+            result = self.users_collection.update_one(
+                {"username": username, "is_archived": {"$ne": True}},
+                {
+                    "$set": {
+                        "is_active": False,
+                        "is_archived": True,
+                        "updated_at": datetime.utcnow(),
+                    },
+                    "$inc": {"token_version": 1},
+                },
+            )
+            user = self.users_collection.find_one({"username": username}, {"_id": 1})
+            if result.matched_count == 1 and user:
+                self.db.refresh_sessions.update_many(
+                    {"user_id": str(user["_id"])},
+                    {"$set": {"revoked": True}},
+                )
+            return result.matched_count == 1
+        except Exception as e:
+            logger.error(f"❌ 归档用户失败: {e}")
+            return False
     
     async def deactivate_user(self, username: str) -> bool:
         """禁用用户"""

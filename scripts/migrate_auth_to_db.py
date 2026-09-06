@@ -204,9 +204,9 @@ async def verify_migration():
             return False
         
         # 获取用户列表
-        users = await user_service.list_users()
-        logger.info(f"✅ 数据库中共有 {len(users)} 个用户")
-        for user in users:
+        users_result = await user_service.list_users()
+        logger.info(f"✅ 数据库中共有 {users_result.total} 个用户")
+        for user in users_result.users:
             logger.info(f"   - {user.username} ({user.email}) - {'管理员' if user.is_admin else '普通用户'}")
         
         return True

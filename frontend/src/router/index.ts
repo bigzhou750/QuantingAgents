@@ -496,6 +496,16 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'users',
+        name: 'UserManagement',
+        component: () => import('@/views/System/UserManagement.vue'),
+        meta: {
+          title: '用户管理',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      },
+      {
         path: 'scheduler',
         name: 'SchedulerManagement',
         component: () => import('@/views/System/SchedulerManagement.vue'),

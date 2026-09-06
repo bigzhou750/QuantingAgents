@@ -431,8 +431,9 @@ export const useAuthStore = defineStore('auth', {
 
       // 动态导入 appStore 避免循环依赖
       import('./app').then(({ useAppStore }) => {
+        const prefs = this.user?.preferences
+        if (!prefs) return
         const appStore = useAppStore()
-        const prefs = this.user!.preferences
 
         // 同步主题设置
         if (prefs.ui_theme) {

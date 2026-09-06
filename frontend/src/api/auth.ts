@@ -5,7 +5,12 @@ import type {
   LoginResponse, 
   RefreshTokenResponse,
   User,
-  ChangePasswordForm
+  ChangePasswordForm,
+  AdminUserListData,
+  AdminUserListQuery,
+  AdminUserDetail,
+  AdminCreateUserForm,
+  AdminUpdateUserForm
 } from '@/types/auth'
 
 export const authApi = {
@@ -48,10 +53,35 @@ export const authApi = {
     ApiClient.post('/api/auth/change-password', data),
 
   // 重置密码
-  resetPassword: (email: string) =>
-    ApiClient.post('/api/auth/reset-password', { email }),
+  resetPassword: (username: string, new_password: string) =>
+    ApiClient.post('/api/auth/reset-password', { username, new_password }),
 
   // 验证邮箱
   verifyEmail: (token: string) =>
-    ApiClient.post('/api/auth/verify-email', { token })
+    ApiClient.post('/api/auth/verify-email', { token }),
+
+  // 管理员用户管理
+  adminListUsers: (params: AdminUserListQuery = {}) =>
+    ApiClient.get<AdminUserListData>('/api/auth/users', params),
+
+  adminGetUser: (username: string) =>
+    ApiClient.get<AdminUserDetail>(`/api/auth/users/${encodeURIComponent(username)}`),
+
+  adminCreateUser: (data: AdminCreateUserForm) =>
+    ApiClient.post('/api/auth/create-user', data),
+
+  adminUpdateUser: (username: string, data: AdminUpdateUserForm) =>
+    ApiClient.patch<AdminUserDetail>(`/api/auth/users/${encodeURIComponent(username)}`, data),
+
+  adminUpdateUserStatus: (username: string, is_active: boolean) =>
+    ApiClient.patch(`/api/auth/users/${encodeURIComponent(username)}/status`, { is_active }),
+
+  adminUpdateUserRole: (username: string, is_admin: boolean) =>
+    ApiClient.patch(`/api/auth/users/${encodeURIComponent(username)}/role`, { is_admin }),
+
+  adminResetPassword: (username: string, new_password: string) =>
+    ApiClient.post('/api/auth/reset-password', { username, new_password }),
+
+  adminArchiveUser: (username: string) =>
+    ApiClient.delete(`/api/auth/users/${encodeURIComponent(username)}`)
 }

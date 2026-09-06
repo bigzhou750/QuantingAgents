@@ -8,8 +8,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from pydantic import BaseModel, Field
 
 from app.services.auth_service import AuthService
 from app.core.config import settings
@@ -78,6 +78,11 @@ class AdminRoleRequest(BaseModel):
 class AdminStatusRequest(BaseModel):
     is_active: bool
 
+class AdminUpdateUserRequest(BaseModel):
+    email: Optional[str] = Field(default=None, pattern=r'^[^@]+@[^@]+\.[^@]+$')
+    daily_quota: Optional[int] = Field(default=None, ge=0)
+    concurrent_limit: Optional[int] = Field(default=None, ge=1)
+
 class RegisterRequest(BaseModel):
     username: str
     email: str
@@ -127,6 +132,9 @@ async def get_current_user(authorization: Optional[str] = Header(default=None)) 
 
     if not user.is_active:
         logger.warning(f"❌ 用户已禁用: {token_data.sub}")
+        raise HTTPException(status_code=401, detail="User is inactive")
+    if getattr(user, "is_archived", False):
+        logger.warning(f"❌ 用户已归档: {token_data.sub}")
         raise HTTPException(status_code=401, detail="User is inactive")
     if token_data.token_version != getattr(user, "token_version", 0):
         raise HTTPException(status_code=401, detail="Token has been revoked")
@@ -326,7 +334,7 @@ async def refresh_token(payload: RefreshTokenRequest):
         user = await user_service.get_user_by_id(token_data.user_id or token_data.sub)
         if not user:
             user = await user_service.get_user_by_username(token_data.sub)
-        if not user or not user.is_active:
+        if not user or not user.is_active or getattr(user, "is_archived", False):
             logger.warning(f"❌ 用户不存在或已禁用: {token_data.sub}")
             raise HTTPException(status_code=401, detail="User not found or inactive")
         if token_data.token_version != getattr(user, "token_version", 0):
@@ -506,19 +514,26 @@ async def change_password(
 async def reset_password(
     payload: ResetPasswordRequest,
     request: Request,
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(get_current_admin)
 ):
     """重置密码（管理员操作）"""
     try:
-        # 检查权限
-        if not user.get("is_admin", False):
-            raise HTTPException(status_code=403, detail="权限不足")
-
-        # 重置密码
-        success = await user_service.reset_password(payload.username, payload.new_password)
-        
-        if not success:
+        target = await user_service.get_user_admin_detail(payload.username)
+        if not target:
             raise HTTPException(status_code=404, detail="用户不存在")
+        if target.is_archived:
+            raise HTTPException(status_code=400, detail="归档账号不能重置密码")
+        success = await user_service.reset_password(payload.username, payload.new_password)
+        if not success:
+            raise HTTPException(status_code=400, detail="新密码不符合密码策略")
+        await log_operation(
+            user_id=user["id"],
+            username=user["username"],
+            action_type=ActionType.USER_MANAGEMENT,
+            action="管理员重置密码",
+            details={"target_username": payload.username},
+            success=True,
+        )
 
         return {
             "success": True,
@@ -535,15 +550,10 @@ async def reset_password(
 async def create_user(
     payload: CreateUserRequest,
     request: Request,
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(get_current_admin)
 ):
     """创建用户（管理员操作）"""
     try:
-        # 检查权限
-        if not user.get("is_admin", False):
-            raise HTTPException(status_code=403, detail="权限不足")
-
-        # 创建用户
         user_create = UserCreate(
             username=payload.username,
             email=payload.email,
@@ -586,23 +596,30 @@ async def create_user(
 
 @router.get("/users")
 async def list_users(
-    skip: int = 0,
-    limit: int = 100,
-    user: dict = Depends(get_current_user)
+    keyword: Optional[str] = Query(default=None, max_length=100),
+    status: Optional[str] = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=200),
+    user: dict = Depends(get_current_admin)
 ):
     """获取用户列表（管理员操作）"""
     try:
-        # 检查权限
-        if not user.get("is_admin", False):
-            raise HTTPException(status_code=403, detail="权限不足")
-
-        users = await user_service.list_users(skip=skip, limit=limit)
+        if status and status not in {"active", "disabled", "archived"}:
+            raise HTTPException(status_code=400, detail="无效的账号状态")
+        result = await user_service.list_users(
+            keyword=keyword,
+            status=status,
+            skip=skip,
+            limit=limit,
+        )
         
         return {
             "success": True,
             "data": {
-                "users": [user.model_dump() for user in users],
-                "total": len(users)
+                "users": [item.model_dump() for item in result.users],
+                "total": result.total,
+                "skip": skip,
+                "limit": limit
             },
             "message": "获取用户列表成功"
         }
@@ -612,10 +629,100 @@ async def list_users(
         logger.error(f"获取用户列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取用户列表失败: {str(e)}")
 
+@router.get("/users/{username}")
+async def get_user_detail(
+    username: str,
+    user: dict = Depends(get_current_admin)
+):
+    """获取单个账号的管理员详情。"""
+    detail = await user_service.get_user_admin_detail(username)
+    if not detail:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {
+        "success": True,
+        "data": detail.model_dump(),
+        "message": "获取用户详情成功"
+    }
+
+@router.patch("/users/{username}")
+async def update_user_detail(
+    username: str,
+    payload: AdminUpdateUserRequest,
+    user: dict = Depends(get_current_admin)
+):
+    """管理员更新账号邮箱、每日配额和并发限制。"""
+    if all(value is None for value in (payload.email, payload.daily_quota, payload.concurrent_limit)):
+        raise HTTPException(status_code=400, detail="至少提供一个更新字段")
+    target = await user_service.get_user_admin_detail(username)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.is_archived:
+        raise HTTPException(status_code=400, detail="归档账号不能更新")
+    update_data = UserUpdate(
+        email=payload.email,
+        daily_quota=payload.daily_quota,
+        concurrent_limit=payload.concurrent_limit,
+    )
+    updated = await user_service.update_user_admin(username, update_data)
+    if not updated:
+        raise HTTPException(status_code=400, detail="更新失败，邮箱可能已被使用")
+    await log_operation(
+        user_id=user["id"],
+        username=user["username"],
+        action_type=ActionType.USER_MANAGEMENT,
+        action="管理员更新账号资料",
+        details={"target_username": username},
+        success=True,
+    )
+    return {
+        "success": True,
+        "data": updated.model_dump(),
+        "message": "账号资料已更新"
+    }
+
+@router.delete("/users/{username}")
+async def archive_user(
+    username: str,
+    user: dict = Depends(get_current_admin)
+):
+    """安全归档账号，保留历史资源归属。"""
+    if username == user["username"]:
+        raise HTTPException(status_code=400, detail="不能归档当前登录管理员")
+    target = await user_service.get_user_admin_detail(username)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.is_archived:
+        raise HTTPException(status_code=400, detail="账号已归档")
+    ok = await user_service.archive_user(username)
+    if not ok:
+        raise HTTPException(status_code=500, detail="归档账号失败")
+    await log_operation(
+        user_id=user["id"],
+        username=user["username"],
+        action_type=ActionType.USER_MANAGEMENT,
+        action="管理员归档账号",
+        details={"target_username": username},
+        success=True,
+    )
+    return {
+        "success": True,
+        "data": {"username": username, "is_active": False, "is_archived": True},
+        "message": f"用户 {username} 已归档"
+    }
+
 @router.patch("/users/{username}/status")
-async def update_user_status(username: str, payload: AdminStatusRequest, user: dict = Depends(get_current_user)):
-    if not user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="权限不足")
+async def update_user_status(
+    username: str,
+    payload: AdminStatusRequest,
+    user: dict = Depends(get_current_admin)
+):
+    if username == user["username"] and not payload.is_active:
+        raise HTTPException(status_code=400, detail="不能禁用当前登录管理员")
+    target = await user_service.get_user_admin_detail(username)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.is_archived:
+        raise HTTPException(status_code=400, detail="归档账号不能修改状态")
     ok = await (user_service.activate_user(username) if payload.is_active else user_service.deactivate_user(username))
     if not ok:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -623,12 +730,19 @@ async def update_user_status(username: str, payload: AdminStatusRequest, user: d
     return {"success": True, "data": {"username": username, "is_active": payload.is_active}, "message": "账号状态已更新"}
 
 @router.patch("/users/{username}/role")
-async def update_user_role(username: str, payload: AdminRoleRequest, user: dict = Depends(get_current_user)):
-    if not user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="权限不足")
+async def update_user_role(
+    username: str,
+    payload: AdminRoleRequest,
+    user: dict = Depends(get_current_admin)
+):
     if username == user["username"] and not payload.is_admin:
         # 防止最后一个管理员误操作导致管理面不可恢复。
         raise HTTPException(status_code=400, detail="不能移除当前管理员自身角色")
+    target = await user_service.get_user_admin_detail(username)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.is_archived:
+        raise HTTPException(status_code=400, detail="归档账号不能修改角色")
     ok = await user_service.set_admin_role(username, payload.is_admin)
     if not ok:
         raise HTTPException(status_code=404, detail="用户不存在或角色未变化")
