@@ -35,6 +35,7 @@ class PromoteService:
         request_id: str = "",
         idempotency_key: str = "",
         environment: str = "default",
+        allow_skill_regression_override: bool = False,
     ) -> EvolutionReceipt:
         """将候选发布为正式版本。
 
@@ -80,6 +81,22 @@ class PromoteService:
             gate_result = latest_verification.comparison_result.get("gate", {})
         if gate_result.get("passed") is False:
             raise ValueError("Verification gate failed; promote is blocked")
+
+        skill_regression_group_id = ""
+        skill_regression_gate: Dict[str, Any] = {}
+        skill_regression_override: Dict[str, Any] = {}
+        if proposal.target_artifact_type == ArtifactType.SKILL:
+            (
+                skill_regression_group_id,
+                skill_regression_gate,
+                skill_regression_override,
+            ) = self._resolve_skill_regression_gate(
+                latest_verification.comparison_result or {},
+                required=settings.EVOLUTION_SKILL_REGRESSION_REQUIRED,
+                override_allowed=settings.EVOLUTION_SKILL_REGRESSION_OVERRIDE_ALLOWED,
+                allow_override=allow_skill_regression_override,
+                promoted_by=promoted_by,
+            )
         content_diff_status = proposal.content_diff_status if isinstance(proposal.content_diff_status, str) else "complete"
         if content_diff_status == "legacy_incomplete":
             raise ValueError("Proposal content diff is incomplete; regenerate candidate before promote")
@@ -219,6 +236,9 @@ class PromoteService:
                 content_diff_status=content_diff_status,
                 content_summary=structured_diff.get("change_description", ""),
                 materialization_files=materialization.get("files", []),
+                skill_regression_group_id=skill_regression_group_id,
+                skill_regression_gate=skill_regression_gate,
+                skill_regression_override=skill_regression_override,
             )
             await receipt_service.create(receipt)
             await get_mongo_db()[artifact_registry.COLLECTION_VERSIONS].update_one(
@@ -522,6 +542,31 @@ class PromoteService:
 
         logger.info(f"[Evolution] Proposal {proposal_id} stopped: {reason}")
         return receipt
+
+    @staticmethod
+    def _resolve_skill_regression_gate(
+        comparison_result: Dict[str, Any],
+        *,
+        required: bool,
+        override_allowed: bool,
+        allow_override: bool,
+        promoted_by: str,
+    ) -> tuple[str, Dict[str, Any], Dict[str, Any]]:
+        group_id = str(comparison_result.get("skill_regression_group_id", ""))
+        gate = dict(comparison_result.get("skill_regression_gate") or {})
+        override: Dict[str, Any] = {}
+        if required and not gate.get("passed", False):
+            if not (override_allowed and allow_override):
+                raise ValueError(
+                    "Skill regression gate failed or is missing; promote is blocked"
+                )
+            override = {
+                "allowed": True,
+                "reason": "管理员显式覆盖 Skill 回归门禁",
+                "overridden_by": promoted_by,
+                "overridden_at": now_tz().isoformat(),
+            }
+        return group_id, gate, override
 
     async def _write_skill_version_to_disk(self, version, skills_dir: Any = None) -> None:
         """将目标 Skill 版本恢复到可运行用户 Skill 路径。"""

@@ -210,6 +210,7 @@ class EvalDatasetService:
         category: str = "general",
         description: str = "",
         metadata: Optional[Dict[str, Any]] = None,
+        skill_eval: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """向评测集添加用例"""
         db = get_mongo_db()
@@ -228,6 +229,7 @@ class EvalDatasetService:
             expected_output=expected_output,
             scoring_criteria=scoring_criteria or {},
             metadata=metadata or {},
+            skill_eval=skill_eval,
             tags=tags or [],
             difficulty=difficulty,
             category=category,
@@ -333,7 +335,7 @@ class EvalDatasetService:
         if not existing_case:
             return None
 
-        allowed_fields = {"name", "description", "input", "expected_output", "scoring_criteria", "tags", "difficulty", "category"}
+        allowed_fields = {"name", "description", "input", "expected_output", "scoring_criteria", "tags", "difficulty", "category", "skill_eval"}
         updated = dict(existing_case)
         for k, v in kwargs.items():
             if k in allowed_fields and v is not None:
@@ -451,6 +453,13 @@ class EvalDatasetService:
             golden_data = json.load(f)
 
         cases_to_import = golden_data.get("cases", [])
+        skill_golden_path = os.path.join(
+            os.path.dirname(__file__), "data", "skill_golden_cases.json"
+        )
+        if os.path.exists(skill_golden_path):
+            with open(skill_golden_path, "r", encoding="utf-8") as f:
+                skill_golden_data = json.load(f)
+            cases_to_import.extend(skill_golden_data.get("cases", []))
 
         # 获取当前数据集中已有的 case name 集合，用于去重
         existing_cursor = db[self.COLLECTION_CASES].find(
@@ -475,6 +484,7 @@ class EvalDatasetService:
                 input_data=case_data.get("input", {}),
                 expected_output=case_data.get("expected_output"),
                 scoring_criteria=case_data.get("scoring_criteria"),
+                skill_eval=case_data.get("skill_eval"),
                 tags=case_data.get("tags", []),
                 difficulty=case_data.get("difficulty", "medium"),
                 category=case_data.get("category", "general"),

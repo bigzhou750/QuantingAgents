@@ -190,6 +190,8 @@ class EvalRunnerService:
                 "input": c.get("input", {}),
                 "expected_output": c.get("expected_output"),
                 "scoring_criteria": c.get("scoring_criteria", {}),
+                "skill_eval": c.get("skill_eval")
+                or (c.get("scoring_criteria") or {}).get("skill_eval"),
                 "tags": c.get("tags", []),
                 "difficulty": c.get("difficulty", "medium"),
                 "category": c.get("category", "general"),
@@ -225,6 +227,7 @@ class EvalRunnerService:
             scorer_config=scorer_config_snapshot,
             judge_config=judge_config_snapshot,
             data_window=run_config.data_window,
+            skill_eval=run_config.skill_eval,
         )
 
         run = EvalRun(
@@ -302,6 +305,8 @@ class EvalRunnerService:
                         "input": case.get("input", {}),
                         "expected_output": case.get("expected_output"),
                         "scoring_criteria": case.get("scoring_criteria", {}),
+                        "skill_eval": case.get("skill_eval")
+                        or (case.get("scoring_criteria") or {}).get("skill_eval"),
                         "tags": case.get("tags", []),
                         "difficulty": case.get("difficulty", "medium"),
                         "category": case.get("category", "general"),
@@ -452,7 +457,7 @@ class EvalRunnerService:
                         user_id="eval_system",
                         username="Evaluation System",
                         sink=_make_trace_sink(trial_id),  # 归一化事件并落盘为标准 trace
-                        session_config={"overlay": overlay} if overlay else None,
+                        session_config=self._session_config_for_trial(run_config, overlay),
                     ),
                     timeout=timeout_seconds,
                 )
@@ -582,6 +587,10 @@ class EvalRunnerService:
                 logger.warning(f"Failed to load trace for trial {trial_id}; scoring without trace", exc_info=True)
 
             case_config = dict(case.get("scoring_criteria", {}) or {})
+            if case.get("skill_eval"):
+                case_config["skill_eval"] = case["skill_eval"]
+            elif isinstance(case_config.get("skill_eval"), dict):
+                case_config["skill_eval"] = case_config["skill_eval"]
             if case.get("expected_output") is not None:
                 case_config["expected_output"] = case["expected_output"]
             if case.get("input") is not None:
@@ -614,6 +623,27 @@ class EvalRunnerService:
                 logger.warning(f"Failed to export scored trial {trial_id}", exc_info=True)
         except Exception:
             logger.warning(f"Failed to score/export trial {trial_id}", exc_info=True)
+
+    @staticmethod
+    def _session_config_for_trial(
+        run_config: Dict[str, Any],
+        overlay: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """把 run 级 Skill 评测变体转换为 embedded runtime 可消费配置。"""
+        session_config: Dict[str, Any] = {}
+        if overlay:
+            session_config["overlay"] = overlay
+        skill_eval = dict(run_config.get("skill_eval") or {})
+        if skill_eval:
+            runtime_skill_eval = dict(skill_eval)
+            variant = str(skill_eval.get("variant") or "full_skill_set")
+            skill_name = str(skill_eval.get("skill_name") or "")
+            if variant == "no_target_skill":
+                runtime_skill_eval["exclude_skills"] = [skill_name] if skill_name else []
+            elif variant == "skill_only":
+                runtime_skill_eval["include_skills"] = [skill_name] if skill_name else []
+            session_config["skill_eval"] = runtime_skill_eval
+        return session_config or None
 
     async def _finalize_trial_explainability(
         self,

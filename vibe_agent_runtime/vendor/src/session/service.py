@@ -492,6 +492,9 @@ class SessionService:
 
         session_id = attempt.session_id
         attempt_id = attempt.attempt_id
+        skill_eval = dict((session_config or {}).get("skill_eval") or {})
+        exclude_skills = set(skill_eval.get("exclude_skills") or [])
+        include_skills = set(skill_eval.get("include_skills") or [])
         loop = asyncio.get_running_loop()
         tool_trail: list[Dict[str, Any]] = []
         checkpoint = ResponseCheckpoint(self.store, attempt)
@@ -542,6 +545,8 @@ class SessionService:
                     session_id=session_id,
                     event_callback=event_callback,
                     warn_callback=_mcp_collision_warn,
+                    exclude_skills=exclude_skills,
+                    include_skills=include_skills,
                 ),
             )
 
@@ -551,6 +556,7 @@ class SessionService:
                 event_callback=event_callback,
                 max_iterations=50,
                 persistent_memory=pm,
+                skill_eval=skill_eval,
             )
             self._active_loops[session_id] = agent
 

@@ -346,6 +346,11 @@ class EmbeddedAgentRuntime:
                 )
                 event_bus.add_listener(lambda event: self._on_event(event, task_id, sink))
                 await self.ensure_session(service, models, session_id, title, user_id, username)
+                if session_config and session_config.get("skill_eval"):
+                    session = service.store.get_session(session_id)
+                    if session is not None:
+                        session.config["skill_eval"] = session_config["skill_eval"]
+                        service.store.update_session(session)
                 self._active[session_id] = (task_id, service, event_bus, sink)
                 try:
                     effective_prompt = prompt

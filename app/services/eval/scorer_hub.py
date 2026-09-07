@@ -114,6 +114,17 @@ class ScorerHub:
             logger.warning(f"Failed to import trajectory_scorer: {e}")
 
         try:
+            from app.services.eval.scorers.skill_route_scorer import SkillRouteScorer
+            from app.services.eval.scorers.skill_execution_scorer import SkillExecutionScorer
+            from app.services.eval.scorers.skill_coexistence_scorer import SkillCoexistenceScorer
+            self.register_scorer(SkillRouteScorer())
+            self.register_scorer(SkillExecutionScorer())
+            self.register_scorer(SkillCoexistenceScorer())
+            registered.extend(["skill_route", "skill_execution", "skill_coexistence"])
+        except ImportError as e:
+            logger.warning(f"Failed to import skill scorers: {e}")
+
+        try:
             from app.services.eval.scorers.safety_scorer import SafetyScorer
             self.register_scorer(SafetyScorer())
             registered.append("safety")

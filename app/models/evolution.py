@@ -190,6 +190,7 @@ class VerificationRun(BaseModel):
     proposal_id: str = Field(..., description="关联提案 ID")
     baseline_run_id: str = Field(default="", description="基线 run ID")
     candidate_run_id: str = Field(default="", description="候选 run ID")
+    baseline_artifact_version: str = Field(default="", description="验证时的基线 artifact 版本")
     sandbox_path: str = Field(default="", description="sandbox 临时目录路径")
     comparison_result: Dict[str, Any] = Field(default_factory=dict, description="对比结果")
     status: str = Field(default="pending", description="验证状态（复用 RunStatus 值）")
@@ -243,6 +244,9 @@ class EvolutionReceipt(BaseModel):
     content_diff_status: str = Field(default="", description="发布内容 diff 校验状态")
     content_summary: str = Field(default="", description="实际发布内容摘要")
     materialization_files: List[str] = Field(default_factory=list, description="实际发布文件")
+    skill_regression_group_id: str = Field(default="", description="Skill 配对回归组 ID")
+    skill_regression_gate: Dict[str, Any] = Field(default_factory=dict, description="Skill 回归门禁结果")
+    skill_regression_override: Dict[str, Any] = Field(default_factory=dict, description="Skill 回归门禁覆盖审计")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 

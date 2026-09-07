@@ -113,14 +113,20 @@ class SkillsLoader:
     """
 
     def __init__(self, skills_dir: Optional[Path] = None,
-                 user_skills_dir: Optional[Path] = None) -> None:
+                 user_skills_dir: Optional[Path] = None,
+                 exclude_skills: Optional[set[str]] = None,
+                 include_skills: Optional[set[str]] = None) -> None:
         """Initialize SkillsLoader.
 
         Args:
             skills_dir: Bundled skills directory path; defaults to agent/skills/.
             user_skills_dir: User-created skills directory; defaults to ~/.vibe-trading/skills/user/.
+            exclude_skills: Optional skill names to exclude from this loader.
+            include_skills: Optional allowlist; when non-empty only these skills load.
         """
         self.skills_dir = skills_dir or Path(__file__).resolve().parents[1] / "skills"
+        self._exclude_skills = set(exclude_skills or set())
+        self._include_skills = set(include_skills or set())
         if user_skills_dir is None:
             self._user_skills_dir = _configured_user_skills_dir()
             self._legacy_user_skills_dir = USER_SKILLS_DIR
@@ -143,7 +149,13 @@ class SkillsLoader:
             for path in sorted(directory.iterdir()):
                 if path.is_dir() and (path / "SKILL.md").exists():
                     skill = _load_skill_dir(path)
-                    if skill and skill.name not in seen_names:
+                    if not skill:
+                        continue
+                    if skill.name in self._exclude_skills:
+                        continue
+                    if self._include_skills and skill.name not in self._include_skills:
+                        continue
+                    if skill.name not in seen_names:
                         self.skills.append(skill)
                         seen_names.add(skill.name)
 

@@ -32,6 +32,9 @@
           <el-descriptions-item label="状态">
             <el-tag :type="getStatusType(report.status)" size="small">{{ getStatusLabel(report.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item v-if="report.skill_regression_group_id" label="Skill 回归组">
+            {{ report.skill_regression_group_id }}
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatTime(report.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="生成时间">{{ formatTime(report.generated_at) }}</el-descriptions-item>
         </el-descriptions>
@@ -109,6 +112,22 @@
               <el-tag v-else size="small">{{ row.status || 'available' }}</el-tag>
             </template>
           </el-table-column>
+        </el-table>
+      </el-card>
+
+      <!-- Skill 评测维度 -->
+      <el-card shadow="never" style="margin-bottom: 24px" v-if="skillDimensionKeys.length">
+        <template #header><span>Skill 评测维度</span></template>
+        <el-table :data="skillDimensionTableData" stripe size="small">
+          <el-table-column prop="name" label="维度" width="180" />
+          <el-table-column prop="avg_score" label="平均分" width="100">
+            <template #default="{ row }">{{ pct(row.avg_score) }}</template>
+          </el-table-column>
+          <el-table-column prop="count" label="样本数" width="90" />
+          <el-table-column prop="pass_rate" label="通过率" width="100">
+            <template #default="{ row }">{{ pct(row.pass_rate) }}</template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="120" />
         </el-table>
       </el-card>
 
@@ -205,6 +224,14 @@ const report = ref<any>({})
 const metrics = ref<any>({})
 const passMetrics = ref<any>({})
 const scoreSummary = ref<any>({})
+
+const skillDimensionKeys = computed(() =>
+  ['skill_route', 'skill_execution', 'skill_coexistence'].filter((key) => scoreSummary.value?.[key])
+)
+
+const skillDimensionTableData = computed(() =>
+  skillDimensionKeys.value.map((name) => ({ name, ...(scoreSummary.value?.[name] || {}) }))
+)
 
 const passK = computed(() => passMetrics.value.k || 3)
 

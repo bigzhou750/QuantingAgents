@@ -316,6 +316,8 @@ async def lifespan(app: FastAPI):
                 await runner_service.initialize()
                 await trace_adapter.initialize()
                 await scorer_hub.initialize()
+                from app.services.eval.skill_regression_service import skill_regression_service
+                await skill_regression_service.initialize()
             await bad_case_service.initialize()
             logger.info("✅ Agent 评测平台服务已初始化")
         except Exception as e:

@@ -191,6 +191,26 @@ class TraceAdapter:
         if not isinstance(data, dict):
             data = {"raw": data}
 
+        if event_type == TraceEventType.SKILL_ROUTE:
+            candidates = (
+                data.get("candidates")
+                or data.get("candidate_skills")
+                or data.get("skill_names")
+                or ([data["skill"]] if data.get("skill") else [])
+            )
+            data["candidate_skills"] = [str(c) for c in candidates]
+            data["route_selected"] = bool(
+                data.get("selected", False)
+                or data.get("selected_skills")
+                or data.get("skill")
+            )
+        if event_type == TraceEventType.SKILL_EXECUTE:
+            data["skill_effective"] = bool(
+                data.get("effective", data.get("status") == "loaded")
+            )
+            if "skill_name" not in data and "skill" in data:
+                data["skill_name"] = data["skill"]
+
         business_id = business_id or vibe_event.get("business_id") or data.get("business_id")
         task_id = task_id or vibe_event.get("task_id") or data.get("task_id")
         session_id = session_id or vibe_event.get("session_id") or data.get("session_id")

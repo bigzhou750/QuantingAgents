@@ -368,6 +368,7 @@ async def promote_proposal(
     request_id: Optional[str] = Query(None),
     idempotency_key: Optional[str] = Query(None),
     environment: str = Query("default"),
+    allow_skill_regression_override: bool = Query(False),
     user: dict = Depends(verify_evolution_access),
 ):
     """将候选发布为正式版本"""
@@ -379,6 +380,7 @@ async def promote_proposal(
             request_id=request_id or "",
             idempotency_key=idempotency_key or "",
             environment=environment,
+            allow_skill_regression_override=allow_skill_regression_override,
         )
         return ApiResponse(success=True, data=receipt.model_dump(by_alias=True, exclude={"id"}), message="Proposal promoted")
     except ValueError as e:

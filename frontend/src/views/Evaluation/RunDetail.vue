@@ -259,6 +259,52 @@
           <el-alert :title="selectedTrial.error_message" type="error" :closable="false" show-icon />
         </div>
 
+        <!-- Skill 评测 -->
+        <div style="margin-top: 16px" v-if="trialSkillEval">
+          <div class="section-title">Skill 评测</div>
+          <el-alert
+            v-if="trialSkillEval.status === 'legacy_unverified'"
+            title="旧 trial 无 Skill 评测数据，保留原始 trace"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <template v-else>
+            <el-descriptions :column="3" border size="small" style="margin-top: 8px">
+              <el-descriptions-item label="Route Selected">
+                <el-tag :type="trialSkillEval.route_selected ? 'success' : 'info'" size="small">
+                  {{ trialSkillEval.route_selected ? '是' : '否' }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Skill Effective">
+                <el-tag :type="trialSkillEval.skill_effective ? 'success' : 'info'" size="small">
+                  {{ trialSkillEval.skill_effective ? '是' : '否' }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Skill 事件数">{{ trialSkillEval.events?.length || 0 }}</el-descriptions-item>
+            </el-descriptions>
+            <el-table
+              v-if="trialSkillEval.scores?.length"
+              :data="trialSkillEval.scores"
+              size="small"
+              stripe
+              style="margin-top: 12px"
+            >
+              <el-table-column prop="score_name" label="维度" width="150" />
+              <el-table-column prop="score" label="分数" width="90">
+                <template #default="{ row }">{{ (row.score * 100).toFixed(0) }}%</template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="120" />
+              <el-table-column prop="reason" label="原因" min-width="220" show-overflow-tooltip />
+            </el-table>
+            <el-collapse v-if="trialSkillEval.skill_eval_snapshot" style="margin-top: 8px">
+              <el-collapse-item title="Skill 评测配置">
+                <pre class="json-block">{{ JSON.stringify(trialSkillEval.skill_eval_snapshot, null, 2) }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+          </template>
+        </div>
+
         <!-- 输入数据 -->
         <div style="margin-top: 16px">
           <div class="section-title">输入数据</div>
@@ -403,6 +449,7 @@ const trialDetailVisible = ref(false)
 const selectedTrial = ref<any>(null)
 const trialScores = ref<any[]>([])
 const trialExplainability = ref<any>(null)
+const trialSkillEval = ref<any>(null)
 
 // Trace
 const traceDrawerVisible = ref(false)
@@ -483,6 +530,7 @@ const openTrialDetail = async (trial: any) => {
   selectedTrial.value = trial
   trialDetailVisible.value = true
   trialExplainability.value = null
+  trialSkillEval.value = null
 
   // Load scores for this trial
   try {
@@ -497,6 +545,13 @@ const openTrialDetail = async (trial: any) => {
     trialExplainability.value = res.data?.data || null
   } catch {
     trialExplainability.value = { status: 'unavailable' }
+  }
+
+  try {
+    const res = await axios.get(`/api/eval/trials/${trial.trial_id}/skill-eval`)
+    trialSkillEval.value = res.data?.data || { status: 'legacy_unverified' }
+  } catch {
+    trialSkillEval.value = { status: 'legacy_unverified' }
   }
 }
 

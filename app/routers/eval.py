@@ -23,6 +23,7 @@ from app.services.eval.runner_service import runner_service
 from app.services.eval.trace_adapter import trace_adapter
 from app.services.eval.scorer_hub import scorer_hub
 from app.services.eval.metrics_service import metrics_service
+from app.services.eval.skill_regression_service import skill_regression_service
 from app.services.explainability.record_service import decision_record_store
 from app.models.eval import ClaimTruthLabel, HallucinationType
 from app.utils.timezone import now_tz
@@ -90,6 +91,16 @@ class RunCreateRequest(BaseModel):
     low_confidence_threshold: Optional[float] = None
     review_strategy: Optional[str] = None
     data_window: Optional[dict] = None
+
+
+class SkillRegressionCreateRequest(BaseModel):
+    baseline_run_id: str
+    candidate_run_id: str
+
+
+class SkillRegressionOverrideRequest(BaseModel):
+    allowed: bool
+    reason: str
 
 
 # ==================== 权限检查 ====================
@@ -721,6 +732,72 @@ async def get_trace_summary(trial_id: str):
         return ApiResponse(success=True, data=summary)
     except Exception as e:
         logger.error(f"Failed to get trace summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trials/{trial_id}/skill-eval", dependencies=[Depends(verify_eval_access)])
+async def get_trial_skill_eval(trial_id: str):
+    """获取 trial 的 Skill 路由/执行/共存评测摘要。"""
+    try:
+        trial = await runner_service.get_trial(trial_id)
+        if not trial:
+            raise HTTPException(status_code=404, detail=f"Trial {trial_id} not found")
+        events = await trace_adapter.get_trace_events(
+            trial_id=trial_id,
+            limit=500,
+            event_types=["skill_route", "skill_execute"],
+        )
+        db = get_mongo_db()
+        score_cursor = db["eval_scores"].find({
+            "trial_id": trial_id,
+            "score_name": {"$in": ["skill_route", "skill_execution", "skill_coexistence"]},
+        })
+        scores = []
+        async for doc in score_cursor:
+            doc["id"] = str(doc.pop("_id"))
+            scores.append(doc)
+
+        route_selected = any(
+            (event.get("data") or {}).get("route_selected")
+            for event in events
+            if event.get("event_type") == "skill_route"
+        )
+        skill_effective = any(
+            (event.get("data") or {}).get("skill_effective")
+            for event in events
+            if event.get("event_type") == "skill_execute"
+        )
+        skill_eval_snapshot = trial.get("skill_eval_snapshot") or (
+            (trial.get("case_snapshot") or {}).get("skill_eval")
+        )
+        if not events and not skill_eval_snapshot and not scores:
+            return ApiResponse(
+                success=True,
+                data={
+                    "status": "legacy_unverified",
+                    "route_selected": False,
+                    "skill_effective": False,
+                    "events": [],
+                    "scores": [],
+                    "skill_eval_snapshot": None,
+                },
+                message="旧 trial 无 Skill 评测数据",
+            )
+        return ApiResponse(
+            success=True,
+            data={
+                "status": "complete",
+                "route_selected": route_selected,
+                "skill_effective": skill_effective,
+                "events": events,
+                "scores": scores,
+                "skill_eval_snapshot": skill_eval_snapshot,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get trial skill eval: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1795,6 +1872,126 @@ async def trigger_regression_task(task_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to trigger regression task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Skill 配对回归 API ====================
+
+@router.post("/skill-regression-groups", dependencies=[Depends(verify_eval_access)])
+async def create_skill_regression_group(
+    request: SkillRegressionCreateRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """创建 Skill baseline/candidate 配对回归组。"""
+    try:
+        group = await skill_regression_service.create_group(
+            request.baseline_run_id,
+            request.candidate_run_id,
+            created_by=current_user.get("username", ""),
+        )
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归组已创建",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to create skill regression group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skill-regression-groups", dependencies=[Depends(verify_eval_access)])
+async def list_skill_regression_groups(skip: int = 0, limit: int = 50):
+    """查看 Skill 回归组列表。"""
+    try:
+        groups = await skill_regression_service.list_groups(skip=skip, limit=limit)
+        return ApiResponse(
+            success=True,
+            data={
+                "items": [g.model_dump(by_alias=True, exclude={"id"}) for g in groups],
+                "total": len(groups),
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to list skill regression groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skill-regression-groups/{group_id}", dependencies=[Depends(verify_eval_access)])
+async def get_skill_regression_group(group_id: str):
+    """查看 Skill 回归组详情。"""
+    try:
+        group = await skill_regression_service.get_group(group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Skill 回归组不存在")
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get skill regression group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/compute", dependencies=[Depends(verify_eval_access)])
+async def compute_skill_regression_group(group_id: str):
+    """计算逐 case 回归 delta。"""
+    try:
+        group = await skill_regression_service.compute_deltas(group_id)
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归 delta 已计算",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to compute skill regression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/gate", dependencies=[Depends(verify_eval_access)])
+async def evaluate_skill_regression_group(group_id: str):
+    """执行 Skill critical 回归门禁。"""
+    try:
+        group = await skill_regression_service.evaluate_gate(group_id)
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to evaluate skill regression gate: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/override", dependencies=[Depends(verify_eval_access)])
+async def override_skill_regression_group(
+    group_id: str,
+    request: SkillRegressionOverrideRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """管理员显式覆盖 Skill 回归门禁并留痕。"""
+    try:
+        group = await skill_regression_service.override_group(
+            group_id,
+            allowed=request.allowed,
+            reason=request.reason,
+            overridden_by=current_user.get("username", ""),
+        )
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归门禁覆盖已记录",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to override skill regression gate: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

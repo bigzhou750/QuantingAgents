@@ -182,7 +182,60 @@ class RunSnapshot(BaseModel):
     scorer_config: List[Dict[str, Any]] = Field(default_factory=list, description="评分器配置快照")
     judge_config: Dict[str, Any] = Field(default_factory=dict, description="Judge 配置快照")
     data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
+    skill_eval: Optional[Dict[str, Any]] = Field(default=None, description="Skill 评测运行配置快照")
     created_at: datetime = Field(default_factory=now_tz, description="快照创建时间")
+
+
+# ==================== Skill 评测模型 ====================
+
+class SkillEvalVariant(str, Enum):
+    """Skill 评测运行变体"""
+    NO_TARGET_SKILL = "no_target_skill"
+    SKILL_ONLY = "skill_only"
+    FULL_SKILL_SET = "full_skill_set"
+
+
+class SkillRouteExpectation(BaseModel):
+    """Skill 路由断言"""
+    should_trigger: List[str] = Field(default_factory=list, description="应触发的 Skill 名称")
+    should_not_trigger: List[str] = Field(default_factory=list, description="不应触发的 Skill 名称")
+    boundary: List[str] = Field(default_factory=list, description="容易混淆的边界样本")
+    required: List[str] = Field(default_factory=list, description="必须出现在候选集中的 Skill")
+    forbidden: List[str] = Field(default_factory=list, description="禁止出现在候选集中的 Skill")
+    note: str = Field(default="", description="路由断言说明")
+
+
+class SkillExecutionAssert(BaseModel):
+    """Skill 执行断言"""
+    required_tools: List[str] = Field(default_factory=list, description="必须调用的工具")
+    forbidden_tools: List[str] = Field(default_factory=list, description="禁止调用的工具")
+    required_files: List[str] = Field(default_factory=list, description="必须生成或读取的文件")
+    schema_checks: List[Dict[str, Any]] = Field(default_factory=list, description="schema/字段检查")
+    formula_checks: List[Dict[str, Any]] = Field(default_factory=list, description="公式或数值检查")
+    state_checks: List[Dict[str, Any]] = Field(default_factory=list, description="环境状态变更检查")
+    output_structure: Dict[str, Any] = Field(default_factory=dict, description="输出结构约束")
+    max_expected_steps: int = Field(default=20, description="最大期望工具步骤数")
+
+
+class SkillCoexistenceConfig(BaseModel):
+    """Skill 共存冲突配置"""
+    coexisting_skills: List[str] = Field(default_factory=list, description="真实 Skill 集合")
+    neighbor_skills: List[str] = Field(default_factory=list, description="相邻 Skill")
+    conflict_scenario: str = Field(default="", description="冲突场景描述")
+    max_neighbor_success_drop: float = Field(default=0.1, ge=0.0, le=1.0, description="邻居成功率最大允许下降")
+    forbidden_overlaps: List[str] = Field(default_factory=list, description="禁止共享或覆盖的工具/文件模式")
+
+
+class SkillEvalConfig(BaseModel):
+    """Skill 评测配置，作为 EvalCase/run config 的可选扩展。"""
+    skill_name: str = Field(default="", description="目标 Skill")
+    variant: SkillEvalVariant = Field(default=SkillEvalVariant.FULL_SKILL_SET, description="评测变体")
+    skill_versions: Dict[str, str] = Field(default_factory=dict, description="Skill name -> version")
+    route_expectation: SkillRouteExpectation = Field(default_factory=SkillRouteExpectation)
+    execution_asserts: SkillExecutionAssert = Field(default_factory=SkillExecutionAssert)
+    coexistence: SkillCoexistenceConfig = Field(default_factory=SkillCoexistenceConfig)
+    critical: bool = Field(default=False, description="关键场景，回退必须阻断")
+    model_versions: List[str] = Field(default_factory=list, description="允许的模型版本")
 
 
 # ==================== 评测集模型 ====================
@@ -197,6 +250,7 @@ class EvalCase(BaseModel):
     expected_output: Optional[Dict[str, Any]] = Field(default=None, description="期望输出")
     scoring_criteria: Dict[str, Any] = Field(default_factory=dict, description="评分标准")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="回流来源和评测元数据")
+    skill_eval: Optional[SkillEvalConfig] = Field(default=None, description="Skill 评测配置")
     archived: bool = Field(default=False, description="是否已归档（软删除）")
     tags: List[str] = Field(default_factory=list, description="标签")
     difficulty: str = Field(default="medium", description="难度级别: easy/medium/hard")
@@ -241,6 +295,7 @@ class EvalRunConfig(BaseModel):
     quality_pass_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="质量 pass 阈值")
     required_scorers: List[str] = Field(default_factory=list, description="质量 pass 必须通过的 scorer")
     data_window: Optional[Dict[str, Any]] = Field(default=None, description="数据时间窗口")
+    skill_eval: Dict[str, Any] = Field(default_factory=dict, description="Skill 评测运行配置")
     extra: Dict[str, Any] = Field(default_factory=dict, description="额外配置")
 
 
@@ -259,6 +314,7 @@ class EvalRun(BaseModel):
     started_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
     snapshot: Optional[RunSnapshot] = Field(default=None, description="运行快照（case/scorer/judge/data_window）")
+    skill_regression_group_id: Optional[str] = Field(default=None, description="配对回归组 ID")
     created_by: str = Field(default="", description="创建者")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
@@ -280,6 +336,7 @@ class EvalTrial(BaseModel):
     input_data: Dict[str, Any] = Field(default_factory=dict, description="实际输入")
     output_data: Optional[Dict[str, Any]] = Field(default=None, description="实际输出")
     case_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="运行时 case 内容快照")
+    skill_eval_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="运行时 Skill 评测配置快照")
     snapshot_version: Optional[str] = Field(default=None, description="执行时使用的数据集快照版本")
     trace_ref: Optional[str] = Field(default=None, description="Trace 引用 ID")
     token_usage: Dict[str, int] = Field(default_factory=dict, description="Token 使用情况")
@@ -288,6 +345,63 @@ class EvalTrial(BaseModel):
     error_message: Optional[str] = Field(default=None)
     started_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=now_tz)
+    updated_at: datetime = Field(default_factory=now_tz)
+
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+
+
+# ==================== Skill 配对回归模型 ====================
+
+class SkillCaseDelta(BaseModel):
+    """单个 case 的基线/候选版本对比结果"""
+    case_id: str = Field(..., description="case ID")
+    case_name: str = Field(default="", description="case 名称")
+    critical: bool = Field(default=False, description="是否为关键场景")
+    baseline_score: float = Field(default=0.0, description="基线平均质量分")
+    candidate_score: float = Field(default=0.0, description="候选平均质量分")
+    delta: float = Field(default=0.0, description="candidate - baseline")
+    baseline_latency_ms: float = Field(default=0.0, description="基线平均延迟")
+    candidate_latency_ms: float = Field(default=0.0, description="候选平均延迟")
+    baseline_cost_usd: float = Field(default=0.0, description="基线平均成本")
+    candidate_cost_usd: float = Field(default=0.0, description="候选平均成本")
+    dimension_deltas: Dict[str, float] = Field(default_factory=dict, description="评分维度 delta")
+    regressed: bool = Field(default=False, description="是否回退")
+    regressed_dimensions: List[str] = Field(default_factory=list, description="回退维度")
+    reasons: List[str] = Field(default_factory=list, description="失败原因")
+    failure_trial_ids: List[str] = Field(default_factory=list, description="失败/超时 trial ID")
+    baseline_trial_ids: List[str] = Field(default_factory=list, description="基线 trial ID")
+    candidate_trial_ids: List[str] = Field(default_factory=list, description="候选 trial ID")
+
+
+class SkillRegressionGateResult(BaseModel):
+    """Skill 配对回归门禁结果"""
+    passed: bool = Field(default=False, description="是否通过")
+    enabled: bool = Field(default=True, description="是否启用")
+    blocks: List[Dict[str, Any]] = Field(default_factory=list, description="阻断项")
+    checks: List[Dict[str, Any]] = Field(default_factory=list, description="逐项检查")
+    evaluated_at: datetime = Field(default_factory=now_tz, description="评估时间")
+
+
+class SkillRegressionGroup(BaseModel):
+    """Skill 配对回归组"""
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    group_id: str = Field(..., description="回归组唯一标识")
+    baseline_run_id: str = Field(..., description="基线 run ID")
+    candidate_run_id: str = Field(..., description="候选 run ID")
+    dataset_id: str = Field(default="", description="共享数据集 ID")
+    dataset_version: str = Field(default="", description="共享数据集版本")
+    skill_name: str = Field(default="", description="目标 Skill")
+    baseline_skill_version: str = Field(default="", description="基线 Skill 版本")
+    candidate_skill_version: str = Field(default="", description="候选 Skill 版本")
+    model_version: str = Field(default="", description="模型版本")
+    scorer_versions: Dict[str, str] = Field(default_factory=dict, description="scorer name -> version")
+    critical_cases: List[str] = Field(default_factory=list, description="关键 case ID")
+    per_case_deltas: List[SkillCaseDelta] = Field(default_factory=list, description="逐 case delta")
+    gate_result: Optional[SkillRegressionGateResult] = Field(default=None, description="回归门禁结果")
+    status: str = Field(default="pending", description="pending/computed/gate_passed/gate_failed")
+    override: Dict[str, Any] = Field(default_factory=dict, description="管理员覆盖记录")
+    created_by: str = Field(default="", description="创建者")
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
 

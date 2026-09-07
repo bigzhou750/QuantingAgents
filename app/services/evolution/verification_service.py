@@ -186,9 +186,26 @@ class VerificationService:
             if not completed:
                 raise ValueError(f"Verification run {candidate_run_id} did not complete within timeout")
 
+            skill_regression_group_id = ""
+            if proposal.target_artifact_type == ArtifactType.SKILL:
+                from app.services.eval.skill_regression_service import skill_regression_service
+
+                regression_group = await skill_regression_service.create_group(
+                    proposal.trigger_run_id,
+                    candidate_run_id,
+                    created_by="evolution_verify",
+                )
+                regression_group = await skill_regression_service.evaluate_gate(
+                    regression_group.group_id
+                )
+                skill_regression_group_id = regression_group.group_id
+
             # 计算对比结果
             comparison = await self._compute_comparison(
-                proposal.trigger_run_id, candidate_run_id, metrics_service
+                proposal.trigger_run_id,
+                candidate_run_id,
+                metrics_service,
+                skill_regression_group_id=skill_regression_group_id,
             )
 
             # 保存验证记录
@@ -197,6 +214,7 @@ class VerificationService:
                 proposal_id=proposal_id,
                 baseline_run_id=proposal.trigger_run_id,
                 candidate_run_id=candidate_run_id,
+                baseline_artifact_version=baseline_version,
                 sandbox_path=sandbox_path,
                 overlay_id=overlay_id,
                 overlay_manifest=overlay_manifest,
@@ -347,7 +365,11 @@ class VerificationService:
         return current_content + addition
 
     async def _compute_comparison(
-        self, baseline_run_id: str, candidate_run_id: str, metrics_service
+        self,
+        baseline_run_id: str,
+        candidate_run_id: str,
+        metrics_service,
+        skill_regression_group_id: str = "",
     ) -> Dict[str, Any]:
         """计算基线与候选的指标对比"""
         try:
@@ -416,6 +438,29 @@ class VerificationService:
                 "checks": checks,
                 "evaluated_at": now_tz().isoformat(),
             }
+
+            if skill_regression_group_id:
+                from app.services.eval.skill_regression_service import skill_regression_service
+
+                group = await skill_regression_service.get_group(skill_regression_group_id)
+                if group:
+                    new_regressions = [
+                        delta.model_dump(by_alias=True)
+                        for delta in group.per_case_deltas
+                        if delta.regressed
+                    ]
+                    result["new_regressions"] = new_regressions
+                    if group.gate_result:
+                        result["skill_regression_group_id"] = group.group_id
+                        result["skill_regression_gate"] = group.gate_result.model_dump(by_alias=True)
+                        result["gate"]["checks"].append({
+                            "name": "skill_regression_gate",
+                            "passed": group.gate_result.passed,
+                            "detail": group.gate_result.blocks,
+                        })
+                        result["gate"]["passed"] = (
+                            result["gate"]["passed"] and group.gate_result.passed
+                        )
 
             return result
 
