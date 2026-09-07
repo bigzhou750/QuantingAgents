@@ -283,11 +283,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-<<<<<<< HEAD
-import { Close, Delete, List, Plus, Refresh, UserFilled } from '@element-plus/icons-vue'
-=======
 import { ChatLineSquare, CircleClose, Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
->>>>>>> 79ff6a28180567a31ef1a05d850fe4f16f184c6e
 import { marked } from 'marked'
 import {
   vibeAgentApi,
