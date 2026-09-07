@@ -4,20 +4,7 @@
     <NetworkStatus />
 
     <!-- 主要内容区域 -->
-    <router-view v-slot="{ Component, route }">
-      <transition
-        :name="(route?.meta?.transition as string) || 'fade'"
-        mode="out-in"
-        appear
-      >
-        <keep-alive :include="keepAliveComponents">
-      <component
-        :is="Component"
-        :key="route?.path === '/research-agent' ? route.path : (route?.fullPath || 'default')"
-      />
-        </keep-alive>
-      </transition>
-    </router-view>
+    <router-view />
 
     <!-- 配置向导 -->
     <ConfigWizard

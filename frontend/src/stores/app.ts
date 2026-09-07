@@ -11,7 +11,7 @@ export interface AppState {
 
   // 网络状态
   isOnline: boolean
-  apiConnected: boolean
+  apiConnected: boolean | null
   lastApiCheck: number
 
   // 布局状态
@@ -54,7 +54,7 @@ export const useAppStore = defineStore('app', {
     language: (useStorage('app-language', 'zh-CN').value || 'zh-CN') as 'zh-CN' | 'en-US',
 
     isOnline: navigator.onLine,
-    apiConnected: false,
+    apiConnected: null,
     lastApiCheck: 0,
 
     sidebarCollapsed: useStorage('sidebar-collapsed', false).value || false,
@@ -202,7 +202,7 @@ export const useAppStore = defineStore('app', {
       try {
         // 使用 AbortController 实现超时
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3秒超时
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
 
         const response = await fetch('/api/health', {
           method: 'GET',
@@ -230,7 +230,7 @@ export const useAppStore = defineStore('app', {
       try {
         // 使用 AbortController 实现超时
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3秒超时
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
 
         const response = await fetch('/api/health', {
           signal: controller.signal

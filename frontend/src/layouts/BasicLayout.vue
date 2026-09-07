@@ -56,18 +56,12 @@
       <main class="main-content">
         <div class="content-wrapper">
           <router-view v-slot="{ Component, route }">
-            <transition
-              :name="route.meta.transition || 'fade'"
-              mode="out-in"
-              appear
-            >
-              <keep-alive :include="keepAliveComponents">
-                <component
-                  :is="Component"
-                  :key="route.path === '/research-agent' ? route.path : route.fullPath"
-                />
-              </keep-alive>
-            </transition>
+            <keep-alive :include="keepAliveComponents">
+              <component
+                :is="Component"
+                :key="route.name || route.path"
+              />
+            </keep-alive>
           </router-view>
         </div>
       </main>
