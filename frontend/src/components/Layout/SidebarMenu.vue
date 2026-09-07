@@ -222,7 +222,6 @@ const showSelfEvolution = computed(() => {
     padding: 0;
 
     :deep(.el-menu-item),
-    :deep(.el-menu-tooltip__trigger),
     :deep(.el-sub-menu__title) {
       display: flex !important;
       align-items: center;
@@ -240,8 +239,8 @@ const showSelfEvolution = computed(() => {
     }
 
     :deep(.el-tooltip__trigger) {
-      justify-content: left !important;
-      padding-left: 6px !important;
+      justify-content: center !important;
+      // padding-left: 6px !important;
     }
 
     :deep(.el-menu-item.is-active)::before {
