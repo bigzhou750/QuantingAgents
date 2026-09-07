@@ -78,37 +78,58 @@ def _min_interval() -> float:
     return resolve_min_interval(_MIN_INTERVAL_ENV, _DEFAULT_MIN_INTERVAL)
 
 
-def _curl_get_json(url: str, *, params: dict[str, Any], timeout: int = 15) -> Any:
+def _curl_get_json(url: str, *, params: dict[str, Any], timeout: int = 15, max_retries: int = 3) -> Any:
     """Fallback GET via ``curl`` subprocess when Python TLS is blocked.
 
     Some providers (e.g. Eastmoney) fingerprint Python's TLS ClientHello and
     silently drop the connection, while ``curl`` with its own TLS stack works
     fine.  This helper shells out to ``curl`` as a last resort.
+
+    Retries up to ``max_retries`` times with exponential backoff (1s, 2s, 4s)
+    on empty responses or connection errors, since Eastmoney intermittently
+    returns HTTP 52 (empty reply) under load.
     """
     import subprocess
+    import time
     from urllib.parse import urlencode
 
     full_url = f"{url}?{urlencode(params)}"
-    try:
-        result = subprocess.run(
-            [
-                "curl", "-s", "-S", "--max-time", str(timeout),
-                "-H", "User-Agent: Mozilla/5.0",
-                "-H", "Accept: */*",
-                full_url,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout + 5,
-        )
-        if result.returncode != 0:
-            raise ConnectionError(f"curl exited {result.returncode}: {result.stderr.strip()}")
-        body = result.stdout.strip()
-        if not body:
-            raise ValueError("curl returned empty body")
-        return json.loads(body)
-    except subprocess.TimeoutExpired:
-        raise TimeoutError(f"curl timed out after {timeout}s for {url}")
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-S", "--max-time", str(timeout),
+                    "-H", "User-Agent: Mozilla/5.0",
+                    "-H", "Accept: */*",
+                    full_url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5,
+            )
+            if result.returncode != 0:
+                raise ConnectionError(f"curl exited {result.returncode}: {result.stderr.strip()}")
+            body = result.stdout.strip()
+            if not body:
+                raise ValueError("curl returned empty body")
+            return json.loads(body)
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"curl timed out after {timeout}s for {url}")
+        except (ValueError, ConnectionError) as exc:
+            last_error = exc
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                logger.warning(
+                    "curl attempt %d/%d failed for %s: %s; retrying in %ds",
+                    attempt + 1, max_retries, url, exc, wait_time,
+                )
+                time.sleep(wait_time)
+            else:
+                raise
+    # Should not reach here, but just in case
+    raise last_error  # type: ignore[misc]
 
 
 def get_json(url: str, *, params: dict[str, Any]) -> Any:
