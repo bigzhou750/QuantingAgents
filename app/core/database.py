@@ -362,6 +362,30 @@ async def create_database_indexes(db):
         await market_quotes.create_index([("amount", -1)])
         await market_quotes.create_index([("updated_at", -1)])
 
+        # ==================== Token 计费模块索引 ====================
+        # token_accounts: user_id 唯一
+        token_accounts = db["token_accounts"]
+        await token_accounts.create_index([("user_id", 1)], unique=True)
+
+        # token_recharge_orders: order_id 唯一 + 用户订单列表 + 过期清理
+        token_orders = db["token_recharge_orders"]
+        await token_orders.create_index([("order_id", 1)], unique=True)
+        await token_orders.create_index([("user_id", 1), ("created_at", -1)])
+        await token_orders.create_index([("status", 1), ("expire_at", 1)])
+        await token_orders.create_index([("idempotency_key", 1)], unique=True, sparse=True)
+
+        # token_transactions: txn_id 唯一 + 用户流水列表 + 订单关联
+        token_txns = db["token_transactions"]
+        await token_txns.create_index([("txn_id", 1)], unique=True)
+        await token_txns.create_index([("user_id", 1), ("created_at", -1)])
+        await token_txns.create_index([("order_id", 1)], sparse=True)
+        await token_txns.create_index([("type", 1), ("user_id", 1), ("created_at", -1)])
+
+        # token_packages: package_id 唯一 + 排序查询
+        token_pkgs = db["token_packages"]
+        await token_pkgs.create_index([("package_id", 1)], unique=True)
+        await token_pkgs.create_index([("enabled", 1), ("sort_order", 1)])
+
         logger.info("✅ 数据库索引创建完成")
 
     except Exception as e:

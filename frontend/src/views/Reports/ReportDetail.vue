@@ -665,7 +665,7 @@ const applyToTrading = async () => {
           ]),
           h('p', [
             h('strong', '预计金额：'),
-            h('span', { style: 'color: #409EFF; font-weight: bold;' }, `${estimatedAmount.value}元`)
+            h('span', { style: 'color: #0EA5E9; font-weight: bold;' }, `${estimatedAmount.value}元`)
           ]),
           h('p', [
             h('strong', '模型置信度：'),
@@ -886,7 +886,7 @@ const normalizeConfidenceScore = (score: number) => {
 
 const getConfidenceColor = (score: number) => {
   if (score >= 80) return '#67C23A' // 较高 - 绿色
-  if (score >= 60) return '#409EFF' // 中上 - 蓝色
+  if (score >= 60) return '#0EA5E9' // 中上 - 蓝色
   if (score >= 40) return '#E6A23C' // 中等 - 橙色
   return '#F56C6C' // 较低 - 红色
 }

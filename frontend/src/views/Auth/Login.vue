@@ -2,9 +2,9 @@
   <div class="login-page">
     <div class="login-container">
       <div class="login-header">
-        <img src="/logo.svg" alt="TradingAgents-CN" class="logo" />
-        <h1 class="title">TradingAgents-CN</h1>
-        <p class="subtitle">多智能体股票分析学习平台</p>
+        <img src="/logo.svg" alt="智投" class="logo" />
+        <h1 class="title">智投</h1>
+        <p class="subtitle">AI智能股票分析平台</p>
       </div>
 
       <el-card class="login-card" shadow="always">
@@ -68,9 +68,9 @@
       </el-card>
 
       <div class="login-footer">
-        <p>&copy; 2025 TradingAgents-CN. All rights reserved.</p>
-        <p class="disclaimer">
-          TradingAgents-CN 是一个 AI 多 Agents 的股票分析学习平台。平台中的分析结论、观点和“投资建议”均由 AI 自动生成，仅用于学习、研究与交流，不构成任何形式的投资建议或承诺。用户据此进行的任何投资行为及其产生的风险与后果，均由用户自行承担。市场有风险，入市需谨慎。
+        <p>&copy; 2025 智投. All rights reserved.</p>
+        <p class=”disclaimer”>
+          本平台AI分析结果仅供学习研究参考，不构成投资建议。市场有风险，投资需谨慎。
         </p>
       </div>
     </div>
@@ -154,7 +154,7 @@ const handleLogin = async () => {
 <style lang="scss" scoped>
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--zt-gradient-hero);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -272,6 +272,11 @@ const createAxiosInstance = (): AxiosInstance => {
             handle401Error(authStore, '登录已过期，请重新登录')
             break
 
+          case 402:
+            // 余额不足：不自动弹错误提示，由调用方处理（引导充值）
+            console.log('💰 402 余额不足:', data?.detail || data?.message)
+            break
+
           case 403:
             showErrorMessage('权限不足，无法访问该资源')
             break
@@ -379,6 +384,11 @@ const handleBusinessError = (data: ApiResponse) => {
     case 40103:  // Token 过期
       console.log('🔒 业务错误：认证失败')
       handle401Error(authStore, message || '登录已过期，请重新登录')
+      break
+    case 402:
+    case 40201:
+      // 余额不足：不自动弹错误提示，由调用方处理
+      console.log('💰 业务错误：余额不足', message)
       break
     case 40001:
       showErrorMessage('参数错误')
