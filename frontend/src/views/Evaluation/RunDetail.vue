@@ -87,13 +87,13 @@
         </el-col>
         <el-col :span="4" v-if="run.num_trials_per_case > 1">
           <div class="metric-item">
-            <div class="metric-label">pass@{{ metrics.pass_k || 3 }}</div>
+            <div class="metric-label">质量 pass@{{ metrics.pass_k || 3 }}</div>
             <div class="metric-value">{{ ((metrics.pass_at_k || 0) * 100).toFixed(1) }}%</div>
           </div>
         </el-col>
         <el-col :span="4" v-if="run.num_trials_per_case > 1">
           <div class="metric-item">
-            <div class="metric-label">pass^{{ metrics.pass_k || 3 }}</div>
+            <div class="metric-label">质量 pass^{{ metrics.pass_k || 3 }}</div>
             <div class="metric-value">{{ ((metrics.pass_pow_k || 0) * 100).toFixed(1) }}%</div>
           </div>
         </el-col>
@@ -118,12 +118,44 @@
           <el-col :span="6" v-for="(scoreData, scoreName) in metrics.score_aggregation" :key="scoreName">
             <div class="score-dimension">
               <span class="score-name">{{ scoreName }}</span>
-              <el-tag :type="scoreData.avg_score >= 0.7 ? 'success' : scoreData.avg_score >= 0.5 ? 'warning' : 'danger'" size="small">
+              <el-tag v-if="scoreData.status !== 'unscorable' && scoreData.status !== 'not_applicable'" :type="scoreData.avg_score >= 0.7 ? 'success' : scoreData.avg_score >= 0.5 ? 'warning' : 'danger'" size="small">
                 {{ (scoreData.avg_score * 100).toFixed(0) }}%
               </el-tag>
+              <el-tag v-else type="info" size="small">{{ scoreData.status === 'unscorable' ? '不可评分' : '不适用' }}</el-tag>
             </div>
           </el-col>
         </el-row>
+      </div>
+
+      <div v-if="metrics.claim_summary?.hallucination_metrics" class="hallucination-summary">
+        <div class="metric-label" style="margin-bottom: 8px">幻觉检测指标</div>
+        <el-row :gutter="12">
+          <el-col :span="5" v-for="item in hallucinationMetricItems" :key="item.key">
+            <div class="score-dimension">
+              <span class="score-name">{{ item.label }}</span>
+              <el-tag v-if="item.value !== null" :type="item.value >= 0.8 ? 'success' : 'warning'" size="small">
+                {{ (item.value * 100).toFixed(1) }}%
+              </el-tag>
+              <el-tag v-else type="info" size="small">暂无真值</el-tag>
+            </div>
+          </el-col>
+        </el-row>
+        <el-table
+          v-if="metrics.claim_summary.claims?.length"
+          :data="metrics.claim_summary.claims"
+          size="small"
+          stripe
+          style="margin-top: 12px"
+          max-height="260"
+        >
+          <el-table-column prop="claim_text" label="Claim" min-width="260" show-overflow-tooltip />
+          <el-table-column prop="truth_label" label="真值" width="110" />
+          <el-table-column prop="prediction_label" label="预测幻觉" width="110">
+            <template #default="{ row }">{{ row.prediction_label === true ? '是' : row.prediction_label === false ? '否' : '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="hallucination_type" label="类型" width="110" />
+          <el-table-column prop="evidence_source" label="证据来源" min-width="160" show-overflow-tooltip />
+        </el-table>
       </div>
     </el-card>
 
@@ -227,6 +259,52 @@
           <el-alert :title="selectedTrial.error_message" type="error" :closable="false" show-icon />
         </div>
 
+        <!-- Skill 评测 -->
+        <div style="margin-top: 16px" v-if="trialSkillEval">
+          <div class="section-title">Skill 评测</div>
+          <el-alert
+            v-if="trialSkillEval.status === 'legacy_unverified'"
+            title="旧 trial 无 Skill 评测数据，保留原始 trace"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <template v-else>
+            <el-descriptions :column="3" border size="small" style="margin-top: 8px">
+              <el-descriptions-item label="Route Selected">
+                <el-tag :type="trialSkillEval.route_selected ? 'success' : 'info'" size="small">
+                  {{ trialSkillEval.route_selected ? '是' : '否' }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Skill Effective">
+                <el-tag :type="trialSkillEval.skill_effective ? 'success' : 'info'" size="small">
+                  {{ trialSkillEval.skill_effective ? '是' : '否' }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Skill 事件数">{{ trialSkillEval.events?.length || 0 }}</el-descriptions-item>
+            </el-descriptions>
+            <el-table
+              v-if="trialSkillEval.scores?.length"
+              :data="trialSkillEval.scores"
+              size="small"
+              stripe
+              style="margin-top: 12px"
+            >
+              <el-table-column prop="score_name" label="维度" width="150" />
+              <el-table-column prop="score" label="分数" width="90">
+                <template #default="{ row }">{{ (row.score * 100).toFixed(0) }}%</template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="120" />
+              <el-table-column prop="reason" label="原因" min-width="220" show-overflow-tooltip />
+            </el-table>
+            <el-collapse v-if="trialSkillEval.skill_eval_snapshot" style="margin-top: 8px">
+              <el-collapse-item title="Skill 评测配置">
+                <pre class="json-block">{{ JSON.stringify(trialSkillEval.skill_eval_snapshot, null, 2) }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+          </template>
+        </div>
+
         <!-- 输入数据 -->
         <div style="margin-top: 16px">
           <div class="section-title">输入数据</div>
@@ -262,6 +340,47 @@
             <el-icon><List /></el-icon>
             查看 Trace
           </el-button>
+        </div>
+
+        <!-- 决策链与解释校验 -->
+        <div style="margin-top: 16px">
+          <div class="section-title">决策链与解释校验</div>
+          <el-alert
+            v-if="trialExplainability?.status === 'legacy_unverified' || trialExplainability?.status === 'unavailable'"
+            :title="trialExplainability?.status === 'legacy_unverified' ? '旧 trial 无决策链，保留原始 trace' : '暂无决策链数据'"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <template v-else-if="trialExplainability">
+            <el-table :data="trialExplainability.decision_chain || []" size="small" stripe style="margin-top: 8px">
+              <el-table-column prop="scenario" label="场景" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="selected_option" label="选择" width="120" show-overflow-tooltip />
+              <el-table-column prop="selection_reason" label="依据" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="status" label="状态" width="110" />
+              <el-table-column prop="risk_level" label="风险" width="80" />
+            </el-table>
+            <el-descriptions v-if="trialExplainability.validations?.length" :column="3" border size="small" style="margin-top: 12px">
+              <el-descriptions-item v-for="item in trialExplainability.validations" :key="item.validation_id" :label="item.status" :span="1">
+                {{ item.reason }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <el-table
+              v-if="trialExplainability.explanations?.length"
+              :data="trialExplainability.explanations"
+              size="small"
+              stripe
+              style="margin-top: 12px"
+            >
+              <el-table-column prop="version" label="版本" width="90" />
+              <el-table-column label="用户解释" min-width="260">
+                <template #default="{ row }">{{ row.user?.text || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="业务解释" min-width="260">
+                <template #default="{ row }">{{ row.business?.text || '-' }}</template>
+              </el-table-column>
+            </el-table>
+          </template>
         </div>
       </div>
     </el-drawer>
@@ -316,11 +435,21 @@ const run = ref<any>({})
 const trials = ref<any[]>([])
 const loadingTrials = ref(false)
 const metrics = ref<any>(null)
+const hallucinationMetricItems = computed(() => {
+  const data = metrics.value?.claim_summary?.hallucination_metrics || {}
+  return [
+    { key: 'precision', label: 'Precision', value: data.precision ?? null },
+    { key: 'recall', label: 'Recall', value: data.recall ?? null },
+    { key: 'f1', label: 'F1', value: data.f1 ?? null },
+  ]
+})
 
 // Trial detail
 const trialDetailVisible = ref(false)
 const selectedTrial = ref<any>(null)
 const trialScores = ref<any[]>([])
+const trialExplainability = ref<any>(null)
+const trialSkillEval = ref<any>(null)
 
 // Trace
 const traceDrawerVisible = ref(false)
@@ -400,6 +529,8 @@ const loadTrials = async () => {
 const openTrialDetail = async (trial: any) => {
   selectedTrial.value = trial
   trialDetailVisible.value = true
+  trialExplainability.value = null
+  trialSkillEval.value = null
 
   // Load scores for this trial
   try {
@@ -407,6 +538,20 @@ const openTrialDetail = async (trial: any) => {
     trialScores.value = res.data?.data?.items || []
   } catch {
     trialScores.value = []
+  }
+
+  try {
+    const res = await axios.get(`/api/eval/trials/${trial.trial_id}/explainability`)
+    trialExplainability.value = res.data?.data || null
+  } catch {
+    trialExplainability.value = { status: 'unavailable' }
+  }
+
+  try {
+    const res = await axios.get(`/api/eval/trials/${trial.trial_id}/skill-eval`)
+    trialSkillEval.value = res.data?.data || { status: 'legacy_unverified' }
+  } catch {
+    trialSkillEval.value = { status: 'legacy_unverified' }
   }
 }
 
@@ -486,7 +631,7 @@ const getTrialStatusLabel = (status: string) => {
 
 const getScoreStatusType = (status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    passed: 'success', failed: 'danger', skipped: 'info', not_configured: 'warning', error: 'danger',
+    passed: 'success', failed: 'danger', skipped: 'info', not_configured: 'warning', error: 'danger', unscorable: 'info', not_applicable: 'info',
   }
   return map[status] || 'info'
 }
@@ -504,6 +649,7 @@ const getTraceEventTagType = (eventType: string): 'primary' | 'success' | 'warni
     error: 'danger',
     llm_call: 'primary',
     tool_call: 'warning',
+    decision: 'success',
     lifecycle: 'info',
     streaming: 'success',
     evidence: 'success',
@@ -519,6 +665,7 @@ const getTraceGroupLabel = (eventType: string) => {
   const map: Record<string, string> = {
     llm_call: '🤖 LLM 调用',
     tool_call: '🔧 Tool 调用',
+    decision: '🧭 Decision',
     evidence: '📎 Evidence',
     retrieval: '🔍 Retrieval',
     citation: '📝 Citation',

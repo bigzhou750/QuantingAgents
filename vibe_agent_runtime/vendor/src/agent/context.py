@@ -6,7 +6,7 @@ import copy
 import json
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from src.agent.memory import WorkspaceMemory
 from src.agent.skills import SkillsLoader
@@ -229,7 +229,10 @@ class ContextBuilder:
 
     def __init__(self, registry: ToolRegistry, memory: WorkspaceMemory,
                  skills_loader: Optional[SkillsLoader] = None,
-                 persistent_memory: Optional[PersistentMemory] = None) -> None:
+                 persistent_memory: Optional[PersistentMemory] = None,
+                 exclude_skills: Optional[set[str]] = None,
+                 include_skills: Optional[set[str]] = None,
+                 event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> None:
         """Initialize ContextBuilder.
 
         Args:
@@ -240,8 +243,12 @@ class ContextBuilder:
         """
         self.registry = registry
         self.memory = memory
-        self.skills_loader = skills_loader or SkillsLoader()
+        self.skills_loader = skills_loader or SkillsLoader(
+            exclude_skills=exclude_skills,
+            include_skills=include_skills,
+        )
         self._persistent_memory = persistent_memory
+        self._event_callback = event_callback
 
     def build_system_prompt(self, user_message: str = "") -> str:
         """Build system prompt.
@@ -277,12 +284,29 @@ class ContextBuilder:
         except Exception:  # noqa: BLE001
             routing = ""
 
+        skill_descriptions = self.skills_loader.get_descriptions()
+        if self._event_callback:
+            try:
+                self._event_callback(
+                    "skill_route",
+                    {
+                        "skill_names": [s.name for s in self.skills_loader.skills],
+                        "candidates": [s.name for s in self.skills_loader.skills],
+                        "selected_skills": [],
+                        "reason": "context_injected",
+                        "status": "ok",
+                        "candidates_unavailable": False,
+                    },
+                )
+            except Exception:
+                pass
+
         return _SYSTEM_PROMPT.format(
             tool_count=len(self.registry._tools),
             skill_count=len(self.skills_loader.skills),
             data_source_count=self._count_data_sources(),
             tool_descriptions=self._format_tool_descriptions(),
-            skill_descriptions=self.skills_loader.get_descriptions(),
+            skill_descriptions=skill_descriptions,
             memory_summary=self.memory.to_summary(),
             memory_section=memory_section,
             strategy_discovery_routing=routing,

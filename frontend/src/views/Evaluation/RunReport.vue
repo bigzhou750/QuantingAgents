@@ -32,6 +32,9 @@
           <el-descriptions-item label="状态">
             <el-tag :type="getStatusType(report.status)" size="small">{{ getStatusLabel(report.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item v-if="report.skill_regression_group_id" label="Skill 回归组">
+            {{ report.skill_regression_group_id }}
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatTime(report.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="生成时间">{{ formatTime(report.generated_at) }}</el-descriptions-item>
         </el-descriptions>
@@ -59,13 +62,13 @@
           </el-col>
           <el-col :span="4">
             <div class="metric-item">
-              <div class="metric-label">pass@{{ passK }}</div>
+              <div class="metric-label">质量 pass@{{ passK }}</div>
               <div class="metric-value">{{ pct(passMetrics.pass_at_k) }}</div>
             </div>
           </el-col>
           <el-col :span="4">
             <div class="metric-item">
-              <div class="metric-label">pass^{{ passK }}</div>
+              <div class="metric-label">质量 pass^{{ passK }}</div>
               <div class="metric-value">{{ pct(passMetrics.pass_pow_k) }}</div>
             </div>
           </el-col>
@@ -102,6 +105,29 @@
           <el-table-column prop="pass_rate" label="通过率" width="100">
             <template #default="{ row }">{{ pct(row.pass_rate) }}</template>
           </el-table-column>
+          <el-table-column prop="status" label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.status === 'unscorable'" type="info" size="small">不可评分</el-tag>
+              <el-tag v-else-if="row.status === 'not_applicable'" type="info" size="small">不适用</el-tag>
+              <el-tag v-else size="small">{{ row.status || 'available' }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <!-- Skill 评测维度 -->
+      <el-card shadow="never" style="margin-bottom: 24px" v-if="skillDimensionKeys.length">
+        <template #header><span>Skill 评测维度</span></template>
+        <el-table :data="skillDimensionTableData" stripe size="small">
+          <el-table-column prop="name" label="维度" width="180" />
+          <el-table-column prop="avg_score" label="平均分" width="100">
+            <template #default="{ row }">{{ pct(row.avg_score) }}</template>
+          </el-table-column>
+          <el-table-column prop="count" label="样本数" width="90" />
+          <el-table-column prop="pass_rate" label="通过率" width="100">
+            <template #default="{ row }">{{ pct(row.pass_rate) }}</template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="120" />
         </el-table>
       </el-card>
 
@@ -199,6 +225,14 @@ const metrics = ref<any>({})
 const passMetrics = ref<any>({})
 const scoreSummary = ref<any>({})
 
+const skillDimensionKeys = computed(() =>
+  ['skill_route', 'skill_execution', 'skill_coexistence'].filter((key) => scoreSummary.value?.[key])
+)
+
+const skillDimensionTableData = computed(() =>
+  skillDimensionKeys.value.map((name) => ({ name, ...(scoreSummary.value?.[name] || {}) }))
+)
+
 const passK = computed(() => passMetrics.value.k || 3)
 
 // Claim-Evidence 汇总 (5.3)
@@ -222,6 +256,7 @@ const scoreTableData = computed(() => {
     max_score: data.max_score || 0,
     count: data.count || 0,
     pass_rate: data.pass_rate || 0,
+    status: data.status || 'available',
   }))
 })
 

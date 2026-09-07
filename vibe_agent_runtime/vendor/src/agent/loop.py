@@ -923,6 +923,7 @@ class AgentLoop:
         event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         max_iterations: int = 50,
         persistent_memory: Optional[Any] = None,
+        skill_eval: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Initialize AgentLoop.
 
@@ -957,6 +958,7 @@ class AgentLoop:
         self._cancel_event = threading.Event()
         self._previous_summary: str = ""
         self._persistent_memory = persistent_memory
+        self._skill_eval = skill_eval or {}
         self._run_iteration: int = 0
         self._has_run = False
         self._grounding: GroundingLedger | None = None
@@ -1093,8 +1095,14 @@ class AgentLoop:
             history=history,
         )
 
-        context = ContextBuilder(self.registry, self.memory,
-                                  persistent_memory=self._persistent_memory)
+        context = ContextBuilder(
+            self.registry,
+            self.memory,
+            persistent_memory=self._persistent_memory,
+            exclude_skills=set(self._skill_eval.get("exclude_skills") or []),
+            include_skills=set(self._skill_eval.get("include_skills") or []),
+            event_callback=self._event_callback,
+        )
         goal_context, active_goal_id = get_current_goal_context(session_id) if session_id else ("", None)
         llm_user_message = user_message
         if goal_context:

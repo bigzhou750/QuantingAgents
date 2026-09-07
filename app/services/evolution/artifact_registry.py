@@ -80,6 +80,8 @@ class ArtifactRegistryService:
         await db[self.COLLECTION_VERSIONS].create_index([("artifact_id", 1), ("version", 1)], unique=True)
         await db[self.COLLECTION_VERSIONS].create_index("status")
         await db[self.COLLECTION_VERSIONS].create_index("artifact_type")
+        await db[self.COLLECTION_VERSIONS].create_index("environment")
+        await db[self.COLLECTION_REGISTRY].create_index("environments")
 
         # 首次启用自进化时登记受控默认资产，避免 proposal 生成因没有 registry
         # 条目而无法进入验证。真实用户资产仍必须显式登记。
@@ -188,13 +190,15 @@ class ArtifactRegistryService:
 
     # ==================== Version Management ====================
 
-    async def create_version(
+    async def create_version_record(
         self,
         artifact_id: str,
         content_snapshot: Dict[str, Any],
         created_by: str = "system",
+        environment: str = "default",
+        source_proposal_id: str = "",
     ) -> ArtifactVersion:
-        """为 artifact 创建新版本"""
+        """创建不可变版本记录，但不切换当前生效指针。"""
         db = get_mongo_db()
 
         # 获取当前最新版本
@@ -223,38 +227,142 @@ class ArtifactRegistryService:
             content_hash=content_hash,
             content_snapshot=content_snapshot,
             owner=created_by,
-            status=ArtifactVersionStatus.ACTIVE,
+            status=ArtifactVersionStatus.PENDING,
+            environment=environment,
+            source_proposal_id=source_proposal_id,
         )
         await db[self.COLLECTION_VERSIONS].insert_one(version_doc.model_dump(by_alias=True, exclude={"id"}))
+        logger.info(f"Created pending version {new_version} for artifact {artifact_id} in {environment}")
+        return version_doc
 
-        # 将旧 active 版本标记为 superseded
+    async def create_version(
+        self,
+        artifact_id: str,
+        content_snapshot: Dict[str, Any],
+        created_by: str = "system",
+        environment: str = "default",
+        source_proposal_id: str = "",
+    ) -> ArtifactVersion:
+        """兼容入口：创建版本并立即切换当前指针。"""
+        version = await self.create_version_record(
+            artifact_id,
+            content_snapshot,
+            created_by=created_by,
+            environment=environment,
+            source_proposal_id=source_proposal_id,
+        )
+        await self.activate_version(
+            artifact_id,
+            version.version,
+            environment=environment,
+            activated_by=created_by,
+        )
+        return await self.get_version(artifact_id, version.version)
+
+    async def activate_version(
+        self,
+        artifact_id: str,
+        version: str,
+        environment: str = "default",
+        activated_by: str = "system",
+        mode: str = "promote",
+    ) -> ArtifactVersion:
+        """将某个版本切换为当前生效版本，并保留旧版本记录。"""
+        db = get_mongo_db()
+        target_doc = await db[self.COLLECTION_VERSIONS].find_one(
+            {"artifact_id": artifact_id, "version": version}
+        )
+        if not target_doc:
+            raise ValueError(f"Version {version} not found for artifact {artifact_id}")
+
+        previous_status = (
+            ArtifactVersionStatus.ROLLED_BACK.value
+            if mode == "rollback"
+            else ArtifactVersionStatus.SUPERSEDED.value
+        )
         await db[self.COLLECTION_VERSIONS].update_many(
             {
                 "artifact_id": artifact_id,
-                "version": {"$ne": new_version},
+                "version": {"$ne": version},
                 "status": ArtifactVersionStatus.ACTIVE.value,
             },
-            {"$set": {"status": ArtifactVersionStatus.SUPERSEDED.value, "superseded_by": new_version}},
+            {"$set": {"status": previous_status, "superseded_by": version}},
         )
-
-        # 更新 registry 当前版本
+        await db[self.COLLECTION_VERSIONS].update_one(
+            {"artifact_id": artifact_id},
+            {"$set": {
+                "status": ArtifactVersionStatus.ACTIVE.value,
+                "superseded_by": None,
+                "failure_reason": "",
+                "updated_at": now_tz(),
+            }, "$addToSet": {"published_environments": environment}},
+        )
+        entry = await db[self.COLLECTION_REGISTRY].find_one({"artifact_id": artifact_id})
+        if not entry:
+            raise ValueError(f"Artifact '{artifact_id}' not registered")
+        environments = dict(entry.get("environments") or {})
+        environments[environment] = version
+        update_fields: Dict[str, Any] = {
+            "environments": environments,
+            "updated_at": now_tz(),
+        }
+        if environment == "default":
+            update_fields["current_version"] = version
         await db[self.COLLECTION_REGISTRY].update_one(
             {"artifact_id": artifact_id},
-            {"$set": {"current_version": new_version, "updated_at": now_tz()}},
+            {"$set": update_fields},
         )
+        updated = await db[self.COLLECTION_VERSIONS].find_one(
+            {"artifact_id": artifact_id, "version": version}
+        )
+        logger.info(
+            "Activated artifact %s version %s in environment %s by %s (mode=%s)",
+            artifact_id,
+            version,
+            environment,
+            activated_by,
+            mode,
+        )
+        return ArtifactVersion(**updated)
 
-        logger.info(f"Created version {new_version} for artifact {artifact_id}")
-        return version_doc
+    async def mark_version_failed(
+        self,
+        artifact_id: str,
+        version: str,
+        reason: str = "",
+    ) -> None:
+        """将未切换指针的版本记录标记为失败。"""
+        db = get_mongo_db()
+        await db[self.COLLECTION_VERSIONS].update_one(
+            {"artifact_id": artifact_id, "version": version},
+            {"$set": {
+                "status": ArtifactVersionStatus.FAILED.value,
+                "failure_reason": reason,
+                "updated_at": now_tz(),
+            }},
+        )
+        logger.warning("Marked artifact %s version %s as failed: %s", artifact_id, version, reason)
 
-    async def get_current_version(self, artifact_id: str) -> Optional[ArtifactVersion]:
+    async def get_current_version(
+        self,
+        artifact_id: str,
+        environment: str = "default",
+    ) -> Optional[ArtifactVersion]:
         """获取 artifact 当前生效版本"""
         db = get_mongo_db()
-        doc = await db[self.COLLECTION_VERSIONS].find_one(
-            {"artifact_id": artifact_id, "status": ArtifactVersionStatus.ACTIVE.value},
-        )
-        if not doc:
+        entry = await db[self.COLLECTION_REGISTRY].find_one({"artifact_id": artifact_id})
+        if not entry:
             return None
-        return ArtifactVersion(**doc)
+        environments = entry.get("environments") or {}
+        version = environments.get(environment) or (
+            entry.get("current_version") if environment == "default" else None
+        )
+        if not version:
+            return None
+        doc = await db[self.COLLECTION_VERSIONS].find_one(
+            {"artifact_id": artifact_id, "version": version}
+        )
+        return ArtifactVersion(**doc) if doc else None
 
     async def get_version(self, artifact_id: str, version: str) -> Optional[ArtifactVersion]:
         """获取指定版本"""
@@ -286,11 +394,16 @@ class ArtifactRegistryService:
             results.append(ArtifactVersion(**doc))
         return results
 
-    async def rollback(self, artifact_id: str, target_version: str, rolled_back_by: str = "system") -> ArtifactVersion:
-        """回滚到指定版本"""
+    async def rollback(
+        self,
+        artifact_id: str,
+        target_version: str,
+        rolled_back_by: str = "system",
+        environment: str = "default",
+    ) -> ArtifactVersion:
+        """回滚到指定版本（兼容入口：校验后立即切换指针）"""
         db = get_mongo_db()
 
-        # 验证目标版本存在
         target = await db[self.COLLECTION_VERSIONS].find_one(
             {"artifact_id": artifact_id, "version": target_version},
         )
@@ -301,29 +414,23 @@ class ArtifactRegistryService:
         actual_hash = _compute_content_hash(target.get("content_snapshot", {}))
         if expected_hash and expected_hash != actual_hash:
             raise ValueError(f"Version {target_version} content hash mismatch")
-        if target.get("status") == ArtifactVersionStatus.ACTIVE.value:
+        target_status = ArtifactVersionStatus(target.get("status", ArtifactVersionStatus.SUPERSEDED.value))
+        if target_status in (ArtifactVersionStatus.PENDING, ArtifactVersionStatus.FAILED):
+            raise ValueError(f"Version {target_version} is not usable for rollback")
+        if target_status == ArtifactVersionStatus.ACTIVE:
             return ArtifactVersion(**target)
 
-        # 将当前 active 版本标记为 rolled_back
-        await db[self.COLLECTION_VERSIONS].update_many(
-            {"artifact_id": artifact_id, "status": ArtifactVersionStatus.ACTIVE.value},
-            {"$set": {"status": ArtifactVersionStatus.ROLLED_BACK.value}},
-        )
+        current = await self.get_current_version(artifact_id, environment)
+        if current and current.version == target_version:
+            return ArtifactVersion(**target)
 
-        # 将目标版本恢复为 active
-        await db[self.COLLECTION_VERSIONS].update_one(
-            {"artifact_id": artifact_id, "version": target_version},
-            {"$set": {"status": ArtifactVersionStatus.ACTIVE.value, "superseded_by": None}},
+        return await self.activate_version(
+            artifact_id,
+            target_version,
+            environment=environment,
+            activated_by=rolled_back_by,
+            mode="rollback",
         )
-
-        # 更新 registry
-        await db[self.COLLECTION_REGISTRY].update_one(
-            {"artifact_id": artifact_id},
-            {"$set": {"current_version": target_version, "updated_at": now_tz()}},
-        )
-
-        logger.info(f"Rolled back artifact {artifact_id} to version {target_version} by {rolled_back_by}")
-        return ArtifactVersion(**{**target, "status": ArtifactVersionStatus.ACTIVE.value})
 
 
 # 模块级单例

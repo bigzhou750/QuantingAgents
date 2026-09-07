@@ -79,6 +79,8 @@ class User(BaseModel):
     is_active: bool = True
     is_verified: bool = False
     is_admin: bool = False
+    is_archived: bool = False
+    token_version: int = 0
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
     last_login: Optional[datetime] = None
@@ -121,6 +123,8 @@ class UserResponse(BaseModel):
     email: str
     is_active: bool
     is_verified: bool
+    is_admin: bool
+    is_archived: bool
     created_at: datetime
     last_login: Optional[datetime]
     preferences: UserPreferences
@@ -136,6 +140,39 @@ class UserResponse(BaseModel):
         if dt:
             return dt.isoformat()
         return None
+
+
+class UserAdminResponse(BaseModel):
+    """管理员用户详情响应模型，不包含密码哈希或 Token。"""
+    id: str
+    username: str
+    email: str
+    is_active: bool
+    is_verified: bool
+    is_admin: bool
+    is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+    last_login: Optional[datetime]
+    preferences: UserPreferences
+    daily_quota: int
+    concurrent_limit: int
+    total_analyses: int
+    successful_analyses: int
+    failed_analyses: int
+
+    @field_serializer('created_at', 'updated_at', 'last_login')
+    def serialize_datetime(self, dt: Optional[datetime], _info) -> Optional[str]:
+        """序列化 datetime 为 ISO 8601 格式，保留时区信息"""
+        if dt:
+            return dt.isoformat()
+        return None
+
+
+class UserListResult(BaseModel):
+    """用户列表查询结果，total 为满足筛选条件的完整数量。"""
+    users: List[UserResponse]
+    total: int
 
 
 class UserLogin(BaseModel):

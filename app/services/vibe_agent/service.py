@@ -28,7 +28,7 @@ from .models import (
     new_id,
     utc_now,
 )
-from .paths import ensure_session_tree, session_runtime_root, vibe_runtime_base
+from .paths import ensure_session_tree, session_runtime_root, vibe_runtime_base, assert_within_user_scope
 from .protocol import encode_event_payload, session_event_channel
 
 # 个人投资助手上下文注入（可选）
@@ -51,10 +51,12 @@ class VibeAgentService:
     message_collection = "vibe_agent_messages"
     task_collection = "vibe_agent_tasks"
     event_collection = "vibe_agent_events"
+    feedback_collection = "vibe_agent_feedback"
 
     def __init__(self) -> None:
         self._background_tasks: set[asyncio.Task] = set()
         self._message_submit_lock = asyncio.Lock()
+        self._trace_sequence: Dict[str, int] = {}
 
     async def ensure_indexes(self) -> None:
         db = get_mongo_db()
@@ -63,6 +65,15 @@ class VibeAgentService:
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
         await db[self.task_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True)
         await db[self.event_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("sequence", ASCENDING)], unique=True)
+        await db[self.feedback_collection].create_index([("user_id", ASCENDING), ("session_id", ASCENDING), ("task_id", ASCENDING)])
+        try:
+            from app.services.explainability.metrics_service import decision_metrics_service
+            from app.services.explainability.record_service import decision_record_store
+
+            await decision_record_store.initialize()
+            await decision_metrics_service.initialize()
+        except Exception:
+            logger.warning("failed to initialize decision explainability indexes", exc_info=True)
         await self.recover_orphaned_tasks()
 
     async def recover_orphaned_tasks(self) -> None:
@@ -385,6 +396,9 @@ class VibeAgentService:
             return {**task.model_dump(), "session_title": session.get("title")}
 
     async def _run_internal_task(self, command: VibeCommand) -> None:
+        # Runtime paths are persisted in the command, so validate them again
+        # at the async boundary instead of trusting a queued payload.
+        assert_within_user_scope(Path(command.runtime_root), command.user_id)
         await self.update_task_status(command.user_id, command.task_id, VibeTaskStatus.processing)
         try:
             runtime_task = asyncio.create_task(embedded_agent_runtime.run(
@@ -464,6 +478,12 @@ class VibeAgentService:
                         {"message": assistant_message.model_dump()},
                         command.task_id,
                     )
+            await self._finalize_task_explainability(
+                command.user_id,
+                command.session_id,
+                command.task_id,
+                content,
+            )
             current = await self.get_task(command.user_id, command.task_id)
             if current.get("status") not in {
                 VibeTaskStatus.completed.value,
@@ -574,6 +594,91 @@ class VibeAgentService:
         if not task:
             raise HTTPException(status_code=404, detail="研究任务不存在")
         return self.task_center_row(task)
+
+    async def submit_feedback(
+        self,
+        user: Dict[str, Any],
+        session_id: str,
+        task_id: str,
+        feedback_type: str,
+        content: str = "",
+    ) -> Dict[str, Any]:
+        """保存用户反馈并创建待复核的线上 Bad Case 候选。"""
+        session = await self.get_session(user["id"], session_id)
+        task = await get_mongo_db()[self.task_collection].find_one(
+            {"user_id": user["id"], "session_id": session_id, "task_id": task_id},
+            {"_id": 0},
+        )
+        if not task:
+            raise HTTPException(status_code=404, detail="研究任务不存在")
+
+        assistant = await get_mongo_db()[self.message_collection].find_one(
+            {
+                "user_id": user["id"],
+                "session_id": session_id,
+                "task_id": task_id,
+                "role": "assistant",
+            },
+            {"_id": 0},
+            sort=[("created_at", DESCENDING)],
+        )
+        if not assistant and not str(content or "").strip():
+            raise HTTPException(status_code=400, detail="反馈缺少可关联的 Agent 输出")
+
+        from app.models.eval import BadCaseSourceContext, DetectionSignal, FailureFamily, DetectionStatus, ReviewStatus
+        from app.services.eval.bad_case_service import bad_case_service
+        from app.services.eval.badcase_fingerprint import hash_user_id
+
+        feedback_doc = {
+            "feedback_id": new_id("feedback"),
+            "user_id": user["id"],
+            "session_id": session_id,
+            "task_id": task_id,
+            "feedback_type": feedback_type,
+            "content": str(content or "")[:2000],
+            "created_at": utc_now(),
+        }
+        await get_mongo_db()[self.feedback_collection].insert_one(feedback_doc)
+
+        bad_case = await bad_case_service.create_online_bad_case(
+            source="user_feedback",
+            input_data={"prompt": task.get("prompt", "")},
+            output_data={"content": assistant.get("content", "")} if assistant else None,
+            failure_reason=content or feedback_type,
+            risk_level="medium",
+            business_id=task_id,
+            task_id=task_id,
+            session_id=session_id,
+            decision_chain_ref=f"task_{task_id}",
+            failure_family=FailureFamily.USER_FEEDBACK.value,
+            detection_signals=[
+                DetectionSignal(
+                    signal_type="user.feedback",
+                    failure_family=FailureFamily.USER_FEEDBACK,
+                    score=0.0,
+                    confidence=0.7,
+                    severity="medium",
+                    reason=content or feedback_type,
+                    evidence_refs=[task_id, session_id],
+                    detector_name="user_feedback",
+                    detector_version="1.0.0",
+                )
+            ],
+            detection_confidence=0.7,
+            detection_status=DetectionStatus.CANDIDATE.value,
+            review_status=ReviewStatus.PENDING.value,
+            review_required=True,
+            source_context=BadCaseSourceContext(
+                user_id_hash=hash_user_id(user["id"]),
+                session_id=session_id,
+                task_id=task_id,
+                trace_id=f"online_{task_id}",
+                replayable=True,
+            ),
+            created_by=user.get("username", "user"),
+            tags=["user_feedback", f"feedback:{feedback_type}"],
+        )
+        return {"feedback": {key: value for key, value in feedback_doc.items() if key != "_id"}, "bad_case": bad_case, "session_id": session["session_id"]}
 
     async def list_tasks(
         self,
@@ -687,6 +792,144 @@ class VibeAgentService:
             "is_admin": bool(user.get("is_admin", False)),
         }
 
+    def _next_trace_sequence(self, task_id: str) -> int:
+        current = self._trace_sequence.get(task_id, 0)
+        self._trace_sequence[task_id] = current + 1
+        return current + 1
+
+    async def _save_standardized_trace(
+        self,
+        raw_type: str,
+        payload: Dict[str, Any],
+        user_id: str,
+        session_id: str,
+        task_id: str,
+    ) -> None:
+        if not settings.DECISION_AUDIT_ENABLED:
+            return
+        try:
+            from app.services.eval.trace_adapter import trace_adapter
+
+            sequence = self._next_trace_sequence(task_id)
+            vibe_event = {
+                "type": raw_type,
+                "business_id": task_id,
+                "task_id": task_id,
+                "session_id": session_id,
+                "data": payload,
+            }
+            event = trace_adapter.adapt_vibe_event(
+                vibe_event,
+                trial_id=f"task_{task_id}",
+                sequence=sequence,
+                business_id=task_id,
+                task_id=task_id,
+                session_id=session_id,
+            )
+            if event:
+                await trace_adapter.save_single_event(event)
+        except Exception:
+            logger.debug("failed to save standardized Vibe trace", exc_info=True)
+
+    async def _persist_decision_record(
+        self,
+        raw_type: str,
+        payload: Dict[str, Any],
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        parent_decision_id: Optional[str] = None,
+    ) -> None:
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        try:
+            from app.services.explainability.record_service import (
+                decision_record_store,
+                decision_trace_event,
+                normalize_event_to_decision,
+            )
+
+            record = normalize_event_to_decision(
+                raw_type,
+                payload,
+                user_id=user_id,
+                session_id=session_id,
+                task_id=task_id,
+                business_id=task_id,
+                parent_decision_id=parent_decision_id,
+            )
+            await decision_record_store.save_decision_record(record)
+            await self._save_standardized_trace(
+                "decision",
+                decision_trace_event(record),
+                user_id,
+                session_id,
+                task_id,
+            )
+        except Exception:
+            logger.warning("failed to persist decision record", exc_info=True)
+
+    async def _finalize_task_explainability(
+        self,
+        user_id: str,
+        session_id: str,
+        task_id: str,
+        content: str,
+    ) -> None:
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        try:
+            from app.services.explainability.explanation_service import explanation_service
+            from app.services.explainability.metrics_service import decision_metrics_service
+            from app.services.explainability.record_service import decision_record_store
+            from app.services.explainability.validation_service import explanation_validator
+
+            records = await decision_record_store.list_decision_records(task_id=task_id)
+            if not records:
+                await self._persist_decision_record(
+                    "attempt.completed",
+                    {
+                        "scenario": "任务完成结论",
+                        "conclusion": content,
+                        "risk_level": "low",
+                        "sequence": self._next_trace_sequence(task_id),
+                    },
+                    user_id,
+                    session_id,
+                    task_id,
+                )
+                records = await decision_record_store.list_decision_records(task_id=task_id)
+
+            for record in records:
+                explanation = explanation_service.generate(record, output_text=content)
+                await decision_record_store.save_explanation(explanation)
+                validation = explanation_validator.validate(
+                    explanation,
+                    record,
+                    output_text=content,
+                )
+                await decision_record_store.save_validation(validation)
+                if explanation_validator.should_require_review(
+                    validation,
+                    str(record.get("risk_level") or "low"),
+                ):
+                    await decision_record_store.create_review(
+                        business_id=record.get("business_id"),
+                        task_id=task_id,
+                        session_id=session_id,
+                        decision_id=record.get("decision_id"),
+                        action="inconsistent_explanation",
+                        reason=validation.reason,
+                    )
+
+            await decision_metrics_service.record_task_metrics(
+                task_id=task_id,
+                session_id=session_id,
+                task_type="vibe_agent",
+            )
+        except Exception:
+            logger.warning("failed to finalize explainability artifacts", exc_info=True)
+
     async def ingest_worker_event(self, event: Dict[str, Any]) -> None:
         """Persist and fan out a normalized event emitted by the embedded runtime."""
         user_id = str(event.get("user_id") or "")
@@ -777,7 +1020,54 @@ class VibeAgentService:
         elif raw_type.startswith("attempt."):
             payload = {"phase": raw_type, **payload}
 
+        if task_id and raw_type != "text_delta":
+            await self._save_standardized_trace(
+                raw_type,
+                payload,
+                user_id,
+                session_id,
+                str(task_id),
+            )
+
+        if task_id and raw_type in {
+            "tool_call",
+            "tool_result",
+            "evidence",
+            "react_summary",
+            "swarm_status",
+            "goal.updated",
+            "attempt.completed",
+            "attempt.failed",
+        }:
+            await self._persist_decision_record(
+                raw_type,
+                payload,
+                user_id,
+                session_id,
+                str(task_id),
+            )
+
         await self.append_event(user_id, session_id, event_type, payload, task_id)
+
+        # Online Bad Case detection is deliberately asynchronous: scoring and
+        # persistence must never delay the production event stream.
+        if task_id and raw_type in {"attempt.failed", "attempt.completed", "attempt.cancelled"}:
+            try:
+                from app.services.eval.online_badcase_service import online_badcase_collector
+
+                collection_task = asyncio.create_task(
+                    online_badcase_collector.collect_from_online_event(
+                        user_id=user_id,
+                        session_id=session_id,
+                        task_id=str(task_id),
+                        raw_type=raw_type,
+                        payload=payload,
+                    )
+                )
+                self._background_tasks.add(collection_task)
+                collection_task.add_done_callback(self._background_tasks.discard)
+            except Exception:
+                logger.warning("failed to schedule online Bad Case collection", exc_info=True)
 
 
 vibe_agent_service = VibeAgentService()

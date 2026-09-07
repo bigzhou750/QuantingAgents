@@ -77,6 +77,72 @@ class TriggerService:
         )
         return trigger_info
 
+    async def on_bad_case_event(self, bad_case: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """处理线上 Bad Case 事件。
+
+        Bad Case 收集与自进化提案生成解耦：即使演化关闭或没有可用的
+        baseline run，样本仍会被保存，只记录触发被抑制的原因。
+        """
+        bad_case_id = str(bad_case.get("bad_case_id") or "")
+        if not settings.EVOLUTION_ENABLED:
+            await self._log_event(
+                "bad_case_trigger_suppressed",
+                "",
+                {"bad_case_id": bad_case_id, "reason": "evolution_disabled"},
+            )
+            return None
+
+        risk_level = str(bad_case.get("risk_level") or "medium")
+        if risk_level in {"high", "critical"}:
+            await self._log_event(
+                "bad_case_high_risk",
+                "",
+                {
+                    "bad_case_id": bad_case_id,
+                    "risk_level": risk_level,
+                    "failure_family": bad_case.get("failure_family"),
+                    "action": "review_escalation",
+                },
+            )
+
+        trigger = await self.check_bad_case_threshold("")
+        if not trigger:
+            return None
+
+        db = get_mongo_db()
+        latest_run = await db["eval_runs"].find_one(
+            {"status": "completed"},
+            sort=[("completed_at", -1)],
+        )
+        if not latest_run:
+            await self._log_event(
+                "bad_case_trigger_suppressed",
+                "",
+                {"bad_case_id": bad_case_id, "reason": "no_completed_baseline_run"},
+            )
+            return None
+
+        trigger_info = {
+            "trigger_type": TriggerType.BAD_CASE_THRESHOLD.value,
+            "trigger_run_id": latest_run.get("run_id", ""),
+            "dataset_id": latest_run.get("dataset_id", ""),
+            "bad_case_detail": trigger,
+            "target_surface": "case",
+            "sample_failure_ids": trigger.get("sample_bad_case_ids", []),
+        }
+        if settings.EVOLUTION_AUTOMATION_MODE == "manual":
+            trigger_info["action"] = "logged_only"
+            await self._log_event("bad_case_threshold", latest_run.get("run_id", ""), trigger_info)
+            return trigger_info
+
+        from app.services.evolution.proposal_service import proposal_service
+
+        proposal = await proposal_service.create_from_trigger(trigger_info)
+        await self._log_event("bad_case_threshold", latest_run.get("run_id", ""), trigger_info)
+        if proposal:
+            trigger_info["proposal_id"] = proposal.proposal_id
+        return trigger_info
+
     async def _evaluate_triggers(
         self, run_id: str, dataset_id: str, run_doc: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -179,13 +245,17 @@ class TriggerService:
 
         count = await db["eval_bad_cases"].count_documents({
             "converted_to_case_id": {"$exists": False},
+            "detection_status": {"$ne": "rejected"},
         })
 
         if count >= threshold:
             # 获取最近的 bad case IDs
             cursor = (
                 db["eval_bad_cases"]
-                .find({"converted_to_case_id": {"$exists": False}})
+                .find({
+                    "converted_to_case_id": {"$exists": False},
+                    "detection_status": {"$ne": "rejected"},
+                })
                 .sort("created_at", -1)
                 .limit(20)
             )

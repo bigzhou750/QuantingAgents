@@ -21,6 +21,7 @@ from app.models.evolution import (
     ArtifactType,
 )
 from app.utils.timezone import now_tz
+from app.services.evolution.content_diff import validate_structured_diff
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,27 @@ class VerificationService:
         if not proposal:
             raise ValueError(f"Proposal {proposal_id} not found")
 
+        structured_diff = proposal.structured_diff if isinstance(proposal.structured_diff, dict) else {}
+        if structured_diff:
+            content_validation = validate_structured_diff(structured_diff)
+            if not content_validation["passed"]:
+                raise ValueError(
+                    "candidate content diff validation failed: "
+                    + "; ".join(content_validation["errors"])
+                )
+
+        current_baseline = await artifact_registry.get_current_version(proposal.target_artifact_id)
+        if (
+            proposal.baseline_artifact_version
+            and current_baseline
+            and current_baseline.version != proposal.baseline_artifact_version
+        ):
+            raise ValueError(
+                "baseline drift detected; proposal must be regenerated or re-verified "
+                f"(proposal baseline={proposal.baseline_artifact_version}, "
+                f"current={current_baseline.version})"
+            )
+
         try:
             await governance_service.assert_verification_budget()
         except ValueError as budget_error:
@@ -91,8 +113,9 @@ class VerificationService:
         verification_record: Optional[VerificationRun] = None
 
         try:
-            # 获取当前 artifact 版本作为基线
-            current_version = await artifact_registry.get_current_version(proposal.target_artifact_id)
+            # 基线以提案创建时冻结的版本为准；current_baseline 仅用于漂移校验。
+            current_version = current_baseline
+            baseline_version = self._frozen_baseline(proposal, current_baseline)
 
             # 创建 sandbox
             sandbox_path = self._create_sandbox(proposal, current_version)
@@ -101,7 +124,7 @@ class VerificationService:
                 "proposal_id": proposal_id,
                 "artifact_id": proposal.target_artifact_id,
                 "artifact_type": proposal.target_artifact_type.value,
-                "baseline_version": current_version.version if current_version else "",
+                "baseline_version": baseline_version,
                 "candidate_version": proposal.candidate_version or "candidate",
                 "sandbox_path": sandbox_path,
                 "dataset_version": "",
@@ -119,7 +142,7 @@ class VerificationService:
                 {"proposal_id": proposal_id},
                 {"$set": {
                     "overlay_id": overlay_id,
-                    "baseline_artifact_version": overlay_manifest["baseline_version"],
+                    "baseline_artifact_version": baseline_version,
                     "candidate_version": overlay_manifest["candidate_version"],
                     "updated_at": now_tz(),
                 }},
@@ -163,9 +186,26 @@ class VerificationService:
             if not completed:
                 raise ValueError(f"Verification run {candidate_run_id} did not complete within timeout")
 
+            skill_regression_group_id = ""
+            if proposal.target_artifact_type == ArtifactType.SKILL:
+                from app.services.eval.skill_regression_service import skill_regression_service
+
+                regression_group = await skill_regression_service.create_group(
+                    proposal.trigger_run_id,
+                    candidate_run_id,
+                    created_by="evolution_verify",
+                )
+                regression_group = await skill_regression_service.evaluate_gate(
+                    regression_group.group_id
+                )
+                skill_regression_group_id = regression_group.group_id
+
             # 计算对比结果
             comparison = await self._compute_comparison(
-                proposal.trigger_run_id, candidate_run_id, metrics_service
+                proposal.trigger_run_id,
+                candidate_run_id,
+                metrics_service,
+                skill_regression_group_id=skill_regression_group_id,
             )
 
             # 保存验证记录
@@ -174,6 +214,7 @@ class VerificationService:
                 proposal_id=proposal_id,
                 baseline_run_id=proposal.trigger_run_id,
                 candidate_run_id=candidate_run_id,
+                baseline_artifact_version=baseline_version,
                 sandbox_path=sandbox_path,
                 overlay_id=overlay_id,
                 overlay_manifest=overlay_manifest,
@@ -200,6 +241,7 @@ class VerificationService:
                 "verification_id": verification_id,
                 "baseline_run": proposal.trigger_run_id,
                 "candidate_run": candidate_run_id,
+                "content_diff_status": proposal.content_diff_status,
             })
             try:
                 await governance_service.notify("verification_completed", {
@@ -299,6 +341,13 @@ class VerificationService:
         logger.info(f"[Evolution] Created sandbox at {sandbox_dir} for proposal {proposal.proposal_id}")
         return sandbox_dir
 
+    @staticmethod
+    def _frozen_baseline(proposal, current_baseline) -> str:
+        """返回提案创建时冻结的基线版本，而不是运行时当前版本。"""
+        if proposal.baseline_artifact_version:
+            return proposal.baseline_artifact_version
+        return current_baseline.version if current_baseline else ""
+
     def _apply_diff_to_content(self, current_content: str, diff: Dict[str, Any]) -> str:
         """将候选 diff 应用到当前内容上
 
@@ -316,7 +365,11 @@ class VerificationService:
         return current_content + addition
 
     async def _compute_comparison(
-        self, baseline_run_id: str, candidate_run_id: str, metrics_service
+        self,
+        baseline_run_id: str,
+        candidate_run_id: str,
+        metrics_service,
+        skill_regression_group_id: str = "",
     ) -> Dict[str, Any]:
         """计算基线与候选的指标对比"""
         try:
@@ -385,6 +438,29 @@ class VerificationService:
                 "checks": checks,
                 "evaluated_at": now_tz().isoformat(),
             }
+
+            if skill_regression_group_id:
+                from app.services.eval.skill_regression_service import skill_regression_service
+
+                group = await skill_regression_service.get_group(skill_regression_group_id)
+                if group:
+                    new_regressions = [
+                        delta.model_dump(by_alias=True)
+                        for delta in group.per_case_deltas
+                        if delta.regressed
+                    ]
+                    result["new_regressions"] = new_regressions
+                    if group.gate_result:
+                        result["skill_regression_group_id"] = group.group_id
+                        result["skill_regression_gate"] = group.gate_result.model_dump(by_alias=True)
+                        result["gate"]["checks"].append({
+                            "name": "skill_regression_gate",
+                            "passed": group.gate_result.passed,
+                            "detail": group.gate_result.blocks,
+                        })
+                        result["gate"]["passed"] = (
+                            result["gate"]["passed"] and group.gate_result.passed
+                        )
 
             return result
 

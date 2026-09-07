@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30)
+    AUTH_REGISTRATION_ENABLED: bool = Field(default=True)
+    AUTH_PASSWORD_MIN_LENGTH: int = Field(default=8, ge=6, le=128)
+    AUTH_LOGIN_RATE_LIMIT: int = Field(default=10, ge=1, le=1000)
+    AUTH_REGISTER_RATE_LIMIT: int = Field(default=5, ge=1, le=1000)
+    AUTH_TOKEN_REVOCATION_ENABLED: bool = Field(default=True)
+    AUTH_TOKEN_ISSUER: str = Field(default="quantingagents")
 
     # 队列配置
     QUEUE_MAX_SIZE: int = Field(default=10000)
@@ -187,6 +193,10 @@ class Settings(BaseSettings):
 
     # Embedded Vibe Agent runtime. This is data, never source code.
     VIBE_AGENT_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/vibe-agent")
+    USER_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/users")
+    MULTI_ACCOUNT_ISOLATION_ENABLED: bool = Field(default=True)
+    MULTI_ACCOUNT_ISOLATION_ENFORCE: bool = Field(default=False)
+    MULTI_ACCOUNT_MIGRATION_VERSION: int = Field(default=0, ge=0)
     VIBE_AGENT_WORKER_ENABLED: bool = Field(default=True)
     VIBE_AGENT_WORKER_ID: str = Field(default="quanting-vibe-worker")
     VIBE_AGENT_WORKER_CONCURRENCY: int = Field(default=2, ge=1, le=8)
@@ -202,6 +212,43 @@ class Settings(BaseSettings):
     EVAL_OBSERVABILITY_API_KEY: str = Field(default="", description="评测观测后端 API key")
     EVAL_OBSERVABILITY_HOST: str = Field(default="", description="评测观测后端地址")
     EVAL_OBSERVABILITY_PROJECT: str = Field(default="quantingagents-eval", description="评测观测项目名")
+    ONLINE_BADCASE_ENABLED: bool = Field(default=False, description="是否启用线上 Bad Case 自动发现")
+    ONLINE_BADCASE_ENABLE_JUDGE: bool = Field(default=False, description="是否对线上输出启用 LLM Judge 软信号")
+    ONLINE_BADCASE_SOFT_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0, description="软质量信号采样率")
+    ONLINE_BADCASE_CONFIDENCE_THRESHOLD: float = Field(default=0.8, ge=0.0, le=1.0, description="自动确认置信度阈值")
+    ONLINE_BADCASE_JUDGE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="LLM Judge 低分阈值")
+    ONLINE_BADCASE_EVIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="证据评分低分阈值")
+    ONLINE_BADCASE_MAX_CONTENT_LENGTH: int = Field(default=5000, ge=1000, le=200000, description="Bad Case 最大内容长度")
+    ONLINE_BADCASE_DATASET_PURPOSES: str = Field(
+        default="online_regression,review_queue,detector_eval,golden",
+        description="评测集分层用途（逗号分隔）",
+    )
+
+    # ==================== Agent 决策可解释与审计配置 ====================
+    EXPLAINABILITY_ENABLED: bool = Field(
+        default=True,
+        description="是否启用 Agent 决策链、解释校验与审计能力",
+    )
+    DECISION_AUDIT_ENABLED: bool = Field(
+        default=True,
+        description="是否启用按业务 ID 的统一决策审计查询",
+    )
+    EXPLAINABILITY_MODE: str = Field(
+        default="strict",
+        description="解释降级模式: strict/relaxed（strict 下高风险任务解释故障时暂停）",
+    )
+    EXPLAINABILITY_HIGH_RISK_THRESHOLD: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="高风险决策阈值",
+    )
+    EXPLAINABILITY_ALERT_THRESHOLD: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="解释不一致率或决策链完整率告警阈值",
+    )
 
     # ==================== Agent 自进化配置 ====================
     EVOLUTION_ENABLED: bool = Field(default=False, description="是否启用 Agent 自进化闭环（默认关闭）")
@@ -217,6 +264,30 @@ class Settings(BaseSettings):
     EVOLUTION_CHANGE_BUDGET_CHARS: int = Field(default=20000, ge=100, le=200000, description="单提案最大变更字符数")
     EVOLUTION_DAILY_COST_BUDGET_USD: float = Field(default=10.0, ge=0, le=100000, description="每日验证成本预算")
     EVOLUTION_REQUIRE_SMOKE_TEST: bool = Field(default=True, description="发布后是否必须通过 smoke test")
+    EVOLUTION_SKILL_REGRESSION_REQUIRED: bool = Field(
+        default=True,
+        description="Skill promote 前是否必须通过配对回归 gate",
+    )
+    EVOLUTION_SKILL_REGRESSION_OVERRIDE_ALLOWED: bool = Field(
+        default=False,
+        description="是否允许管理员显式覆盖 Skill 回归门禁",
+    )
+    EVOLUTION_ARTIFACT_RUNTIME_ROOT: str = Field(
+        default="~/.quantingagents/runtime/evolution-artifacts",
+        description="自进化 artifact 的正式 materialization 根目录",
+    )
+    EVOLUTION_FOLLOW_UP_WINDOW_MINUTES: int = Field(
+        default=60,
+        ge=5,
+        le=10080,
+        description="高风险发布反馈升级统计窗口",
+    )
+    EVOLUTION_OVERLAY_MAX_FILES: int = Field(
+        default=32,
+        ge=1,
+        le=200,
+        description="候选 overlay 最大可加载文件数",
+    )
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)

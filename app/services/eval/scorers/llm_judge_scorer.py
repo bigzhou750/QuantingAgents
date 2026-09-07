@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 
-from app.models.eval import ScoreSource
+from app.models.eval import ScoreSource, ScoreStatus
 from app.services.eval.scorers.base import BaseScorer, ScoreResult
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,15 @@ DEFAULT_JUDGE_PROMPT_TEMPLATE = """你是一个专业的金融内容质量评审
 ## Agent 输出
 {output_text}
 
+## 证据上下文
+{evidence_text}
+
+## 参考答案 / 期望输出
+{expected_output_text}
+
+## 数据窗口
+{data_window_text}
+
 ## 评分维度
 {rubric_text}
 
@@ -78,6 +87,49 @@ DEFAULT_JUDGE_PROMPT_TEMPLATE = """你是一个专业的金融内容质量评审
 }}
 
 仅返回 JSON，不要包含其他文字。"""
+
+
+class JudgeContextBuilder:
+    """把评测运行中的证据、参考答案和数据窗口组装成 Judge 上下文。"""
+
+    @staticmethod
+    def build(
+        trace_events: List[Dict[str, Any]],
+        case_config: Optional[Dict[str, Any]],
+        trial_data: Dict[str, Any],
+    ) -> Dict[str, str]:
+        case_snapshot = trial_data.get("case_snapshot") or {}
+        expected_output = (case_config or {}).get("expected_output") or case_snapshot.get("expected_output")
+        data_window = (case_config or {}).get("data_window") or (case_config or {}).get("data_window")
+
+        evidence_lines = []
+        for event in trace_events or []:
+            if event.get("event_type") not in ("evidence", "retrieval", "citation"):
+                continue
+            data = event.get("data", {})
+            snippet = data.get("snippet") or data.get("content") or data.get("text") or ""
+            source = data.get("source") or data.get("provider") or event.get("event_id", "")
+            if snippet:
+                evidence_lines.append(f"- 来源: {source}\n  内容: {str(snippet)[:500]}")
+
+        expected_lines = []
+        if expected_output:
+            if isinstance(expected_output, dict):
+                expected_lines.append(
+                    json.dumps(expected_output, ensure_ascii=False, indent=2)[:1000]
+                )
+            else:
+                expected_lines.append(str(expected_output)[:1000])
+
+        return {
+            "evidence_text": "\n".join(evidence_lines) or "无可用证据上下文",
+            "expected_output_text": "\n".join(expected_lines) or "未提供参考答案/期望输出",
+            "data_window_text": (
+                json.dumps(data_window, ensure_ascii=False)
+                if data_window
+                else "未提供数据窗口"
+            ),
+        }
 
 
 class LLMJudgeScorer(BaseScorer):
@@ -107,6 +159,15 @@ class LLMJudgeScorer(BaseScorer):
     def version(self) -> str:
         return self._version
 
+    @property
+    def is_available(self) -> bool:
+        """Judge 依赖不是可选 mock，缺失时必须失败关闭。"""
+        try:
+            import dashscope  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
     async def score(
         self,
         trial_data: Dict[str, Any],
@@ -126,18 +187,47 @@ class LLMJudgeScorer(BaseScorer):
                 score=0.0,
                 passed=False,
                 reason="Agent 输出为空，无法评分",
-                confidence=1.0,
+                confidence=0.0,
                 source=self.source,
                 version=self.version,
+                status=ScoreStatus.UNSCORABLE,
+            )
+
+        context = JudgeContextBuilder.build(trace_events, case_config, trial_data)
+        if context["evidence_text"] == "无可用证据上下文" and context["expected_output_text"] == "未提供参考答案/期望输出":
+            return ScoreResult(
+                score_name=self.name,
+                score=0.0,
+                passed=False,
+                reason="缺少证据或参考答案，无法进行事实性评审，标记为不可评分",
+                confidence=0.0,
+                source=self.source,
+                version=self.version,
+                status=ScoreStatus.UNSCORABLE,
             )
 
         # 构建 rubric 文本
         rubric_text = self._format_rubric()
 
+        if not self.is_available:
+            return ScoreResult(
+                score_name=self.name,
+                score=0.0,
+                passed=False,
+                reason="dashscope SDK 未安装，LLM Judge 不可用",
+                confidence=0.0,
+                source=self.source,
+                version=self.version,
+                status=ScoreStatus.NOT_CONFIGURED,
+            )
+
         # 构建 prompt
         prompt = self._prompt_template.format(
             input_text=input_text[:3000],
             output_text=output_text[:5000],
+            evidence_text=context["evidence_text"][:2000],
+            expected_output_text=context["expected_output_text"][:1000],
+            data_window_text=context["data_window_text"][:500],
             rubric_text=rubric_text,
         )
 
@@ -154,7 +244,7 @@ class LLMJudgeScorer(BaseScorer):
                 score=max(0.0, min(1.0, overall_score)),
                 passed=overall_score >= 0.6,
                 reason=overall_reason,
-                confidence=0.85,
+                confidence=0.75 if context["evidence_text"] != "无可用证据上下文" else 0.5,
                 source=self.source,
                 version=self.version,
                 raw_output={
@@ -162,6 +252,9 @@ class LLMJudgeScorer(BaseScorer):
                     "raw_response": judge_output,
                     "parsed": parsed,
                     "rubric_version": self._version,
+                    "prompt_preview": prompt[:2000],
+                    "has_evidence": context["evidence_text"] != "无可用证据上下文",
+                    "has_expected_output": context["expected_output_text"] != "未提供参考答案/期望输出",
                 },
             )
         except Exception as e:
@@ -174,6 +267,7 @@ class LLMJudgeScorer(BaseScorer):
                 confidence=0.0,
                 source=self.source,
                 version=self.version,
+                status=ScoreStatus.ERROR,
             )
 
     def _format_rubric(self) -> str:
@@ -201,15 +295,7 @@ class LLMJudgeScorer(BaseScorer):
                 raise RuntimeError(f"DashScope API error: {response.code} - {response.message}")
 
         except ImportError:
-            logger.warning("dashscope not available, returning mock judge output")
-            return json.dumps({
-                "dimensions": [
-                    {"name": d["name"], "score": 0.5, "reason": "mock: dashscope unavailable"}
-                    for d in self._rubric.get("dimensions", [])
-                ],
-                "overall_score": 0.5,
-                "overall_reason": "mock: dashscope SDK not installed",
-            })
+            raise RuntimeError("dashscope SDK not available, judge scoring is not configured")
 
     def _parse_judge_output(self, raw_output: str) -> Dict[str, Any]:
         """解析 judge 输出的 JSON"""

@@ -14,7 +14,7 @@ import uuid
 from bson import ObjectId
 
 from app.core.database import get_mongo_db
-from app.models.eval import EvalDataset, EvalCase, DatasetStatus
+from app.models.eval import EvalDataset, EvalCase, DatasetStatus, DatasetPurpose
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -90,11 +90,15 @@ class EvalDatasetService:
         description: str = "",
         tags: Optional[List[str]] = None,
         created_by: str = "",
+        purpose: str = DatasetPurpose.GENERAL.value,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """创建评测集"""
         db = get_mongo_db()
 
         dataset_id = f"ds_{uuid.uuid4().hex[:12]}"
+        meta = dict(metadata or {})
+        meta["purpose"] = DatasetPurpose(purpose).value
         dataset = EvalDataset(
             dataset_id=dataset_id,
             name=name,
@@ -103,6 +107,7 @@ class EvalDatasetService:
             status=DatasetStatus.DRAFT,
             tags=tags or [],
             created_by=created_by,
+            metadata=meta,
         )
 
         doc = dataset.model_dump(by_alias=True, exclude={"id"})
@@ -125,6 +130,7 @@ class EvalDatasetService:
         limit: int = 20,
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
+        purpose: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """列出评测集"""
         db = get_mongo_db()
@@ -134,6 +140,8 @@ class EvalDatasetService:
             query["tags"] = {"$in": tags}
         if status:
             query["status"] = status
+        if purpose:
+            query["metadata.purpose"] = DatasetPurpose(purpose).value
 
         cursor = db[self.COLLECTION_DATASETS].find(query).sort("created_at", -1).skip(skip).limit(limit)
         results = []
@@ -149,6 +157,8 @@ class EvalDatasetService:
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
+        purpose: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """更新评测集"""
         db = get_mongo_db()
@@ -162,6 +172,10 @@ class EvalDatasetService:
             update_fields["tags"] = tags
         if status is not None:
             update_fields["status"] = status
+        if purpose is not None:
+            update_fields["metadata.purpose"] = DatasetPurpose(purpose).value
+        if metadata is not None:
+            update_fields["metadata"] = metadata
 
         result = await db[self.COLLECTION_DATASETS].update_one(
             {"dataset_id": dataset_id},
@@ -195,6 +209,8 @@ class EvalDatasetService:
         difficulty: str = "medium",
         category: str = "general",
         description: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+        skill_eval: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """向评测集添加用例"""
         db = get_mongo_db()
@@ -212,6 +228,8 @@ class EvalDatasetService:
             input=input_data,
             expected_output=expected_output,
             scoring_criteria=scoring_criteria or {},
+            metadata=metadata or {},
+            skill_eval=skill_eval,
             tags=tags or [],
             difficulty=difficulty,
             category=category,
@@ -237,12 +255,23 @@ class EvalDatasetService:
         return {"case_id": case_id, "dataset_id": dataset_id, "dataset_version": new_version}
 
     async def get_case(self, case_id: str) -> Optional[Dict[str, Any]]:
-        """获取用例"""
+        """获取当前最新且未归档的用例版本。"""
         db = get_mongo_db()
-        doc = await db[self.COLLECTION_CASES].find_one({"case_id": case_id})
-        if doc:
-            doc["id"] = str(doc.pop("_id"))
-        return doc
+        cursor = db[self.COLLECTION_CASES].find(
+            {"case_id": case_id, "archived": {"$ne": True}}
+        )
+        best = None
+        best_version = None
+        async for doc in cursor:
+            current = _parse_semver(str(doc.get("version", "")))
+            if current is None:
+                current = (0, 0, 0)
+            if best is None or current > best_version:
+                best = doc
+                best_version = current
+        if best:
+            best["id"] = str(best.pop("_id"))
+        return best
 
     async def list_cases(
         self,
@@ -267,12 +296,26 @@ class EvalDatasetService:
             query["category"] = category
 
         cursor = db[self.COLLECTION_CASES].find(query).sort("created_at", -1)
-        results = []
+        by_case: Dict[str, Dict[str, Any]] = {}
         async for doc in cursor:
-            if version and not _version_lte(str(doc.get("version", "")), version):
+            if doc.get("archived") is True:
                 continue
-            doc["id"] = str(doc.pop("_id"))
-            results.append(doc)
+            doc_version = str(doc.get("version", ""))
+            if version and not _version_lte(doc_version, version):
+                continue
+            parsed = _parse_semver(doc_version) or (0, 0, 0)
+            existing = by_case.get(doc.get("case_id", ""))
+            if existing is None:
+                by_case[doc.get("case_id", "")] = doc
+            else:
+                existing_parsed = _parse_semver(str(existing.get("version", ""))) or (0, 0, 0)
+                if parsed > existing_parsed:
+                    by_case[doc.get("case_id", "")] = doc
+
+        results = list(by_case.values())
+        results.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+        for doc in results:
+            doc["id"] = str(doc.pop("_id", ""))
         return results[skip:skip + limit]
 
     async def update_case(
@@ -282,8 +325,8 @@ class EvalDatasetService:
     ) -> Optional[Dict[str, Any]]:
         """更新用例
 
-        更新成功后自动递增所属数据集的 patch 版本号，
-        确保"按版本重放"能拿到更新前的快照。
+        不原地修改旧版本：从当前最新版本复制内容，插入一个新版本文档，
+        确保按版本重放仍能拿到更新前的快照。
         """
         db = get_mongo_db()
 
@@ -292,19 +335,11 @@ class EvalDatasetService:
         if not existing_case:
             return None
 
-        allowed_fields = {"name", "description", "input", "expected_output", "scoring_criteria", "tags", "difficulty", "category"}
-        update_fields = {"updated_at": now_tz()}
+        allowed_fields = {"name", "description", "input", "expected_output", "scoring_criteria", "tags", "difficulty", "category", "skill_eval"}
+        updated = dict(existing_case)
         for k, v in kwargs.items():
             if k in allowed_fields and v is not None:
-                update_fields[k] = v
-
-        result = await db[self.COLLECTION_CASES].update_one(
-            {"case_id": case_id},
-            {"$set": update_fields}
-        )
-
-        if result.modified_count == 0:
-            return None
+                updated[k] = v
 
         # 递增数据集版本
         dataset_id = existing_case.get("dataset_id")
@@ -312,15 +347,36 @@ class EvalDatasetService:
             dataset = await self.get_dataset(dataset_id)
             if dataset:
                 new_version = _bump_patch_version(dataset.get("version", "1.0.0"))
+                updated.pop("_id", None)
+                updated["version"] = new_version
+                updated["archived"] = False
+                updated["updated_at"] = now_tz()
                 await db[self.COLLECTION_DATASETS].update_one(
                     {"dataset_id": dataset_id},
                     {"$set": {"version": new_version, "updated_at": now_tz()}}
                 )
+                doc = EvalCase(
+                    case_id=updated["case_id"],
+                    name=updated.get("name", existing_case.get("name", "")),
+                    description=updated.get("description", ""),
+                    input=updated.get("input", {}),
+                    expected_output=updated.get("expected_output"),
+                    scoring_criteria=updated.get("scoring_criteria", {}),
+                    metadata=updated.get("metadata", {}),
+                    tags=updated.get("tags", []),
+                    difficulty=updated.get("difficulty", "medium"),
+                    category=updated.get("category", "general"),
+                    archived=False,
+                )
+                doc_data = doc.model_dump(by_alias=True, exclude={"id"})
+                doc_data["dataset_id"] = dataset_id
+                doc_data["version"] = new_version
+                await db[self.COLLECTION_CASES].insert_one(doc_data)
 
         return await self.get_case(case_id)
 
     async def delete_case(self, case_id: str) -> bool:
-        """删除用例"""
+        """软删除用例：写一个新版本并标记 archived，保留历史版本。"""
         db = get_mongo_db()
 
         # 获取 case 所属的 dataset
@@ -330,13 +386,19 @@ class EvalDatasetService:
 
         dataset_id = case.get("dataset_id")
 
-        # 删除 case
-        result = await db[self.COLLECTION_CASES].delete_one({"case_id": case_id})
+        # 写入归档版本，而不是物理删除
+        dataset = await self.get_dataset(dataset_id) if dataset_id else None
+        new_version = _bump_patch_version(dataset.get("version", "1.0.0")) if dataset else "1.0.0"
+        archived_doc = dict(case)
+        archived_doc.pop("_id", None)
+        archived_doc.pop("id", None)
+        archived_doc["version"] = new_version
+        archived_doc["archived"] = True
+        archived_doc["updated_at"] = now_tz()
+        await db[self.COLLECTION_CASES].insert_one(archived_doc)
 
         # 从数据集中移除引用并递增版本
         if dataset_id:
-            dataset = await self.get_dataset(dataset_id)
-            new_version = _bump_patch_version(dataset.get("version", "1.0.0")) if dataset else "1.0.0"
             await db[self.COLLECTION_DATASETS].update_one(
                 {"dataset_id": dataset_id},
                 {
@@ -345,7 +407,7 @@ class EvalDatasetService:
                 }
             )
 
-        return result.deleted_count > 0
+        return True
 
     async def get_dataset_with_cases(
         self,
@@ -391,6 +453,13 @@ class EvalDatasetService:
             golden_data = json.load(f)
 
         cases_to_import = golden_data.get("cases", [])
+        skill_golden_path = os.path.join(
+            os.path.dirname(__file__), "data", "skill_golden_cases.json"
+        )
+        if os.path.exists(skill_golden_path):
+            with open(skill_golden_path, "r", encoding="utf-8") as f:
+                skill_golden_data = json.load(f)
+            cases_to_import.extend(skill_golden_data.get("cases", []))
 
         # 获取当前数据集中已有的 case name 集合，用于去重
         existing_cursor = db[self.COLLECTION_CASES].find(
@@ -415,6 +484,7 @@ class EvalDatasetService:
                 input_data=case_data.get("input", {}),
                 expected_output=case_data.get("expected_output"),
                 scoring_criteria=case_data.get("scoring_criteria"),
+                skill_eval=case_data.get("skill_eval"),
                 tags=case_data.get("tags", []),
                 difficulty=case_data.get("difficulty", "medium"),
                 category=case_data.get("category", "general"),
@@ -461,32 +531,14 @@ class EvalDatasetService:
             # 只有 updated_at，没有实际更新字段
             return {"updated": 0}
 
-        result = await db[self.COLLECTION_CASES].update_many(
-            {"case_id": {"$in": case_ids}},
-            {"$set": update_fields},
-        )
+        updated_count = 0
+        for case_id in case_ids:
+            result = await self.update_case(case_id, **update_fields)
+            if result:
+                updated_count += 1
 
-        # 收集受影响的 dataset_id 并递增版本
-        affected_datasets = set()
-        cursor = db[self.COLLECTION_CASES].find(
-            {"case_id": {"$in": case_ids}}, {"dataset_id": 1}
-        )
-        async for doc in cursor:
-            ds_id = doc.get("dataset_id")
-            if ds_id:
-                affected_datasets.add(ds_id)
-
-        for ds_id in affected_datasets:
-            dataset = await self.get_dataset(ds_id)
-            if dataset:
-                new_version = _bump_patch_version(dataset.get("version", "1.0.0"))
-                await db[self.COLLECTION_DATASETS].update_one(
-                    {"dataset_id": ds_id},
-                    {"$set": {"version": new_version, "updated_at": now_tz()}},
-                )
-
-        logger.info(f"Batch updated {result.modified_count} cases")
-        return {"updated": result.modified_count}
+        logger.info(f"Batch updated {updated_count} cases")
+        return {"updated": updated_count}
 
     async def publish_version(
         self,

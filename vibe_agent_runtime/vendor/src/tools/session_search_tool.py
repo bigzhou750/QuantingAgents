@@ -34,6 +34,9 @@ class SessionSearchTool(BaseTool):
     }
     repeatable = True
 
+    def __init__(self, search_index=None) -> None:
+        self._search_index = search_index
+
     def execute(self, **kwargs: Any) -> str:
         """Search past sessions.
 
@@ -62,7 +65,8 @@ class SessionSearchTool(BaseTool):
 
         try:
             from src.session.search import get_shared_index
-            matches = get_shared_index().search(query, max_sessions=max_results)
+            index = self._search_index or get_shared_index()
+            matches = index.search(query, max_sessions=max_results)
 
             if not matches:
                 return json.dumps(

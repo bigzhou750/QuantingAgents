@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.routers.auth_db import get_current_user
+from app.routers.auth_db import get_current_user, get_current_admin
 from app.services.log_export_service import get_log_export_service
 
-router = APIRouter(prefix="/system-logs", tags=["系统日志"])
+router = APIRouter(prefix="/system-logs", tags=["系统日志"], dependencies=[Depends(get_current_admin)])
 logger = logging.getLogger("webapi")
 
 
@@ -231,4 +231,3 @@ async def delete_log_file(
     except Exception as e:
         logger.error(f"❌ 删除日志文件失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除日志文件失败: {str(e)}")
-

@@ -7,6 +7,7 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
+  is_archived?: boolean
   roles?: string[]
   created_at: string
   updated_at: string
@@ -79,6 +80,67 @@ export interface ChangePasswordForm {
 export interface ResetPasswordForm {
   email: string
   captcha?: string
+}
+
+// 管理员用户列表摘要
+export interface AdminUserSummary {
+  id: string
+  username: string
+  email: string
+  is_active: boolean
+  is_verified: boolean
+  is_admin: boolean
+  is_archived: boolean
+  created_at: string
+  last_login?: string | null
+  preferences: UserPreferences
+  daily_quota: number
+  concurrent_limit: number
+  total_analyses: number
+  successful_analyses: number
+  failed_analyses: number
+}
+
+// 管理员用户详情
+export interface AdminUserDetail extends AdminUserSummary {
+  updated_at: string
+}
+
+// 管理员用户列表响应
+export interface AdminUserListData {
+  users: AdminUserSummary[]
+  total: number
+  skip: number
+  limit: number
+}
+
+// 管理员用户列表查询
+export interface AdminUserListQuery {
+  keyword?: string
+  status?: 'active' | 'disabled' | 'archived' | ''
+  skip?: number
+  limit?: number
+}
+
+// 管理员创建用户表单
+export interface AdminCreateUserForm {
+  username: string
+  email: string
+  password: string
+  is_admin: boolean
+}
+
+// 管理员更新账号表单
+export interface AdminUpdateUserForm {
+  email?: string
+  daily_quota?: number
+  concurrent_limit?: number
+}
+
+// 管理员重置密码请求
+export interface AdminResetPasswordForm {
+  username: string
+  new_password: string
 }
 
 // 用户权限信息

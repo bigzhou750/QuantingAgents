@@ -133,11 +133,31 @@
             <el-table-column label="置信度" width="90">
               <template #default="{ row }">{{ ((row.confidence || 0) * 100).toFixed(0) }}%</template>
             </el-table-column>
+            <el-table-column prop="verification_method" label="判定方法" width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.verification_method || '—' }}</template>
+            </el-table-column>
             <el-table-column prop="reason" label="判定理由" min-width="180" show-overflow-tooltip />
             <el-table-column prop="evidence_source" label="来源" width="120" show-overflow-tooltip>
               <template #default="{ row }">{{ row.evidence_source || '—' }}</template>
             </el-table-column>
+            <el-table-column label="标注历史" width="90">
+              <template #default="{ row }">
+                <el-tag v-if="(row.annotation_history || []).length" type="info" size="small">
+                  {{ row.annotation_history.length }} 条
+                </el-tag>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
           </el-table>
+          <el-collapse v-if="hasAnnotationHistory" style="margin-top: 8px">
+            <el-collapse-item title="Claim 标注历史与证据引用">
+              <pre class="json-block">{{ JSON.stringify(claimEvidenceList.map((claim: any) => ({
+                claim_id: claim.claim_id,
+                truth_label: claim.truth_label,
+                annotation_history: claim.annotation_history || [],
+              })), null, 2) }}</pre>
+            </el-collapse-item>
+          </el-collapse>
         </div>
 
         <!-- Judge 维度理由和原始输出 -->
@@ -260,6 +280,9 @@ const claimEvidenceList = computed(() => {
   const claims = selectedScore.value?.claims || []
   return Array.isArray(claims) ? claims : []
 })
+const hasAnnotationHistory = computed(() =>
+  claimEvidenceList.value.some((claim: any) => (claim.annotation_history || []).length > 0),
+)
 
 const verdictTagType = (verdict: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
@@ -267,6 +290,7 @@ const verdictTagType = (verdict: string): 'primary' | 'success' | 'warning' | 'i
     weakly_supported: 'warning',
     unsupported: 'danger',
     contradicted: 'danger',
+    unscorable: 'info',
   }
   return map[verdict] || 'info'
 }
@@ -277,6 +301,7 @@ const verdictLabel = (verdict: string) => {
     weakly_supported: '弱支撑',
     unsupported: '无证据',
     contradicted: '与证据矛盾',
+    unscorable: '不可评分',
   }
   return map[verdict] || verdict
 }

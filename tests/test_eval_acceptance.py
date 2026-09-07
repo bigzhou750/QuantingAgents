@@ -325,14 +325,16 @@ class TestCrossModuleConsistency:
         assert "skipped" in statuses
         assert "not_configured" in statuses
         assert "error" in statuses
+        assert "unscorable" in statuses
+        assert "not_applicable" in statuses
 
     def test_frontend_routes_match_backend_endpoints(self):
         """前端路由与后端端点对应关系"""
-        import os
-        router_path = "/Users/luoqiang/Documents/luoqiang/quanting-agent/frontend/src/router/index.ts"
-        assert os.path.exists(router_path)
+        from pathlib import Path
+        router_path = Path(__file__).resolve().parents[1] / "frontend" / "src" / "router" / "index.ts"
+        assert router_path.exists()
 
-        with open(router_path) as f:
+        with router_path.open() as f:
             content = f.read()
 
         # 验证关键路由存在

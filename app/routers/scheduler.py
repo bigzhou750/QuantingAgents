@@ -47,6 +47,8 @@ async def list_jobs(
     Returns:
         任务列表，包含任务ID、名称、状态、下次执行时间等信息
     """
+    if not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
     try:
         jobs = await service.list_jobs()
         return ok(data=jobs, message=f"获取到 {len(jobs)} 个定时任务")
@@ -106,6 +108,8 @@ async def get_job_detail(
     Returns:
         任务详细信息
     """
+    if not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
     try:
         job = await service.get_job(job_id)
         if not job:

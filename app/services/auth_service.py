@@ -1,4 +1,5 @@
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from app.utils.timezone import now_tz
 from typing import Optional
@@ -9,17 +10,39 @@ from app.core.config import settings
 class TokenData(BaseModel):
     sub: str
     exp: int
+    token_type: str = "access"
+    user_id: Optional[str] = None
+    token_version: int = 0
+    issuer: Optional[str] = None
+    jti: Optional[str] = None
 
 class AuthService:
     @staticmethod
-    def create_access_token(sub: str, expires_minutes: int | None = None, expires_delta: int | None = None) -> str:
+    def create_access_token(
+        sub: str,
+        expires_minutes: int | None = None,
+        expires_delta: int | None = None,
+        *,
+        token_type: str = "access",
+        user_id: str | None = None,
+        token_version: int = 0,
+        jti: str | None = None,
+    ) -> str:
         if expires_delta:
             # 如果指定了秒数，使用秒数
             expire = now_tz() + timedelta(seconds=expires_delta)
         else:
             # 否则使用分钟数
             expire = now_tz() + timedelta(minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        payload = {"sub": sub, "exp": expire}
+        payload = {
+            "sub": sub,
+            "user_id": user_id or sub,
+            "type": token_type,
+            "token_version": token_version,
+            "iss": settings.AUTH_TOKEN_ISSUER,
+            "jti": jti or str(uuid.uuid4()),
+            "exp": expire,
+        }
         token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
         return token
 
@@ -31,20 +54,37 @@ class AuthService:
         try:
             logger.debug(f"🔍 开始验证token")
             logger.debug(f"📝 Token长度: {len(token)}")
-            logger.debug(f"🔑 JWT密钥: {settings.JWT_SECRET[:10]}...")
             logger.debug(f"🔧 JWT算法: {settings.JWT_ALGORITHM}")
 
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            decode_options = {"verify_iss": "iss" in unverified}
+            decode_kwargs = {
+                "algorithms": [settings.JWT_ALGORITHM],
+                "options": decode_options,
+            }
+            if "iss" in unverified:
+                decode_kwargs["issuer"] = settings.AUTH_TOKEN_ISSUER
+            payload = jwt.decode(
+                token,
+                settings.JWT_SECRET,
+                **decode_kwargs,
+            )
             logger.debug(f"✅ Token解码成功")
-            logger.debug(f"📋 Payload: {payload}")
 
-            token_data = TokenData(sub=payload.get("sub"), exp=int(payload.get("exp", time.time())))
-            logger.debug(f"🎯 Token数据: sub={token_data.sub}, exp={token_data.exp}")
+            token_data = TokenData(
+                sub=payload.get("sub"),
+                user_id=payload.get("user_id"),
+                token_type=payload.get("type", "access"),
+                token_version=int(payload.get("token_version", 0)),
+                issuer=payload.get("iss"),
+                jti=payload.get("jti"),
+                exp=int(payload.get("exp", time.time())),
+            )
 
             # 检查是否过期
             current_time = int(time.time())
             if token_data.exp < current_time:
-                logger.warning(f"⏰ Token已过期: exp={token_data.exp}, now={current_time}")
+                logger.warning("⏰ Token已过期")
                 return None
 
             logger.debug(f"✅ Token验证成功")

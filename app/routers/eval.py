@@ -9,11 +9,13 @@ import csv
 import io
 import json
 import logging
+import uuid
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.core.database import get_mongo_db
 from app.core.config import settings
 from app.routers.auth_db import get_current_user
 from app.services.eval.dataset_service import dataset_service
@@ -21,6 +23,9 @@ from app.services.eval.runner_service import runner_service
 from app.services.eval.trace_adapter import trace_adapter
 from app.services.eval.scorer_hub import scorer_hub
 from app.services.eval.metrics_service import metrics_service
+from app.services.eval.skill_regression_service import skill_regression_service
+from app.services.explainability.record_service import decision_record_store
+from app.models.eval import ClaimTruthLabel, HallucinationType
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -40,6 +45,8 @@ class DatasetCreateRequest(BaseModel):
     name: str
     description: str = ""
     tags: List[str] = []
+    purpose: str = "general"
+    metadata: dict = {}
 
 
 class DatasetUpdateRequest(BaseModel):
@@ -47,6 +54,8 @@ class DatasetUpdateRequest(BaseModel):
     description: Optional[str] = None
     tags: Optional[List[str]] = None
     status: Optional[str] = None
+    purpose: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class CaseCreateRequest(BaseModel):
@@ -82,6 +91,16 @@ class RunCreateRequest(BaseModel):
     low_confidence_threshold: Optional[float] = None
     review_strategy: Optional[str] = None
     data_window: Optional[dict] = None
+
+
+class SkillRegressionCreateRequest(BaseModel):
+    baseline_run_id: str
+    candidate_run_id: str
+
+
+class SkillRegressionOverrideRequest(BaseModel):
+    allowed: bool
+    reason: str
 
 
 # ==================== 权限检查 ====================
@@ -129,6 +148,8 @@ async def create_dataset(request: DatasetCreateRequest):
             name=request.name,
             description=request.description,
             tags=request.tags,
+            purpose=request.purpose,
+            metadata=request.metadata,
         )
         return ApiResponse(success=True, data=result, message="评测集创建成功")
     except Exception as e:
@@ -142,6 +163,7 @@ async def list_datasets(
     limit: int = 20,
     tags: Optional[str] = None,
     status: Optional[str] = None,
+    purpose: Optional[str] = None,
 ):
     """列出评测集"""
     try:
@@ -151,6 +173,7 @@ async def list_datasets(
             limit=limit,
             tags=tag_list,
             status=status,
+            purpose=purpose,
         )
         return ApiResponse(success=True, data={"items": datasets, "count": len(datasets)})
     except Exception as e:
@@ -188,6 +211,8 @@ async def update_dataset(dataset_id: str, request: DatasetUpdateRequest):
             description=request.description,
             tags=request.tags,
             status=request.status,
+            purpose=request.purpose,
+            metadata=request.metadata,
         )
         if not result:
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
@@ -710,6 +735,97 @@ async def get_trace_summary(trial_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/trials/{trial_id}/skill-eval", dependencies=[Depends(verify_eval_access)])
+async def get_trial_skill_eval(trial_id: str):
+    """获取 trial 的 Skill 路由/执行/共存评测摘要。"""
+    try:
+        trial = await runner_service.get_trial(trial_id)
+        if not trial:
+            raise HTTPException(status_code=404, detail=f"Trial {trial_id} not found")
+        events = await trace_adapter.get_trace_events(
+            trial_id=trial_id,
+            limit=500,
+            event_types=["skill_route", "skill_execute"],
+        )
+        db = get_mongo_db()
+        score_cursor = db["eval_scores"].find({
+            "trial_id": trial_id,
+            "score_name": {"$in": ["skill_route", "skill_execution", "skill_coexistence"]},
+        })
+        scores = []
+        async for doc in score_cursor:
+            doc["id"] = str(doc.pop("_id"))
+            scores.append(doc)
+
+        route_selected = any(
+            (event.get("data") or {}).get("route_selected")
+            for event in events
+            if event.get("event_type") == "skill_route"
+        )
+        skill_effective = any(
+            (event.get("data") or {}).get("skill_effective")
+            for event in events
+            if event.get("event_type") == "skill_execute"
+        )
+        skill_eval_snapshot = trial.get("skill_eval_snapshot") or (
+            (trial.get("case_snapshot") or {}).get("skill_eval")
+        )
+        if not events and not skill_eval_snapshot and not scores:
+            return ApiResponse(
+                success=True,
+                data={
+                    "status": "legacy_unverified",
+                    "route_selected": False,
+                    "skill_effective": False,
+                    "events": [],
+                    "scores": [],
+                    "skill_eval_snapshot": None,
+                },
+                message="旧 trial 无 Skill 评测数据",
+            )
+        return ApiResponse(
+            success=True,
+            data={
+                "status": "complete",
+                "route_selected": route_selected,
+                "skill_effective": skill_effective,
+                "events": events,
+                "scores": scores,
+                "skill_eval_snapshot": skill_eval_snapshot,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get trial skill eval: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trials/{trial_id}/explainability", dependencies=[Depends(verify_eval_access)])
+async def get_trial_explainability(trial_id: str):
+    """获取 trial 的决策链、解释、校验和复核结果。"""
+    try:
+        task_id = f"task_{trial_id}"
+        records = await decision_record_store.list_decision_records(task_id=task_id)
+        explanations = await decision_record_store.list_explanations(task_id=task_id)
+        validations = await decision_record_store.list_validations(task_id=task_id)
+        reviews = await decision_record_store.list_reviews(task_id=task_id)
+        return ApiResponse(
+            success=True,
+            data={
+                "decision_chain": records,
+                "explanations": explanations,
+                "validations": validations,
+                "reviews": reviews,
+                "status": "complete" if records else "legacy_unverified",
+            },
+            message="trial 可解释性结果已返回",
+        )
+    except Exception as e:
+        logger.error(f"Failed to get trial explainability: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 评分 API ====================
 
 @router.get("/trials/{trial_id}/scores", dependencies=[Depends(verify_eval_access)])
@@ -753,6 +869,84 @@ class HumanReviewRequest(BaseModel):
     comment: str = ""
     action: str = "adjust_score"  # approve / reject / adjust_score / add_bad_case / reflow
     target_dataset_id: Optional[str] = None  # for reflow action
+
+
+class ClaimAnnotationRequest(BaseModel):
+    score_id: str = Field(..., min_length=1)
+    claim_id: str = Field(..., min_length=1)
+    truth_label: ClaimTruthLabel
+    hallucination_type: Optional[HallucinationType] = None
+    evidence_refs: List[str] = Field(default_factory=list, description="结构化证据引用")
+    label_version: str = Field(..., min_length=1)
+    comment: str = ""
+
+
+@router.post("/scores/claims/annotation", dependencies=[Depends(verify_eval_access)])
+async def annotate_claim(
+    request: ClaimAnnotationRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """保存 Claim 级人工真值，供幻觉分类指标使用。"""
+    try:
+        from app.core.database import get_mongo_db
+
+        db = get_mongo_db()
+        score_doc = await db["eval_scores"].find_one({
+            "score_id": request.score_id,
+            "claims.claim_id": request.claim_id,
+        })
+        if not score_doc:
+            raise HTTPException(status_code=404, detail="Score 或 Claim 不存在")
+
+        now = now_tz()
+        annotation_id = f"annotation_{uuid.uuid4().hex[:12]}"
+        annotation = {
+            "annotation_id": annotation_id,
+            "reviewer": current_user.get("username", "unknown"),
+            "truth_label": request.truth_label.value,
+            "hallucination_type": (
+                request.hallucination_type.value if request.hallucination_type else None
+            ),
+            "evidence_refs": request.evidence_refs,
+            "comment": request.comment,
+            "label_version": request.label_version,
+            "timestamp": now,
+        }
+        update = {
+            "claims.$.truth_label": request.truth_label.value,
+            "claims.$.truth_source": current_user.get("username", "unknown"),
+            "claims.$.hallucination_type": (
+                request.hallucination_type.value if request.hallucination_type else None
+            ),
+            "claims.$.label_version": request.label_version,
+            "updated_at": now,
+        }
+        update_result = await db["eval_scores"].update_one(
+            {"score_id": request.score_id, "claims.claim_id": request.claim_id},
+            {
+                "$set": update,
+                "$push": {"claims.$.annotation_history": annotation},
+            },
+        )
+        if update_result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Score 或 Claim 不存在")
+        return ApiResponse(
+            success=True,
+            data={
+                "score_id": request.score_id,
+                "claim_id": request.claim_id,
+                "annotation_id": annotation_id,
+                "truth_label": request.truth_label.value,
+                "label_version": request.label_version,
+                "evidence_refs": request.evidence_refs,
+            },
+            message="Claim 标注已保存",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to annotate claim: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/scores/human-review", dependencies=[Depends(verify_eval_access)])
@@ -870,7 +1064,7 @@ async def list_pending_reviews(
         query = {
             "human_reviewed": {"$ne": True},
             # 排除非真实评分状态，避免未启用/出错的评分器进入待复核队列
-            "status": {"$nin": ["skipped", "not_configured", "error"]},
+            "status": {"$nin": ["skipped", "not_configured", "error", "unscorable", "not_applicable"]},
             "$or": [
                 {"confidence": {"$lt": low_confidence_threshold}},
                 {"score": {"$lt": 0.5}},
@@ -929,11 +1123,14 @@ async def get_run_metrics(run_id: str, k: int = 3):
     """
     try:
         base_metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k, mode="quality")
+        execution_pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=k, mode="execution")
         score_agg = await metrics_service.get_score_aggregation(run_id)
         claim_summary = await metrics_service.get_claim_summary(run_id)
 
         combined = {**base_metrics, **pass_metrics}
+        combined["quality_pass_at_k"] = pass_metrics
+        combined["execution_pass_at_k"] = execution_pass_metrics
         combined["score_aggregation"] = score_agg.get("scores", {})
         combined["claim_summary"] = claim_summary
 
@@ -970,10 +1167,19 @@ class BadCaseCreateRequest(BaseModel):
     failure_reason: str = ""
     risk_level: str = "medium"
     tags: List[str] = []
+    failure_family: Optional[str] = None
 
 
 class ConvertToCaseRequest(BaseModel):
     dataset_id: str
+
+
+class BadCaseReviewRequest(BaseModel):
+    action: str
+    comment: str = ""
+    failure_family: Optional[str] = None
+    tags: Optional[List[str]] = None
+    label_version: Optional[str] = None
 
 
 @router.get("/bad-cases", dependencies=[Depends(verify_eval_access)])
@@ -982,11 +1188,20 @@ async def list_bad_cases(
     risk_level: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
+    detection_status: Optional[str] = None,
+    review_status: Optional[str] = None,
+    failure_family: Optional[str] = None,
 ):
     """列出 Bad Case 池"""
     try:
         items = await bad_case_service.list_bad_cases(
-            source=source, risk_level=risk_level, skip=skip, limit=limit
+            source=source,
+            risk_level=risk_level,
+            skip=skip,
+            limit=limit,
+            detection_status=detection_status,
+            review_status=review_status,
+            failure_family=failure_family,
         )
         stats = await bad_case_service.get_stats()
         return ApiResponse(success=True, data={"items": items, "count": len(items), "stats": stats})
@@ -1006,10 +1221,66 @@ async def create_bad_case(request: BadCaseCreateRequest):
             failure_reason=request.failure_reason,
             risk_level=request.risk_level,
             tags=request.tags,
+            failure_family=request.failure_family,
         )
         return ApiResponse(success=True, data=result, message="Bad Case 创建成功")
     except Exception as e:
         logger.error(f"Failed to create bad case: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/bad-cases/review-queue", dependencies=[Depends(verify_eval_access)])
+async def list_bad_case_review_queue(skip: int = 0, limit: int = 50):
+    """获取待复核 Bad Case"""
+    try:
+        items = await bad_case_service.list_review_queue(skip=skip, limit=limit)
+        return ApiResponse(success=True, data={"items": items, "count": len(items)})
+    except Exception as e:
+        logger.error(f"Failed to list bad case review queue: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/bad-cases/{bad_case_id}", dependencies=[Depends(verify_eval_access)])
+async def get_bad_case(bad_case_id: str):
+    """获取 Bad Case 详情"""
+    try:
+        result = await bad_case_service.get_bad_case(bad_case_id)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Bad case {bad_case_id} not found")
+        return ApiResponse(success=True, data=result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get bad case: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bad-cases/{bad_case_id}/review", dependencies=[Depends(verify_eval_access)])
+async def review_bad_case(
+    bad_case_id: str,
+    request: BadCaseReviewRequest,
+    user: dict = Depends(verify_eval_access),
+):
+    """复核 Bad Case"""
+    try:
+        result = await bad_case_service.review_bad_case(
+            bad_case_id=bad_case_id,
+            action=request.action,
+            reviewer=user.get("username", "unknown"),
+            comment=request.comment,
+            failure_family=request.failure_family,
+            tags=request.tags,
+            label_version=request.label_version,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Bad case {bad_case_id} not found")
+        return ApiResponse(success=True, data=result, message="Bad Case 复核完成")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to review bad case: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1072,6 +1343,10 @@ class OnlineSampleRequest(BaseModel):
     risk_level: str = "medium"
     tags: List[str] = []
     session_id: Optional[str] = None
+    task_id: Optional[str] = None
+    business_id: Optional[str] = None
+    decision_chain_ref: Optional[str] = None
+    explanation_status: Optional[str] = None
     user_feedback: Optional[str] = None
     source_trace_id: Optional[str] = None
     release_receipt_id: Optional[str] = None
@@ -1100,6 +1375,11 @@ async def submit_online_sample(request: OnlineSampleRequest):
             source_trace_id=request.source_trace_id,
             release_receipt_id=request.release_receipt_id,
             artifact_version=request.artifact_version,
+            business_id=request.business_id or request.task_id,
+            task_id=request.task_id,
+            session_id=request.session_id,
+            decision_chain_ref=request.decision_chain_ref,
+            explanation_status=request.explanation_status,
         )
         return ApiResponse(success=True, data=result, message="线上样本已收录")
     except Exception as e:
@@ -1189,7 +1469,8 @@ async def generate_run_report(run_id: str):
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
         metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="quality")
+        execution_pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="execution")
         score_agg = await metrics_service.get_score_aggregation(run_id)
 
         report = {
@@ -1200,6 +1481,7 @@ async def generate_run_report(run_id: str):
             "created_at": str(run.get("created_at", "")),
             "metrics": metrics,
             "pass_at_k": pass_metrics,
+            "execution_pass_at_k": execution_pass_metrics,
             "score_summary": score_agg.get("scores", {}),
             "generated_at": now_tz().isoformat(),
         }
@@ -1257,7 +1539,7 @@ async def check_release_gate(run_id: str):
             })
 
         metrics = await metrics_service.compute_run_metrics(run_id)
-        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=3)
+        pass_metrics = await metrics_service.compute_pass_at_k(run_id, k=3, mode="quality")
 
         checks = []
         failures = []
@@ -1287,6 +1569,7 @@ async def check_release_gate(run_id: str):
             "enabled": True,
             "checks": checks,
             "failures": failures,
+            "pass_mode": pass_metrics.get("mode", "quality"),
         })
     except Exception as e:
         logger.error(f"Failed to check release gate: {e}")
@@ -1325,7 +1608,7 @@ async def get_quality_trends(
             run_id = run.get("run_id")
             metrics = await metrics_service.compute_run_metrics(run_id)
             score_agg = await metrics_service.get_score_aggregation(run_id)
-            pass_metrics = await metrics_service.compute_pass_at_k(run_id)
+            pass_metrics = await metrics_service.compute_pass_at_k(run_id, mode="quality")
 
             latency = metrics.get("latency", {}) or {}
             cost = metrics.get("cost", {}) or {}
@@ -1342,6 +1625,7 @@ async def get_quality_trends(
                 "pass_at_k": pass_metrics.get("pass_at_k", 0),
                 "pass_pow_k": pass_metrics.get("pass_pow_k", 0),
                 "pass_k": pass_metrics.get("k", 3),
+                "pass_mode": pass_metrics.get("mode", "quality"),
                 "score_summary": {
                     name: data.get("avg_score", 0)
                     for name, data in score_agg.get("scores", {}).items()
@@ -1588,6 +1872,126 @@ async def trigger_regression_task(task_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to trigger regression task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Skill 配对回归 API ====================
+
+@router.post("/skill-regression-groups", dependencies=[Depends(verify_eval_access)])
+async def create_skill_regression_group(
+    request: SkillRegressionCreateRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """创建 Skill baseline/candidate 配对回归组。"""
+    try:
+        group = await skill_regression_service.create_group(
+            request.baseline_run_id,
+            request.candidate_run_id,
+            created_by=current_user.get("username", ""),
+        )
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归组已创建",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to create skill regression group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skill-regression-groups", dependencies=[Depends(verify_eval_access)])
+async def list_skill_regression_groups(skip: int = 0, limit: int = 50):
+    """查看 Skill 回归组列表。"""
+    try:
+        groups = await skill_regression_service.list_groups(skip=skip, limit=limit)
+        return ApiResponse(
+            success=True,
+            data={
+                "items": [g.model_dump(by_alias=True, exclude={"id"}) for g in groups],
+                "total": len(groups),
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to list skill regression groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/skill-regression-groups/{group_id}", dependencies=[Depends(verify_eval_access)])
+async def get_skill_regression_group(group_id: str):
+    """查看 Skill 回归组详情。"""
+    try:
+        group = await skill_regression_service.get_group(group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Skill 回归组不存在")
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get skill regression group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/compute", dependencies=[Depends(verify_eval_access)])
+async def compute_skill_regression_group(group_id: str):
+    """计算逐 case 回归 delta。"""
+    try:
+        group = await skill_regression_service.compute_deltas(group_id)
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归 delta 已计算",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to compute skill regression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/gate", dependencies=[Depends(verify_eval_access)])
+async def evaluate_skill_regression_group(group_id: str):
+    """执行 Skill critical 回归门禁。"""
+    try:
+        group = await skill_regression_service.evaluate_gate(group_id)
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to evaluate skill regression gate: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/skill-regression-groups/{group_id}/override", dependencies=[Depends(verify_eval_access)])
+async def override_skill_regression_group(
+    group_id: str,
+    request: SkillRegressionOverrideRequest,
+    current_user: dict = Depends(verify_eval_access),
+):
+    """管理员显式覆盖 Skill 回归门禁并留痕。"""
+    try:
+        group = await skill_regression_service.override_group(
+            group_id,
+            allowed=request.allowed,
+            reason=request.reason,
+            overridden_by=current_user.get("username", ""),
+        )
+        return ApiResponse(
+            success=True,
+            data=group.model_dump(by_alias=True, exclude={"id"}),
+            message="Skill 回归门禁覆盖已记录",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to override skill regression gate: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -153,13 +153,18 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 token_data = AuthService.verify_token(token)
 
                 if token_data:
-                    # 返回用户信息（开源版只有admin用户）
+                    from app.services.user_service import user_service
+                    account = await user_service.get_user_by_id(token_data.user_id or token_data.sub)
+                    if not account or not account.is_active:
+                        return None
+                    if token_data.token_version != getattr(account, "token_version", 0):
+                        return None
                     return {
-                        "id": "admin",
-                        "username": "admin",
-                        "name": "管理员",
-                        "is_admin": True,
-                        "roles": ["admin"]
+                        "id": str(account.id),
+                        "username": account.username,
+                        "name": account.username,
+                        "is_admin": account.is_admin,
+                        "roles": ["admin"] if account.is_admin else ["user"],
                     }
 
             return None

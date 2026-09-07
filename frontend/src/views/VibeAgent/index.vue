@@ -155,10 +155,45 @@
                     <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
                   </div>
                 </div>
+                <div v-if="isActivityOpen(activityFor(message.task_id)) && decisionChainFor(message.task_id).length" class="decision-panel">
+                  <div class="decision-panel-title">决策依据</div>
+                  <div v-for="item in decisionChainFor(message.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                    <div class="decision-row-head">
+                      <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                      <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                    </div>
+                    <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                    <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                    <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
+                  </div>
+                </div>
               </div>
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
                 <div class="message-content markdown-body" v-html="renderMarkdown(message.content)"></div>
+                <div
+                  v-if="message.role === 'assistant' && message.task_id"
+                  class="message-actions"
+                >
+                  <el-button
+                    text
+                    size="small"
+                    :icon="CircleClose"
+                    :disabled="Boolean(feedbackedMessages[message.message_id])"
+                    @click="submitFeedback(message, 'wrong_answer')"
+                  >
+                    {{ feedbackedMessages[message.message_id] ? '已反馈' : '回答错误' }}
+                  </el-button>
+                  <el-button
+                    v-if="!feedbackedMessages[message.message_id]"
+                    text
+                    size="small"
+                    :icon="ChatLineSquare"
+                    @click="submitFeedback(message, 'not_useful')"
+                  >
+                    内容无用
+                  </el-button>
+                </div>
               </div>
             </div>
 
@@ -185,6 +220,18 @@
                   <span class="step-title">{{ step.title }}<template v-if="step.count && step.count > 1"> ×{{ step.count }}</template></span>
                   <span v-if="step.action" class="step-action">{{ step.action }}</span>
                   <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
+                </div>
+              </div>
+              <div v-if="isActivityOpen(activityFor(activeTask.task_id)) && decisionChainFor(activeTask.task_id).length" class="decision-panel">
+                <div class="decision-panel-title">决策依据</div>
+                <div v-for="item in decisionChainFor(activeTask.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                  <div class="decision-row-head">
+                    <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                    <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                  </div>
+                  <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                  <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                  <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
                 </div>
               </div>
               <div v-if="streamTextFor(activeTask.task_id)" class="streaming-response">
@@ -236,9 +283,14 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+<<<<<<< HEAD
 import { Close, Delete, List, Plus, Refresh, UserFilled } from '@element-plus/icons-vue'
+=======
+import { ChatLineSquare, CircleClose, Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
+>>>>>>> 79ff6a28180567a31ef1a05d850fe4f16f184c6e
 import { marked } from 'marked'
-import { vibeAgentApi,
+import {
+  vibeAgentApi,
   type VibeEvent,
   type VibeMessage,
   type VibeSession,
@@ -248,6 +300,7 @@ import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStr
 import { formatDateTime } from '@/utils/datetime'
 import {
   buildWorkbenchActivity,
+  buildDecisionChain,
   formatActivityElapsed,
   stepElapsedText
 } from './workbench'
@@ -276,6 +329,7 @@ const streamError = ref('')
 const authRequired = ref(false)
 const chatScroll = ref()
 const activityOpen = ref<Record<string, boolean>>({})
+const feedbackedMessages = ref<Record<string, string>>({})
 let controller: AbortController | null = null
 let reconnectTimer: number | null = null
 let sessionLoadVersion = 0
@@ -317,6 +371,9 @@ const activityFor = (taskId: string) => buildWorkbenchActivity(
   events.value,
   activeTask.value?.task_id === taskId ? activeTask.value.status : undefined
 )
+
+const decisionChainFor = (taskId: string) => buildDecisionChain(events.value)
+  .filter(event => String(event.task_id || '') === taskId)
 
 const isActivityOpen = (activity: ReturnType<typeof buildWorkbenchActivity>) => (
   activity.state === 'running' || activityOpen.value[activity.taskId] === true
@@ -647,17 +704,18 @@ const retryTask = async () => {
   await sendMessage()
 }
 
-const taskStatusMap: Record<string, string> = {
-  idle: '空闲',
-  queued: '排队中',
-  pending: '等待中',
-  processing: '处理中',
-  running: '执行中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消'
+const submitFeedback = async (message: VibeMessage, feedbackType: string) => {
+  if (!message.task_id || feedbackedMessages.value[message.message_id]) return
+  try {
+    await vibeAgentApi.submitFeedback(activeSessionId.value, message.task_id, {
+      feedback_type: feedbackType,
+    })
+    feedbackedMessages.value[message.message_id] = feedbackType
+    ElMessage.success('反馈已记录')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '反馈提交失败')
+  }
 }
-const taskStatusLabel = (status?: string) => taskStatusMap[status || ''] || status || '空闲'
 
 const canCancel = (status: string) => ['queued', 'processing', 'pending', 'running'].includes(status)
 const formatTime = (value: string) => (value ? formatDateTime(value) : '-')
@@ -704,7 +762,7 @@ onMounted(async () => {
   // 加载个人投资助手上下文选项
   try {
     const token = localStorage.getItem('auth-token')
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
 
     const profileResponse = await fetch('/api/investment/profile', { headers })
     if (profileResponse.ok) {
@@ -1004,6 +1062,14 @@ onUnmounted(() => {
   color: #fff;
 }
 
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 4px;
+}
+
 .activity-line {
   width: min(760px, 82%);
   margin: 0 0 8px;
@@ -1190,10 +1256,21 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
-.markdown-body :deep(h1) { font-size: 20px; }
-.markdown-body :deep(h2) { font-size: 18px; }
-.markdown-body :deep(h3) { font-size: 16px; }
-.markdown-body :deep(h4) { font-size: 14px; }
+.markdown-body :deep(h1) {
+  font-size: 20px;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 18px;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 16px;
+}
+
+.markdown-body :deep(h4) {
+  font-size: 14px;
+}
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
@@ -1370,9 +1447,66 @@ onUnmounted(() => {
   margin-top: 18px;
 }
 
+.decision-panel {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.decision-panel-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.decision-row+.decision-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+}
+
+.decision-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.decision-status {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+}
+
+.decision-status.requires_review {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.decision-line {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-regular);
+  word-break: break-all;
+}
+
 @keyframes activity-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 960px) {

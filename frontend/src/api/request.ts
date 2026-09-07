@@ -251,8 +251,9 @@ const createAxiosInstance = (): AxiosInstance => {
             }
 
             // 未授权，尝试刷新token
-            if (!config?.skipAuth && authStore.refreshToken) {
+            if (!config?.skipAuth && authStore.refreshToken && !(config as any).__authRefreshTried) {
               try {
+                ;(config as any).__authRefreshTried = true
                 console.log('🔄 401错误，尝试刷新token...')
                 const success = await authStore.refreshAccessToken()
                 if (success) {

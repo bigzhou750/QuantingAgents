@@ -46,11 +46,11 @@ class TaskService:
 
         # 选股结果索引
         await db[self.COLLECTION_SCREENING_RESULTS].create_index("result_id", unique=True)
-        await db[self.COLLECTION_SCREENING_RESULTS].create_index("task_id", unique=True)
+        await db[self.COLLECTION_SCREENING_RESULTS].create_index([("user_id", 1), ("task_id", 1)], unique=True)
 
         # 体检结果索引
         await db[self.COLLECTION_CHECKUP_RESULTS].create_index("result_id", unique=True)
-        await db[self.COLLECTION_CHECKUP_RESULTS].create_index("task_id", unique=True)
+        await db[self.COLLECTION_CHECKUP_RESULTS].create_index([("user_id", 1), ("task_id", 1)], unique=True)
 
         self._initialized = True
         logger.info("TaskService initialized with indexes")
@@ -189,6 +189,7 @@ class TaskService:
     async def save_screening_result(
         self,
         task_id: str,
+        user_id: str,
         candidates: List[Dict[str, Any]],
         overall_risks: Optional[List[str]] = None,
         data_sources: Optional[List[str]] = None,
@@ -221,6 +222,7 @@ class TaskService:
         screening_result = ScreeningResult(
             result_id=result_id,
             task_id=task_id,
+            user_id=user_id,
             candidates=filtered_candidates,
             total_candidates=len(filtered_candidates),
             overall_risks=filtered_risks,
@@ -242,7 +244,7 @@ class TaskService:
             if actual_data_as_of:
                 update_task_fields["data_as_of"] = actual_data_as_of
             await db[self.COLLECTION_TASKS].update_one(
-                {"task_id": task_id},
+                {"task_id": task_id, "user_id": user_id},
                 {"$set": update_task_fields}
             )
 
@@ -252,10 +254,12 @@ class TaskService:
         logger.info(f"Saved screening result {result_id} for task {task_id}")
         return {"result_id": result_id, "total_candidates": len(filtered_candidates)}
 
-    async def get_screening_result(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_screening_result(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
         """获取选股结果"""
         db = get_mongo_db()
-        doc = await db[self.COLLECTION_SCREENING_RESULTS].find_one({"task_id": task_id})
+        doc = await db[self.COLLECTION_SCREENING_RESULTS].find_one(
+            {"task_id": task_id, "user_id": user_id}
+        )
         if doc:
             doc["id"] = str(doc.pop("_id"))
         return doc
@@ -263,6 +267,7 @@ class TaskService:
     async def save_checkup_result(
         self,
         task_id: str,
+        user_id: str,
         fitness_level: str,
         fitness_summary: str,
         key_metrics: List[Dict[str, Any]],
@@ -289,6 +294,7 @@ class TaskService:
         checkup_result = CheckupResult(
             result_id=result_id,
             task_id=task_id,
+            user_id=user_id,
             fitness_level=fitness_level,
             fitness_summary=filtered_summary,
             key_metrics=key_metrics,
@@ -311,17 +317,19 @@ class TaskService:
             if data_as_of:
                 update_task_fields["data_as_of"] = data_as_of
             await db[self.COLLECTION_TASKS].update_one(
-                {"task_id": task_id},
+                {"task_id": task_id, "user_id": user_id},
                 {"$set": update_task_fields}
             )
 
         logger.info(f"Saved checkup result {result_id} for task {task_id}")
         return {"result_id": result_id, "fitness_level": fitness_level}
 
-    async def get_checkup_result(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_checkup_result(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
         """获取体检结果"""
         db = get_mongo_db()
-        doc = await db[self.COLLECTION_CHECKUP_RESULTS].find_one({"task_id": task_id})
+        doc = await db[self.COLLECTION_CHECKUP_RESULTS].find_one(
+            {"task_id": task_id, "user_id": user_id}
+        )
         if doc:
             doc["id"] = str(doc.pop("_id"))
         return doc

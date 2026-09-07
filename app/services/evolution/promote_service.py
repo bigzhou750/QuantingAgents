@@ -1,24 +1,25 @@
 """
 Promote / Rollback / Stop 服务
 
-负责将通过审批的候选变更写回正式 artifact 版本（promote），
+负责将通过审批的候选变更 materialize 到正式 artifact 位置（promote），
 或回滚到稳定版本（rollback），或紧急停止（stop）。
 """
 
 import logging
-import os
-import shutil
 import uuid
 from typing import Optional, Dict, Any
 
 from app.core.config import settings
 from app.core.database import get_mongo_db
 from app.models.evolution import (
+    ApprovalRecord,
+    ArtifactType,
     EvolutionReceipt,
     ProposalStatus,
     StopReason,
-    ArtifactType,
 )
+from app.services.evolution.artifact_publisher import artifact_publisher
+from app.services.evolution.content_diff import validate_structured_diff
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -27,48 +28,47 @@ logger = logging.getLogger(__name__)
 class PromoteService:
     """Promote/Rollback/Stop 服务"""
 
-    def __init__(self):
-        pass
-
     async def promote(
         self,
         proposal_id: str,
         promoted_by: str = "system",
         request_id: str = "",
         idempotency_key: str = "",
+        environment: str = "default",
+        allow_skill_regression_override: bool = False,
     ) -> EvolutionReceipt:
-        """将候选发布为正式版本
+        """将候选发布为正式版本。
 
-        前置条件：提案状态必须为 APPROVED
+        阶段顺序：创建不可变版本 -> materialize -> 发布后 smoke test ->
+        切换当前指针 -> 写回执。任一关键阶段失败时当前版本指针不前移。
         """
-        from app.services.evolution.proposal_service import proposal_service
         from app.services.evolution.artifact_registry import artifact_registry
-        from app.services.evolution.verification_service import verification_service
         from app.services.evolution.approval_service import approval_service
+        from app.services.evolution.governance_service import governance_service
+        from app.services.evolution.proposal_service import proposal_service
         from app.services.evolution.receipt_service import receipt_service
+        from app.services.evolution.verification_service import verification_service
 
         existing_receipt = await receipt_service.get_by_idempotency_key(idempotency_key)
         if existing_receipt:
             return existing_receipt
 
-        # 检查提案状态
         proposal = await proposal_service.get(proposal_id)
         if not proposal:
             raise ValueError(f"Proposal {proposal_id} not found")
         if proposal.status != ProposalStatus.APPROVED:
-            raise ValueError(f"Proposal must be approved before promote (current: {proposal.status.value})")
+            raise ValueError(
+                f"Proposal must be approved before promote (current: {proposal.status.value})"
+            )
 
-        from app.services.evolution.governance_service import governance_service
         await governance_service.acquire_proposal_lock(proposal_id)
 
-        # 检查 human gate
         if settings.EVOLUTION_HUMAN_GATE:
             records = await approval_service.get_records(proposal_id)
             has_approval = any(r.get("action") == "approve" for r in records)
             if not has_approval:
                 raise ValueError("Human gate enabled but no approval record found")
 
-        # 获取验证结果
         verifications = await verification_service.list_by_proposal(proposal_id)
         latest_verification = verifications[0] if verifications else None
         if not latest_verification or latest_verification.status != "completed":
@@ -82,98 +82,229 @@ class PromoteService:
         if gate_result.get("passed") is False:
             raise ValueError("Verification gate failed; promote is blocked")
 
+        skill_regression_group_id = ""
+        skill_regression_gate: Dict[str, Any] = {}
+        skill_regression_override: Dict[str, Any] = {}
+        if proposal.target_artifact_type == ArtifactType.SKILL:
+            (
+                skill_regression_group_id,
+                skill_regression_gate,
+                skill_regression_override,
+            ) = self._resolve_skill_regression_gate(
+                latest_verification.comparison_result or {},
+                required=settings.EVOLUTION_SKILL_REGRESSION_REQUIRED,
+                override_allowed=settings.EVOLUTION_SKILL_REGRESSION_OVERRIDE_ALLOWED,
+                allow_override=allow_skill_regression_override,
+                promoted_by=promoted_by,
+            )
+        content_diff_status = proposal.content_diff_status if isinstance(proposal.content_diff_status, str) else "complete"
+        if content_diff_status == "legacy_incomplete":
+            raise ValueError("Proposal content diff is incomplete; regenerate candidate before promote")
+        structured_diff = proposal.structured_diff if isinstance(proposal.structured_diff, dict) else {}
+        if structured_diff:
+            content_validation = validate_structured_diff(structured_diff)
+            if not content_validation["passed"]:
+                raise ValueError(
+                    "candidate content diff validation failed: "
+                    + "; ".join(content_validation["errors"])
+                )
+
         registry_entry = await artifact_registry.get_registry_entry(proposal.target_artifact_id)
         if not registry_entry:
             raise ValueError(f"Artifact {proposal.target_artifact_id} is not registered")
-        if proposal.baseline_artifact_version and registry_entry.current_version != proposal.baseline_artifact_version:
+        current_baseline_version = await artifact_registry.get_current_version(
+            proposal.target_artifact_id,
+            environment=environment,
+        )
+        if (
+            proposal.baseline_artifact_version
+            and current_baseline_version
+            and current_baseline_version.version != proposal.baseline_artifact_version
+        ):
             raise ValueError(
-                "Artifact baseline version changed during verification; re-verify before promote"
+                "Artifact baseline version changed during verification; re-verify before promote "
+                f"(proposal baseline={proposal.baseline_artifact_version}, "
+                f"current={current_baseline_version.version})"
             )
 
         pre_smoke_test = self._run_smoke_test(proposal)
         if settings.EVOLUTION_REQUIRE_SMOKE_TEST and not pre_smoke_test["passed"]:
             raise ValueError(
-                "Promote smoke test failed: "
-                + "; ".join(pre_smoke_test["failures"])
+                "Promote smoke test failed: " + "; ".join(pre_smoke_test["failures"])
             )
 
-        # 创建新版本
         content_snapshot = proposal.diff.copy()
         content_snapshot["promoted_from_proposal"] = proposal_id
         content_snapshot["promoted_by"] = promoted_by
 
-        new_version = await artifact_registry.create_version(
-            artifact_id=proposal.target_artifact_id,
-            content_snapshot=content_snapshot,
-            created_by=promoted_by,
-        )
-
-        # 写正式版本、smoke test、状态和回执作为一个可补偿单元。
+        version_record = None
+        switched = False
+        operation_records: list[Dict[str, Any]] = []
         try:
-            # 对 Skill 类型，写入文件系统
-            if proposal.target_artifact_type == ArtifactType.SKILL:
-                await self._write_skill_to_disk(proposal, content_snapshot)
+            version_record = await artifact_registry.create_version_record(
+                artifact_id=proposal.target_artifact_id,
+                content_snapshot=content_snapshot,
+                created_by=promoted_by,
+                environment=environment,
+                source_proposal_id=proposal_id,
+            )
+            operation_records.append({
+                "phase": "version_created",
+                "status": "ok",
+                "version": version_record.version,
+                "at": now_tz().isoformat(),
+            })
 
-            smoke_test_result = await self._run_promoted_smoke_test(new_version)
+            materialization = await artifact_publisher.materialize(version_record, environment)
+            await get_mongo_db()[artifact_registry.COLLECTION_VERSIONS].update_one(
+                {"artifact_id": proposal.target_artifact_id, "version": version_record.version},
+                {"$set": {"materialization": materialization, "updated_at": now_tz()}},
+            )
+            operation_records.append({
+                "phase": "materialized",
+                "status": "ok",
+                "files": materialization.get("files", []),
+                "at": now_tz().isoformat(),
+            })
+
+            smoke_test_result = await self._run_promoted_smoke_test(
+                version_record, environment=environment
+            )
             if settings.EVOLUTION_REQUIRE_SMOKE_TEST and not smoke_test_result["passed"]:
                 raise ValueError(
                     "Post-promote smoke test failed: "
                     + "; ".join(smoke_test_result.get("failures", []))
                 )
+            operation_records.append({
+                "phase": "post_smoke_test",
+                "status": "ok",
+                "at": now_tz().isoformat(),
+            })
 
-            # 更新提案状态
+            before_version = (
+                current_baseline_version.version
+                if current_baseline_version
+                else proposal.baseline_artifact_version or registry_entry.current_version
+            )
+            activated = await artifact_registry.activate_version(
+                artifact_id=proposal.target_artifact_id,
+                version=version_record.version,
+                environment=environment,
+                activated_by=promoted_by,
+                mode="promote",
+            )
+            switched = True
+            operation_records.append({
+                "phase": "pointer_switched",
+                "status": "ok",
+                "before_version": before_version,
+                "after_version": activated.version,
+                "environment": environment,
+                "at": now_tz().isoformat(),
+            })
+
             await proposal_service.update_status(proposal_id, ProposalStatus.PROMOTED)
 
-            # 获取审批记录
             approval_records_raw = await approval_service.get_records(proposal_id)
-            from app.models.evolution import ApprovalRecord as AR
-            approval_records = [AR(**r) for r in approval_records_raw]
+            approval_records = [ApprovalRecord(**r) for r in approval_records_raw]
 
-            # 创建回执
             receipt = EvolutionReceipt(
                 receipt_id=f"rcpt_{uuid.uuid4().hex[:12]}",
                 proposal_id=proposal_id,
-                verification_id=latest_verification.verification_id if latest_verification else "",
+                verification_id=latest_verification.verification_id,
                 approval_records=approval_records,
                 final_action="promoted",
-                promoted_version=new_version.version,
+                promoted_version=version_record.version,
                 gate_result=gate_result,
                 smoke_test_result=smoke_test_result,
                 baseline_artifact_version=proposal.baseline_artifact_version,
-                candidate_version=new_version.version,
+                candidate_version=version_record.version,
                 artifact_id=proposal.target_artifact_id,
                 request_id=request_id,
                 idempotency_key=idempotency_key,
+                environment=environment,
+                release_status="succeeded",
+                before_version=before_version,
+                after_version=version_record.version,
+                version_switch={
+                    "before": before_version,
+                    "after": version_record.version,
+                    "environment": environment,
+                    "switched_at": now_tz().isoformat(),
+                },
+                operation_records=operation_records,
+                content_diff_status=content_diff_status,
+                content_summary=structured_diff.get("change_description", ""),
+                materialization_files=materialization.get("files", []),
+                skill_regression_group_id=skill_regression_group_id,
+                skill_regression_gate=skill_regression_gate,
+                skill_regression_override=skill_regression_override,
             )
             await receipt_service.create(receipt)
+            await get_mongo_db()[artifact_registry.COLLECTION_VERSIONS].update_one(
+                {"artifact_id": proposal.target_artifact_id, "version": version_record.version},
+                {"$set": {"release_receipt_id": receipt.receipt_id, "updated_at": now_tz()}},
+            )
+            operation_records.append({
+                "phase": "receipt_created",
+                "status": "ok",
+                "receipt_id": receipt.receipt_id,
+                "at": now_tz().isoformat(),
+            })
 
-            # 记录事件
             await self._log_event("proposal_promoted", proposal_id, {
                 "promoted_by": promoted_by,
-                "new_version": new_version.version,
+                "new_version": version_record.version,
                 "artifact_id": proposal.target_artifact_id,
+                "environment": environment,
             })
             try:
                 await governance_service.notify("proposal_promote", {
                     "proposal_id": proposal_id,
                     "artifact_id": proposal.target_artifact_id,
-                    "version": new_version.version,
+                    "version": version_record.version,
+                    "environment": environment,
                 })
             except Exception:
                 logger.warning("Failed to notify proposal promotion", exc_info=True)
-        except Exception:
-            try:
-                await artifact_registry.rollback(
+            return receipt
+        except Exception as exc:
+            error_message = str(exc)[:500]
+            operation_records.append({
+                "phase": "failed",
+                "status": "failed",
+                "error": error_message,
+                "at": now_tz().isoformat(),
+            })
+            if version_record:
+                await artifact_registry.mark_version_failed(
                     proposal.target_artifact_id,
-                    proposal.baseline_artifact_version,
-                    rolled_back_by="promote_compensation",
+                    version_record.version,
+                    error_message,
                 )
-            except Exception:
-                logger.warning("Promote compensation rollback failed", exc_info=True)
+            if switched:
+                try:
+                    before_version = (
+                        current_baseline_version.version
+                        if current_baseline_version
+                        else proposal.baseline_artifact_version or registry_entry.current_version
+                    )
+                    await artifact_registry.activate_version(
+                        artifact_id=proposal.target_artifact_id,
+                        version=before_version,
+                        environment=environment,
+                        activated_by="promote_compensation",
+                        mode="promote",
+                    )
+                except Exception as compensation_error:
+                    logger.warning("Promote compensation switch failed", exc_info=compensation_error)
+            await self._log_event("release_compensated", proposal_id, {
+                "operation": "promote",
+                "environment": environment,
+                "error": error_message,
+                "operation_records": operation_records,
+            })
             raise
-
-        logger.info(f"[Evolution] Proposal {proposal_id} promoted to version {new_version.version}")
-        return receipt
 
     @staticmethod
     def _run_smoke_test(proposal) -> Dict[str, Any]:
@@ -193,18 +324,21 @@ class PromoteService:
             "checked_at": now_tz().isoformat(),
         }
 
-    async def _run_promoted_smoke_test(self, version) -> Dict[str, Any]:
-        """检查已写入的 active artifact 是否可以被 runtime 读取。"""
+    async def _run_promoted_smoke_test(
+        self,
+        version,
+        environment: str = "default",
+    ) -> Dict[str, Any]:
+        """检查已 materialize 的 active artifact 是否可以被 runtime 读取。"""
         failures = []
         snapshot = version.content_snapshot or {}
         if not snapshot:
             failures.append("active version snapshot is empty")
         if version.artifact_type == ArtifactType.SKILL:
-            from pathlib import Path
-            skill_name = version.artifact_id.replace("art_skill_", "")
-            skill_file = Path.home() / ".vibe-trading" / "skills" / "user" / skill_name / "SKILL.md"
-            if not skill_file.is_file():
-                failures.append(f"active Skill file missing: {skill_file}")
+            skill_paths = artifact_publisher.runtime_skill_paths(version.artifact_id, environment)
+            skill_file = next((path for path in skill_paths if path.is_file()), None)
+            if not skill_file:
+                failures.append(f"active Skill file missing: {skill_paths[0]}")
             elif not skill_file.read_text(encoding="utf-8").strip():
                 failures.append("active Skill file is empty")
         return {
@@ -220,72 +354,144 @@ class PromoteService:
         rolled_back_by: str = "system",
         request_id: str = "",
         idempotency_key: str = "",
+        environment: str = "default",
     ) -> EvolutionReceipt:
-        """回滚 artifact 到指定版本"""
+        """回滚 artifact 到指定版本。
+
+        先校验并 materialize 目标版本，成功后再切换当前指针，避免失败时正式版本漂移。
+        """
         from app.services.evolution.artifact_registry import artifact_registry
+        from app.services.evolution.governance_service import governance_service
         from app.services.evolution.receipt_service import receipt_service
 
-        from app.services.evolution.receipt_service import receipt_service
         existing_receipt = await receipt_service.get_by_idempotency_key(idempotency_key)
         if existing_receipt:
             return existing_receipt
 
-        version = await artifact_registry.rollback(artifact_id, target_version, rolled_back_by)
+        version = await artifact_registry.get_version(artifact_id, target_version)
+        if not version:
+            raise ValueError(f"Version {target_version} not found for artifact {artifact_id}")
+        version_status = getattr(version.status, "value", version.status)
+        if version_status in {"pending", "failed"}:
+            raise ValueError(f"Version {target_version} is not usable for rollback")
 
-        if version.artifact_type == ArtifactType.SKILL:
-            await self._write_skill_version_to_disk(version)
-        smoke_test_result = {
-            "passed": bool(version.content_snapshot),
-            "checked_at": now_tz().isoformat(),
-        }
-        if not smoke_test_result["passed"]:
-            raise ValueError("rollback target has empty content snapshot")
-
-        receipt = EvolutionReceipt(
-            receipt_id=f"rcpt_{uuid.uuid4().hex[:12]}",
-            proposal_id="",
-            final_action="rollback",
-            promoted_version=target_version,
-            smoke_test_result=smoke_test_result,
-            request_id=request_id,
-            idempotency_key=idempotency_key,
-            artifact_id=artifact_id,
-        )
-        await receipt_service.create(receipt)
-
-        await self._log_event("artifact_rollback", "", {
-            "artifact_id": artifact_id,
-            "target_version": target_version,
-            "rolled_back_by": rolled_back_by,
-        })
-        from app.services.evolution.governance_service import governance_service
+        before_version = await artifact_registry.get_current_version(artifact_id, environment)
+        before_version_str = before_version.version if before_version else ""
+        switched = False
+        operation_records: list[Dict[str, Any]] = []
         try:
-            await governance_service.notify("artifact_rollback", {
+            materialization = await artifact_publisher.materialize(version, environment)
+            await get_mongo_db()[artifact_registry.COLLECTION_VERSIONS].update_one(
+                {"artifact_id": artifact_id, "version": target_version},
+                {"$set": {"materialization": materialization, "updated_at": now_tz()}},
+            )
+            operation_records.append({
+                "phase": "rollback_materialized",
+                "status": "ok",
+                "version": target_version,
+                "files": materialization.get("files", []),
+                "at": now_tz().isoformat(),
+            })
+
+            smoke_test_result = await self._run_promoted_smoke_test(version, environment)
+            if not smoke_test_result["passed"]:
+                raise ValueError(
+                    "Rollback smoke test failed: "
+                    + "; ".join(smoke_test_result.get("failures", []))
+                )
+            operation_records.append({
+                "phase": "rollback_smoke_test",
+                "status": "ok",
+                "at": now_tz().isoformat(),
+            })
+
+            activated = await artifact_registry.activate_version(
+                artifact_id=artifact_id,
+                version=target_version,
+                environment=environment,
+                activated_by=rolled_back_by,
+                mode="rollback",
+            )
+            switched = True
+            operation_records.append({
+                "phase": "rollback_pointer_switched",
+                "status": "ok",
+                "before_version": before_version_str,
+                "after_version": activated.version,
+                "at": now_tz().isoformat(),
+            })
+
+            receipt = EvolutionReceipt(
+                receipt_id=f"rcpt_{uuid.uuid4().hex[:12]}",
+                proposal_id="",
+                final_action="rollback",
+                promoted_version=target_version,
+                smoke_test_result=smoke_test_result,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+                artifact_id=artifact_id,
+                environment=environment,
+                release_status="succeeded",
+                before_version=before_version_str,
+                after_version=target_version,
+                version_switch={
+                    "before": before_version_str,
+                    "after": target_version,
+                    "environment": environment,
+                    "switched_at": now_tz().isoformat(),
+                },
+                operation_records=operation_records,
+            )
+            await receipt_service.create(receipt)
+            await get_mongo_db()[artifact_registry.COLLECTION_VERSIONS].update_one(
+                {"artifact_id": artifact_id, "version": target_version},
+                {"$set": {"release_receipt_id": receipt.receipt_id, "updated_at": now_tz()}},
+            )
+
+            await self._log_event("artifact_rollback", "", {
                 "artifact_id": artifact_id,
                 "target_version": target_version,
                 "rolled_back_by": rolled_back_by,
+                "environment": environment,
+                "receipt_id": receipt.receipt_id,
             })
-        except Exception:
-            logger.warning("Failed to notify artifact rollback", exc_info=True)
-
-        logger.info(f"[Evolution] Artifact {artifact_id} rolled back to {target_version}")
-        return receipt
-
-    async def _write_skill_version_to_disk(self, version, skills_dir: Any = None) -> None:
-        """将目标 Skill 版本恢复到正式用户 Skill 路径。"""
-        from pathlib import Path
-        skill_name = version.artifact_id.replace("art_skill_", "")
-        if skills_dir is None:
-            root = Path.home() / ".vibe-trading" / "skills" / "user"
-        else:
-            root = Path(skills_dir)
-        skill_file = root / skill_name / "SKILL.md"
-        skill_file.parent.mkdir(parents=True, exist_ok=True)
-        content = (version.content_snapshot or {}).get("content", "")
-        if not content:
-            raise ValueError("rollback Skill content is empty")
-        skill_file.write_text(content, encoding="utf-8")
-        await self._invalidate_skill_cache(version.artifact_id)
+            try:
+                await governance_service.notify("artifact_rollback", {
+                    "artifact_id": artifact_id,
+                    "target_version": target_version,
+                    "rolled_back_by": rolled_back_by,
+                    "environment": environment,
+                })
+            except Exception:
+                logger.warning("Failed to notify artifact rollback", exc_info=True)
+            return receipt
+        except Exception as exc:
+            operation_records.append({
+                "phase": "rollback_failed",
+                "status": "failed",
+                "error": str(exc)[:500],
+                "at": now_tz().isoformat(),
+            })
+            if switched and before_version:
+                try:
+                    await artifact_registry.activate_version(
+                        artifact_id=artifact_id,
+                        version=before_version_str,
+                        environment=environment,
+                        activated_by="rollback_compensation",
+                        mode="promote",
+                    )
+                except Exception as compensation_error:
+                    logger.warning("Rollback compensation switch failed", exc_info=compensation_error)
+            await self._log_event("release_compensated", "", {
+                "operation": "rollback",
+                "artifact_id": artifact_id,
+                "target_version": target_version,
+                "environment": environment,
+                "error": str(exc)[:500],
+                "operation_records": operation_records,
+            })
+            raise
 
     async def stop(
         self,
@@ -296,15 +502,14 @@ class PromoteService:
         idempotency_key: str = "",
     ) -> EvolutionReceipt:
         """紧急停止提案"""
-        from app.services.evolution.proposal_service import proposal_service
         from app.services.evolution.approval_service import approval_service
+        from app.services.evolution.proposal_service import proposal_service
         from app.services.evolution.receipt_service import receipt_service
 
         existing_receipt = await receipt_service.get_by_idempotency_key(idempotency_key)
         if existing_receipt:
             return existing_receipt
 
-        # 映射原因字符串到枚举
         reason_map = {
             "budget_exceeded": StopReason.BUDGET_EXCEEDED,
             "repeated_failures": StopReason.REPEATED_FAILURES,
@@ -314,13 +519,10 @@ class PromoteService:
         }
         stop_reason = reason_map.get(reason, StopReason.MANUAL)
 
-        # 更新提案状态
         await proposal_service.update_status(proposal_id, ProposalStatus.STOPPED)
 
-        # 获取审批记录
         approval_records_raw = await approval_service.get_records(proposal_id)
-        from app.models.evolution import ApprovalRecord as AR
-        approval_records = [AR(**r) for r in approval_records_raw]
+        approval_records = [ApprovalRecord(**r) for r in approval_records_raw]
 
         receipt = EvolutionReceipt(
             receipt_id=f"rcpt_{uuid.uuid4().hex[:12]}",
@@ -341,31 +543,69 @@ class PromoteService:
         logger.info(f"[Evolution] Proposal {proposal_id} stopped: {reason}")
         return receipt
 
+    @staticmethod
+    def _resolve_skill_regression_gate(
+        comparison_result: Dict[str, Any],
+        *,
+        required: bool,
+        override_allowed: bool,
+        allow_override: bool,
+        promoted_by: str,
+    ) -> tuple[str, Dict[str, Any], Dict[str, Any]]:
+        group_id = str(comparison_result.get("skill_regression_group_id", ""))
+        gate = dict(comparison_result.get("skill_regression_gate") or {})
+        override: Dict[str, Any] = {}
+        if required and not gate.get("passed", False):
+            if not (override_allowed and allow_override):
+                raise ValueError(
+                    "Skill regression gate failed or is missing; promote is blocked"
+                )
+            override = {
+                "allowed": True,
+                "reason": "管理员显式覆盖 Skill 回归门禁",
+                "overridden_by": promoted_by,
+                "overridden_at": now_tz().isoformat(),
+            }
+        return group_id, gate, override
+
+    async def _write_skill_version_to_disk(self, version, skills_dir: Any = None) -> None:
+        """将目标 Skill 版本恢复到可运行用户 Skill 路径。"""
+        from pathlib import Path
+        skill_name = version.artifact_id.replace("art_skill_", "")
+        if skills_dir is None:
+            root = artifact_publisher.skill_user_dir()
+        else:
+            root = Path(skills_dir)
+        skill_file = root / skill_name / "SKILL.md"
+        skill_file.parent.mkdir(parents=True, exist_ok=True)
+        content = (version.content_snapshot or {}).get("content", "")
+        if not content:
+            raise ValueError("rollback Skill content is empty")
+        skill_file.write_text(content, encoding="utf-8")
+        await self._invalidate_skill_cache(version.artifact_id)
+
     async def _write_skill_to_disk(
-        self, proposal, content_snapshot: Dict[str, Any], skills_dir: Any = None
-    ):
-        """将 Skill artifact 写入 USER_SKILLS_DIR"""
-        try:
-            from pathlib import Path
-            skill_name = proposal.target_artifact_id.replace("art_skill_", "")
-            if skills_dir is None:
-                user_skills_dir = Path.home() / ".vibe-trading" / "skills" / "user"
-            else:
-                user_skills_dir = Path(skills_dir)
-            skill_dir = user_skills_dir / skill_name
-            skill_dir.mkdir(parents=True, exist_ok=True)
-
-            content = content_snapshot.get("content", "")
-            if not content and content_snapshot.get("change_description"):
-                # 如果没有完整内容，只写变更描述
-                content = f"# {skill_name}\n\n## Evolution Update\n{content_snapshot['change_description']}\n"
-
-            skill_file = skill_dir / "SKILL.md"
-            skill_file.write_text(content, encoding="utf-8")
-            await self._invalidate_skill_cache(proposal.target_artifact_id)
-            logger.info(f"[Evolution] Wrote skill to {skill_file}")
-        except Exception as e:
-            logger.warning(f"[Evolution] Failed to write skill to disk: {e}")
+        self,
+        proposal,
+        content_snapshot: Dict[str, Any],
+        skills_dir: Any = None,
+    ) -> None:
+        """兼容入口：直接写一个 Skill 目录。"""
+        from pathlib import Path
+        skill_name = proposal.target_artifact_id.replace("art_skill_", "")
+        if skills_dir is None:
+            user_skills_dir = artifact_publisher.skill_user_dir()
+        else:
+            user_skills_dir = Path(skills_dir)
+        skill_dir = user_skills_dir / skill_name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        content = content_snapshot.get("content", "")
+        if not content and content_snapshot.get("change_description"):
+            content = f"# {skill_name}\n\n## Evolution Update\n{content_snapshot['change_description']}\n"
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text(content, encoding="utf-8")
+        await self._invalidate_skill_cache(proposal.target_artifact_id)
+        logger.info(f"[Evolution] Wrote skill to {skill_file}")
 
     @staticmethod
     async def _invalidate_skill_cache(artifact_id: str) -> None:

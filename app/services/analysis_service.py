@@ -61,17 +61,10 @@ class AnalysisService:
         try:
             logger.info(f"🔄 开始转换用户ID: {user_id} (类型: {type(user_id)})")
 
-            # 如果是admin用户，使用固定的ObjectId
-            if user_id == "admin":
-                # 使用固定的ObjectId作为admin用户ID
-                admin_object_id = ObjectId("507f1f77bcf86cd799439011")
-                logger.info(f"🔄 转换admin用户ID: {user_id} -> {admin_object_id}")
-                return PyObjectId(admin_object_id)
-            else:
-                # 尝试将字符串转换为ObjectId
-                object_id = ObjectId(user_id)
-                logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
-                return PyObjectId(object_id)
+            # 尝试将字符串转换为ObjectId
+            object_id = ObjectId(user_id)
+            logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
+            return PyObjectId(object_id)
         except Exception as e:
             logger.error(f"❌ 用户ID转换失败: {user_id} -> {e}")
             # 如果转换失败，生成一个新的ObjectId

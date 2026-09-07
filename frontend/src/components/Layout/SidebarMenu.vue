@@ -82,6 +82,7 @@
         <span>Agent 评测</span>
       </template>
       <el-menu-item index="/evaluation/dashboard">评测概览</el-menu-item>
+      <el-menu-item index="/evaluation/decision-audit">决策审计</el-menu-item>
       <el-menu-item index="/evaluation/datasets">评测集管理</el-menu-item>
       <el-menu-item index="/evaluation/runs">评测运行</el-menu-item>
       <el-menu-item index="/evaluation/trends">质量趋势</el-menu-item>
@@ -133,6 +134,7 @@
       <!-- 系统管理 -->
       <el-sub-menu index="/settings-admin">
         <template #title>系统管理</template>
+        <el-menu-item v-if="authStore.isAdmin" index="/settings/users">用户管理</el-menu-item>
         <el-menu-item index="/settings/database">数据库管理</el-menu-item>
         <el-menu-item index="/settings/logs">操作日志</el-menu-item>
         <el-menu-item index="/settings/system-logs">系统日志</el-menu-item>

@@ -77,12 +77,16 @@ def _discover_subclasses() -> list[type[BaseTool]]:
 def build_registry(
     *,
     persistent_memory: "PersistentMemory | None" = None,
+    search_index=None,
     include_shell_tools: bool = False,
     agent_config: "AgentConfig | None" = None,
     session_id: str | None = None,
     event_callback: Callable[[str, dict], None] | None = None,
     warn_callback: Callable[[str], None] | None = None,
     interactive: bool | None = None,
+    user_skills_dir: Path | None = None,
+    exclude_skills: set[str] | None = None,
+    include_skills: set[str] | None = None,
     _mcp_server_tool_name_segments: Mapping[str, str] | None = None,
 ) -> ToolRegistry:
     """Build the tool registry via auto-discovery, optionally enriched with MCP tools.
@@ -134,6 +138,7 @@ def build_registry(
     from src.tools.remember_tool import RememberTool
     from src.tools.swarm_tool import SwarmTool
     from src.tools.scheduled_research_tool import ScheduledResearchTool
+    from src.tools.session_search_tool import SessionSearchTool
 
     goal_tool_classes = {
         StartResearchGoalTool,
@@ -173,6 +178,17 @@ def build_registry(
                 continue
             if cls is RememberTool and persistent_memory is not None:
                 registry.register(cls(memory=persistent_memory))
+            elif cls is SessionSearchTool and search_index is not None:
+                registry.register(cls(search_index=search_index))
+            elif cls.name == "load_skill" and user_skills_dir is not None:
+                registry.register(cls(
+                    user_skills_dir=user_skills_dir,
+                    exclude_skills=exclude_skills,
+                    include_skills=include_skills,
+                    event_callback=event_callback,
+                ))
+            elif cls.name in {"save_skill", "patch_skill", "delete_skill", "skill_file"} and user_skills_dir is not None:
+                registry.register(cls(user_skills_dir=user_skills_dir))
             elif cls in session_injected_classes:
                 registry.register(cls(default_session_id=session_id, event_callback=event_callback))
             elif cls is SwarmTool:

@@ -30,6 +30,7 @@ from tradingagents.agents.utils.agent_states import (
 from tradingagents.dataflows.interface import set_config
 
 from .conditional_logic import ConditionalLogic
+from .decision_capture import DecisionCapture
 from .setup import GraphSetup
 from .propagation import Propagator
 from .reflection import Reflector
@@ -686,7 +687,7 @@ class TradingAgentsGraph:
             ),
         }
 
-    def propagate(self, company_name, trade_date, progress_callback=None, task_id=None):
+    def propagate(self, company_name, trade_date, progress_callback=None, task_id=None, decision_sink=None):
         """Run the trading agents graph for a company on a specific date.
 
         Args:
@@ -710,6 +711,20 @@ class TradingAgentsGraph:
         init_agent_state = self.propagator.create_initial_state(
             company_name, trade_date
         )
+        decision_capture = DecisionCapture()
+
+        def capture_chunk(chunk):
+            """从 graph stream chunk 中采集节点级决策记录。"""
+            for node_name, node_update in chunk.items():
+                if node_name.startswith("__") or not isinstance(node_update, dict):
+                    continue
+                parent_id = decision_capture.records[-1]["decision_id"] if decision_capture.records else None
+                decision_capture.record(
+                    node_name,
+                    node_update,
+                    parent_decision_id=parent_id,
+                    sink=decision_sink,
+                )
         logger.debug(f"🔍 [GRAPH DEBUG] 初始状态中的company_of_interest: '{init_agent_state.get('company_of_interest', 'NOT_FOUND')}'")
         logger.debug(f"🔍 [GRAPH DEBUG] 初始状态中的trade_date: '{init_agent_state.get('trade_date', 'NOT_FOUND')}'")
 
@@ -743,6 +758,7 @@ class TradingAgentsGraph:
                         current_node_name = node_name
                         current_node_start = time.time()
                         break
+                capture_chunk(chunk)
 
                 # 在 updates 模式下，chunk 格式为 {node_name: state_update}
                 # 在 values 模式下，chunk 格式为完整的状态
@@ -789,6 +805,7 @@ class TradingAgentsGraph:
                             current_node_start = time.time()
                             logger.info(f"🔍 [TIMING] 开始计时: {node_name}")
                             break
+                    capture_chunk(chunk)
 
                     self._send_progress_update(chunk, progress_callback)
                     # 累积状态更新
@@ -817,6 +834,7 @@ class TradingAgentsGraph:
                             current_node_name = node_name
                             current_node_start = time.time()
                             break
+                    capture_chunk(chunk)
 
                     # 累积状态更新
                     if final_state is None:
@@ -849,6 +867,7 @@ class TradingAgentsGraph:
 
         # 将性能数据添加到状态中
         final_state['performance_metrics'] = performance_data
+        final_state['decision_records'] = decision_capture.snapshot()
 
         # Store current state for reflection
         self.curr_state = final_state

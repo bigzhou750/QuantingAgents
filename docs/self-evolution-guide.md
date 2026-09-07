@@ -4,6 +4,8 @@
 
 自进化闭环在评测平台之上建立了 **Trigger → Proposal → Verify → Promote/Rollback** 的受控经验沉淀机制。它将失败样本、人工复核和评测指标转化为候选 Skill/Prompt/Policy/Rubric/Case 变更，经固定评测集验证和人工审批后再生效。
 
+Skill 候选的验证与发布门禁细节见 [Skill 执行评测与配对回归](evaluation/skill-execution-evaluation-and-regression.md)。
+
 ## 启用配置
 
 在环境变量或配置中设置：

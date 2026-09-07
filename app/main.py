@@ -26,10 +26,11 @@ import asyncio
 from pathlib import Path
 
 from app.core.config import settings
-from app.core.database import init_db, close_db
+from app.core.database import init_db, close_db, get_mongo_db
 from app.core.logging_config import setup_logging
 from app.routers import auth_db as auth, analysis, screening, queue, sse, health, favorites, config, reports, database, operation_logs, tags, tushare_init, akshare_init, baostock_init, historical_data, multi_period_sync, financial_data, news_data, social_media, internal_messages, usage_statistics, model_capabilities, cache, logs
 from app.routers import vibe_agent as vibe_agent_router
+from app.routers import decision_audit as decision_audit_router
 from app.routers import sync as sync_router, multi_source_sync
 from app.routers import stocks as stocks_router
 from app.routers import stock_data as stock_data_router
@@ -296,21 +297,28 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.vibe_agent.service import vibe_agent_service
         await vibe_agent_service.ensure_indexes()
+        from app.core.ownership import ensure_owner_indexes
+        await ensure_owner_indexes(get_mongo_db())
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
 
-    # 初始化 Agent 评测平台服务（仅当启用时）
-    if settings.EVAL_PLATFORM_ENABLED:
+    # 初始化 Agent 评测平台服务（评测平台或线上 Bad Case 采集启用时）
+    if settings.EVAL_PLATFORM_ENABLED or settings.ONLINE_BADCASE_ENABLED:
         try:
             from app.services.eval.dataset_service import dataset_service
             from app.services.eval.runner_service import runner_service
             from app.services.eval.trace_adapter import trace_adapter
             from app.services.eval.scorer_hub import scorer_hub
+            from app.services.eval.bad_case_service import bad_case_service
 
-            await dataset_service.initialize()
-            await runner_service.initialize()
-            await trace_adapter.initialize()
-            await scorer_hub.initialize()
+            if settings.EVAL_PLATFORM_ENABLED:
+                await dataset_service.initialize()
+                await runner_service.initialize()
+                await trace_adapter.initialize()
+                await scorer_hub.initialize()
+                from app.services.eval.skill_regression_service import skill_regression_service
+                await skill_regression_service.initialize()
+            await bad_case_service.initialize()
             logger.info("✅ Agent 评测平台服务已初始化")
         except Exception as e:
             logger.warning(f"Agent 评测平台初始化失败: {e}")
@@ -903,6 +911,7 @@ app.include_router(reports.router, tags=["reports"])
 app.include_router(screening.router, prefix="/api/screening", tags=["screening"])
 app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
 app.include_router(vibe_agent_router.router, prefix="/api/vibe-agent", tags=["vibe-agent"])
+app.include_router(decision_audit_router.router, prefix="/api/decision-audit", tags=["decision-audit"])
 app.include_router(personal_investment_router.router, prefix="/api/investment", tags=["personal-investment"])
 app.include_router(news_watch_router.router, prefix="/api/news-watch", tags=["news-watch"])
 app.include_router(favorites.router, prefix="/api", tags=["favorites"])

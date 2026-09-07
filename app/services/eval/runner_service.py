@@ -49,10 +49,48 @@ def _make_trace_sink(trial_id: str):
                 "data": payload if isinstance(payload, dict) else {"raw": payload},
             }
             trace_event = trace_adapter.adapt_vibe_event(
-                vibe_event, trial_id=trial_id, sequence=sequence_counter["n"]
+                vibe_event,
+                trial_id=trial_id,
+                sequence=sequence_counter["n"],
+                business_id=f"task_{trial_id}",
+                task_id=f"task_{trial_id}",
             )
             if trace_event:
                 await trace_adapter.save_single_event(trace_event)
+
+            if event_type in {
+                "tool_call",
+                "tool_result",
+                "evidence",
+                "react_summary",
+                "swarm_status",
+                "goal.updated",
+                "attempt.completed",
+                "attempt.failed",
+            }:
+                from app.services.explainability.record_service import (
+                    decision_record_store,
+                    decision_trace_event,
+                    normalize_event_to_decision,
+                )
+
+                record = normalize_event_to_decision(
+                    event_type,
+                    payload if isinstance(payload, dict) else {},
+                    task_id=f"task_{trial_id}",
+                    business_id=f"task_{trial_id}",
+                    session_id=f"eval_{trial_id}",
+                )
+                await decision_record_store.save_decision_record(record)
+                decision_event = trace_adapter.adapt_vibe_event(
+                    decision_trace_event(record),
+                    trial_id=trial_id,
+                    sequence=sequence_counter["n"] + 1,
+                    business_id=f"task_{trial_id}",
+                    task_id=f"task_{trial_id}",
+                )
+                if decision_event:
+                    await trace_adapter.save_single_event(decision_event)
         except Exception:
             # trace 记录失败不应该影响 trial 本身的执行
             logger.warning(f"Failed to record trace event for trial {trial_id}", exc_info=True)
@@ -152,6 +190,8 @@ class EvalRunnerService:
                 "input": c.get("input", {}),
                 "expected_output": c.get("expected_output"),
                 "scoring_criteria": c.get("scoring_criteria", {}),
+                "skill_eval": c.get("skill_eval")
+                or (c.get("scoring_criteria") or {}).get("skill_eval"),
                 "tags": c.get("tags", []),
                 "difficulty": c.get("difficulty", "medium"),
                 "category": c.get("category", "general"),
@@ -187,6 +227,7 @@ class EvalRunnerService:
             scorer_config=scorer_config_snapshot,
             judge_config=judge_config_snapshot,
             data_window=run_config.data_window,
+            skill_eval=run_config.skill_eval,
         )
 
         run = EvalRun(
@@ -248,10 +289,7 @@ class EvalRunnerService:
 
             evolution_config = run_doc.get("config") or {}
 
-            # 按创建运行时记录的版本获取 case，确保可复现
-            cases = await dataset_service.list_cases(
-                dataset_id, limit=1000, version=dataset_version
-            )
+            cases = await self._resolve_run_cases(run_doc, dataset_id, dataset_version)
             self._validate_evolution_scope(evolution_config, cases, dataset_version)
 
             # 为每个 case 创建并执行 trial
@@ -267,9 +305,12 @@ class EvalRunnerService:
                         "input": case.get("input", {}),
                         "expected_output": case.get("expected_output"),
                         "scoring_criteria": case.get("scoring_criteria", {}),
+                        "skill_eval": case.get("skill_eval")
+                        or (case.get("scoring_criteria") or {}).get("skill_eval"),
                         "tags": case.get("tags", []),
                         "difficulty": case.get("difficulty", "medium"),
                         "category": case.get("category", "general"),
+                        "dataset_version": dataset_version,
                     }
                     trial = EvalTrial(
                         trial_id=trial_id,
@@ -279,13 +320,20 @@ class EvalRunnerService:
                         status=TrialStatus.PENDING,
                         input_data=case.get("input", {}),
                         case_snapshot=case_snap,
+                        snapshot_version=dataset_version,
                     )
 
                     trial_doc = trial.model_dump(by_alias=True, exclude={"id"})
                     await db[self.COLLECTION_TRIALS].insert_one(trial_doc)
 
                     # 执行 trial
-                    await self._execute_trial(run_id, trial_id, case, timeout_seconds)
+                    await self._execute_trial(
+                        run_id,
+                        trial_id,
+                        case,
+                        timeout_seconds,
+                        dataset_version,
+                    )
 
             # 完成运行
             completed_count = await db[self.COLLECTION_TRIALS].count_documents({
@@ -357,7 +405,14 @@ class EvalRunnerService:
         if forbidden_cases:
             raise ValueError("candidate verification cannot access test/holdout cases")
 
-    async def _execute_trial(self, run_id: str, trial_id: str, case: Dict[str, Any], timeout_seconds: int):
+    async def _execute_trial(
+        self,
+        run_id: str,
+        trial_id: str,
+        case: Dict[str, Any],
+        timeout_seconds: int,
+        dataset_version: Optional[str] = None,
+    ):
         """执行单个 trial"""
         db = get_mongo_db()
         case_id = case.get("case_id", "")
@@ -402,7 +457,7 @@ class EvalRunnerService:
                         user_id="eval_system",
                         username="Evaluation System",
                         sink=_make_trace_sink(trial_id),  # 归一化事件并落盘为标准 trace
-                        session_config={"overlay": overlay} if overlay else None,
+                        session_config=self._session_config_for_trial(run_config, overlay),
                     ),
                     timeout=timeout_seconds,
                 )
@@ -511,21 +566,39 @@ class EvalRunnerService:
     async def _score_and_export_trial(self, trial_id: str, case: Dict[str, Any]) -> None:
         """Run scorers and optional observability export for every terminal trial."""
         try:
-            from app.services.eval.trace_adapter import trace_adapter
             from app.services.eval.scorer_hub import scorer_hub
-            from app.services.eval.observability_adapter import observability_adapter
 
             trial_data = await self.get_trial(trial_id)
             if not trial_data:
                 return
+            try:
+                await self._finalize_trial_explainability(trial_data)
+            except Exception:
+                logger.warning(f"Failed to finalize explainability for trial {trial_id}", exc_info=True)
 
-            trace_events = await trace_adapter.get_trace_events(trial_id, limit=1000)
-            case_config = case.get("scoring_criteria", {}) or {}
+            # Trace persistence is diagnostic data. It must not prevent the
+            # authoritative scorer pipeline from running for candidate runs.
+            trace_events: List[Dict[str, Any]] = []
+            try:
+                from app.services.eval.trace_adapter import trace_adapter
+
+                trace_events = await trace_adapter.get_trace_events(trial_id, limit=1000)
+            except Exception:
+                logger.warning(f"Failed to load trace for trial {trial_id}; scoring without trace", exc_info=True)
+
+            case_config = dict(case.get("scoring_criteria", {}) or {})
+            if case.get("skill_eval"):
+                case_config["skill_eval"] = case["skill_eval"]
+            elif isinstance(case_config.get("skill_eval"), dict):
+                case_config["skill_eval"] = case_config["skill_eval"]
+            if case.get("expected_output") is not None:
+                case_config["expected_output"] = case["expected_output"]
+            if case.get("input") is not None:
+                case_config["case_input"] = case["input"]
             run_id = trial_data.get("run_id", "")
             run_doc = await self.get_run(run_id) if run_id else None
-            scorer_names = []
-            if run_doc:
-                scorer_names = (run_doc.get("config") or {}).get("scorer_names") or []
+            run_config = (run_doc or {}).get("config") or {}
+            scorer_names = run_config.get("scorer_names")
 
             scores = await scorer_hub.score_trial(
                 trial_id=trial_id,
@@ -533,15 +606,89 @@ class EvalRunnerService:
                 trace_events=trace_events,
                 scorer_names=scorer_names or None,
                 case_config=case_config,
+                run_config=run_config,
             )
-            await observability_adapter.export_trial(
-                trial_id=trial_id,
-                trial_data=trial_data,
-                trace_events=trace_events,
-                scores=scores,
-            )
+
+            # Observability export is best-effort after score persistence.
+            try:
+                from app.services.eval.observability_adapter import observability_adapter
+
+                await observability_adapter.export_trial(
+                    trial_id=trial_id,
+                    trial_data=trial_data,
+                    trace_events=trace_events,
+                    scores=scores,
+                )
+            except Exception:
+                logger.warning(f"Failed to export scored trial {trial_id}", exc_info=True)
         except Exception:
             logger.warning(f"Failed to score/export trial {trial_id}", exc_info=True)
+
+    @staticmethod
+    def _session_config_for_trial(
+        run_config: Dict[str, Any],
+        overlay: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """把 run 级 Skill 评测变体转换为 embedded runtime 可消费配置。"""
+        session_config: Dict[str, Any] = {}
+        if overlay:
+            session_config["overlay"] = overlay
+        skill_eval = dict(run_config.get("skill_eval") or {})
+        if skill_eval:
+            runtime_skill_eval = dict(skill_eval)
+            variant = str(skill_eval.get("variant") or "full_skill_set")
+            skill_name = str(skill_eval.get("skill_name") or "")
+            if variant == "no_target_skill":
+                runtime_skill_eval["exclude_skills"] = [skill_name] if skill_name else []
+            elif variant == "skill_only":
+                runtime_skill_eval["include_skills"] = [skill_name] if skill_name else []
+            session_config["skill_eval"] = runtime_skill_eval
+        return session_config or None
+
+    async def _finalize_trial_explainability(
+        self,
+        trial_data: Dict[str, Any],
+    ) -> None:
+        """为评测 trial 生成解释与校验结果。"""
+        if not settings.EXPLAINABILITY_ENABLED:
+            return
+        from app.services.explainability.explanation_service import explanation_service
+        from app.services.explainability.metrics_service import decision_metrics_service
+        from app.services.explainability.record_service import decision_record_store
+        from app.services.explainability.validation_service import explanation_validator
+
+        trial_id = str(trial_data.get("trial_id") or "")
+        task_id = f"task_{trial_id}"
+        records = await decision_record_store.list_decision_records(task_id=task_id)
+        if not records:
+            return
+        output_data = trial_data.get("output_data") or {}
+        output_text = str(output_data.get("content") or output_data.get("result") or "")
+        for record in records:
+            explanation = explanation_service.generate(record, output_text=output_text)
+            await decision_record_store.save_explanation(explanation)
+            validation = explanation_validator.validate(
+                explanation,
+                record,
+                output_text=output_text,
+            )
+            await decision_record_store.save_validation(validation)
+            if explanation_validator.should_require_review(
+                validation,
+                str(record.get("risk_level") or "low"),
+            ):
+                await decision_record_store.create_review(
+                    business_id=record.get("business_id"),
+                    task_id=task_id,
+                    session_id=record.get("session_id"),
+                    decision_id=record.get("decision_id"),
+                    action="inconsistent_explanation",
+                    reason=validation.reason,
+                )
+        await decision_metrics_service.record_task_metrics(
+            task_id=task_id,
+            task_type="eval_trial",
+        )
 
     async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         """获取评测运行"""
@@ -550,6 +697,20 @@ class EvalRunnerService:
         if doc:
             doc["id"] = str(doc.pop("_id"))
         return doc
+
+    @staticmethod
+    async def _resolve_run_cases(
+        run_doc: Dict[str, Any],
+        dataset_id: str,
+        dataset_version: str,
+    ) -> List[Dict[str, Any]]:
+        """优先使用创建时锁定的 snapshot，确保 case 后续修改/删除不影响该 run。"""
+        snapshot_case_contents = (run_doc.get("snapshot") or {}).get("case_contents") or {}
+        if snapshot_case_contents:
+            return list(snapshot_case_contents.values())
+        return await dataset_service.list_cases(
+            dataset_id, limit=1000, version=dataset_version
+        )
 
     async def list_runs(
         self,

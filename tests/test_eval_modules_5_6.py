@@ -86,8 +86,8 @@ class TestEvidenceScorerClaims:
             assert len(c.claim_text) > 10
 
     @pytest.mark.asyncio
-    async def test_map_claims_to_evidence_supported(self):
-        """有足够关键词匹配时 verdict 为 supported"""
+    async def test_map_claims_to_evidence_lexical_only_is_weak_support(self):
+        """只有关键词匹配时不能判为事实 supported"""
         from app.services.eval.scorers.evidence_scorer import EvidenceQualityScorer
         from app.models.eval import ClaimEvidence, ClaimVerdict
 
@@ -111,7 +111,8 @@ class TestEvidenceScorerClaims:
             }
         ]
         result = scorer._map_claims_to_evidence([claim], evidence_events, [])
-        assert result[0].verdict == ClaimVerdict.SUPPORTED
+        assert result[0].verdict == ClaimVerdict.WEAKLY_SUPPORTED
+        assert result[0].verification_method == "lexical_only"
         assert result[0].evidence_snippet is not None
         assert result[0].trace_event_id == "ev1"
 

@@ -185,13 +185,29 @@ class LoadSkillTool(BaseTool):
     }
     repeatable = True
 
-    def __init__(self, skills_loader: SkillsLoader | None = None) -> None:
+    def __init__(
+        self,
+        skills_loader: SkillsLoader | None = None,
+        user_skills_dir: Path | None = None,
+        exclude_skills: set[str] | None = None,
+        include_skills: set[str] | None = None,
+        event_callback: Any | None = None,
+    ) -> None:
         """Initialize LoadSkillTool.
 
         Args:
             skills_loader: SkillsLoader instance; creates one automatically if omitted.
+            user_skills_dir: User skills directory passed to the loader.
+            exclude_skills: Skill names the loader must exclude.
+            include_skills: Optional allowlist passed to the loader.
+            event_callback: Optional (event_type, data) callback for skill trace events.
         """
-        self._loader = skills_loader or SkillsLoader()
+        self._loader = skills_loader or SkillsLoader(
+            user_skills_dir=user_skills_dir,
+            exclude_skills=exclude_skills,
+            include_skills=include_skills,
+        )
+        self._event_callback = event_callback
 
     def execute(self, **kwargs: Any) -> str:
         """Load a skill as a skeleton, a named section, or a character page.
@@ -212,6 +228,7 @@ class LoadSkillTool(BaseTool):
         """
         name = kwargs["name"]
         content = self._loader.get_content(name)
+        self._emit_route(name, error=content.startswith("Error:"))
         if content.startswith("Error:"):
             return json.dumps({"status": "error", "content": content}, ensure_ascii=False)
 
@@ -223,6 +240,12 @@ class LoadSkillTool(BaseTool):
 
         total = len(content)
         section_name = (kwargs.get("section") or "").strip()
+        self._emit_execute(
+            name,
+            mode="section" if section_name else "document",
+            offset=max(int(raw_offset or 0), 0),
+            total_chars=total,
+        )
 
         if section_name:
             sections = split_sections(content)
@@ -304,3 +327,46 @@ class LoadSkillTool(BaseTool):
             max(_PAGE_CHARS - len(outline), _MIN_PAGE_CHARS),
         )
         return mapped
+
+    def _emit_route(self, skill_name: str, *, error: bool) -> None:
+        if not self._event_callback:
+            return
+        try:
+            self._event_callback(
+                "skill_route",
+                {
+                    "skill": skill_name,
+                    "selected": True,
+                    "candidates": [skill_name],
+                    "reason": "load_skill_called",
+                    "status": "error" if error else "ok",
+                    "candidates_unavailable": False,
+                },
+            )
+        except Exception:
+            pass
+
+    def _emit_execute(
+        self,
+        skill_name: str,
+        *,
+        mode: str,
+        offset: int,
+        total_chars: int,
+    ) -> None:
+        if not self._event_callback:
+            return
+        try:
+            self._event_callback(
+                "skill_execute",
+                {
+                    "skill": skill_name,
+                    "status": "loaded",
+                    "mode": mode,
+                    "offset": offset,
+                    "total_chars": total_chars,
+                    "effective": True,
+                },
+            )
+        except Exception:
+            pass

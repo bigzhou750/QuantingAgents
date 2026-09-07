@@ -82,6 +82,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="failure_reason" label="失败原因" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="failure_family" label="失败家族" width="150" show-overflow-tooltip />
       <el-table-column prop="tags" label="标签" width="180">
         <template #default="{ row }">
           <el-tag v-for="tag in (row.tags || []).slice(0, 3)" :key="tag" size="small" style="margin-right: 2px">{{ tag }}</el-tag>
@@ -93,12 +94,28 @@
           <el-tag v-else type="warning" size="small">待处理</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="复核" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.review_status === 'approved' || row.review_status === 'manual' || row.review_status === 'auto_confirmed'" type="success" size="small">已确认</el-tag>
+          <el-tag v-else-if="row.review_status === 'rejected'" type="danger" size="small">已拒绝</el-tag>
+          <el-tag v-else type="warning" size="small">待复核</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="created_at" label="创建时间" width="170">
         <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" fixed="right" width="160">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="viewDetail(row)">详情</el-button>
+          <el-button
+            v-if="row.review_status === 'pending'"
+            type="warning"
+            link
+            size="small"
+            @click="openReviewDialog(row)"
+          >
+            复核
+          </el-button>
           <el-button
             v-if="!row.converted_to_case_id"
             type="success"
@@ -119,13 +136,46 @@
           <el-descriptions-item label="ID">{{ selectedBadCase.bad_case_id }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{ getSourceLabel(selectedBadCase.source) }}</el-descriptions-item>
           <el-descriptions-item label="风险级别">{{ selectedBadCase.risk_level }}</el-descriptions-item>
+          <el-descriptions-item label="失败家族">{{ selectedBadCase.failure_family || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="检测置信度">{{ selectedBadCase.detection_confidence ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="检测状态">{{ selectedBadCase.detection_status || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="复核状态">{{ selectedBadCase.review_status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="失败原因" :span="2">{{ selectedBadCase.failure_reason }}</el-descriptions-item>
+          <el-descriptions-item label="业务 ID">{{ selectedBadCase.business_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="任务 ID">{{ selectedBadCase.task_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="会话 ID">{{ selectedBadCase.session_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="决策链引用">{{ selectedBadCase.decision_chain_ref || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="解释校验">{{ selectedBadCase.explanation_status || '-' }}</el-descriptions-item>
         </el-descriptions>
         <h4 style="margin: 16px 0 8px">输入数据</h4>
         <pre class="json-block">{{ JSON.stringify(selectedBadCase.input_data, null, 2) }}</pre>
         <h4 v-if="selectedBadCase.output_data" style="margin: 16px 0 8px">输出数据</h4>
         <pre v-if="selectedBadCase.output_data" class="json-block">{{ JSON.stringify(selectedBadCase.output_data, null, 2) }}</pre>
+        <h4 v-if="selectedBadCase.detection_signals?.length" style="margin: 16px 0 8px">检测信号</h4>
+        <pre v-if="selectedBadCase.detection_signals?.length" class="json-block">{{ JSON.stringify(selectedBadCase.detection_signals, null, 2) }}</pre>
       </div>
+    </el-dialog>
+    <el-dialog v-model="reviewVisible" title="复核 Bad Case" width="500px">
+      <el-form label-width="90px">
+        <el-form-item label="失败家族">
+          <el-select v-model="reviewForm.failure_family" clearable style="width: 100%">
+            <el-option label="执行失败" value="execution" />
+            <el-option label="工具轨迹" value="tool_trajectory" />
+            <el-option label="安全合规" value="safety_compliance" />
+            <el-option label="证据幻觉" value="evidence_hallucination" />
+            <el-option label="输出质量" value="output_quality" />
+            <el-option label="用户反馈" value="user_feedback" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="复核意见">
+          <el-input v-model="reviewForm.comment" type="textarea" :rows="3" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reviewVisible = false">取消</el-button>
+        <el-button type="danger" :loading="reviewing" @click="submitReview('reject')">拒绝</el-button>
+        <el-button type="primary" :loading="reviewing" @click="submitReview('approve')">确认</el-button>
+      </template>
     </el-dialog>
 
     <!-- 回流对话框 -->
@@ -172,6 +222,15 @@
         <el-form-item label="Session ID">
           <el-input v-model="onlineSampleForm.session_id" placeholder="可选，关联的会话ID" />
         </el-form-item>
+        <el-form-item label="任务 ID">
+          <el-input v-model="onlineSampleForm.task_id" placeholder="可选，关联的任务ID" />
+        </el-form-item>
+        <el-form-item label="业务 ID">
+          <el-input v-model="onlineSampleForm.business_id" placeholder="可选，业务ID通常等同任务ID" />
+        </el-form-item>
+        <el-form-item label="决策链引用">
+          <el-input v-model="onlineSampleForm.decision_chain_ref" placeholder="可选，例如 task_xxx" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="onlineSampleDialogVisible = false">取消</el-button>
@@ -195,6 +254,10 @@ const filterRisk = ref('')
 
 const detailVisible = ref(false)
 const selectedBadCase = ref<any>(null)
+const reviewVisible = ref(false)
+const reviewing = ref(false)
+const reviewTarget = ref<any>(null)
+const reviewForm = ref({ failure_family: '', comment: '' })
 
 const convertVisible = ref(false)
 const convertDatasetId = ref('')
@@ -224,6 +287,31 @@ const loadBadCases = async () => {
 const viewDetail = (row: any) => {
   selectedBadCase.value = row
   detailVisible.value = true
+}
+
+const openReviewDialog = (row: any) => {
+  reviewTarget.value = row
+  reviewForm.value = { failure_family: row.failure_family || '', comment: '' }
+  reviewVisible.value = true
+}
+
+const submitReview = async (action: string) => {
+  if (!reviewTarget.value) return
+  reviewing.value = true
+  try {
+    await axios.post(`/api/eval/bad-cases/${reviewTarget.value.bad_case_id}/review`, {
+      action,
+      comment: reviewForm.value.comment,
+      failure_family: reviewForm.value.failure_family || undefined,
+    })
+    ElMessage.success('复核完成')
+    reviewVisible.value = false
+    await loadBadCases()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '复核失败')
+  } finally {
+    reviewing.value = false
+  }
 }
 
 const openConvertDialog = async (row: any) => {
@@ -266,6 +354,9 @@ const onlineSampleForm = ref({
   output_data_json: '',
   failure_reason: '',
   session_id: '',
+  task_id: '',
+  business_id: '',
+  decision_chain_ref: '',
 })
 
 const submitOnlineSample = async () => {
@@ -302,6 +393,15 @@ const submitOnlineSample = async () => {
     if (onlineSampleForm.value.session_id) {
       payload.session_id = onlineSampleForm.value.session_id
     }
+    if (onlineSampleForm.value.task_id) {
+      payload.task_id = onlineSampleForm.value.task_id
+    }
+    if (onlineSampleForm.value.business_id) {
+      payload.business_id = onlineSampleForm.value.business_id
+    }
+    if (onlineSampleForm.value.decision_chain_ref) {
+      payload.decision_chain_ref = onlineSampleForm.value.decision_chain_ref
+    }
 
     await axios.post('/api/eval/online-sample', payload)
     ElMessage.success('样本已入池')
@@ -314,6 +414,9 @@ const submitOnlineSample = async () => {
       output_data_json: '',
       failure_reason: '',
       session_id: '',
+      task_id: '',
+      business_id: '',
+      decision_chain_ref: '',
     }
     await loadBadCases()
   } catch (error: any) {

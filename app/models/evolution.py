@@ -96,7 +96,9 @@ class RiskLevel(str, Enum):
 
 class ArtifactVersionStatus(str, Enum):
     """Artifact 版本状态"""
+    PENDING = "pending"
     ACTIVE = "active"
+    FAILED = "failed"
     SUPERSEDED = "superseded"
     ROLLED_BACK = "rolled_back"
 
@@ -115,6 +117,12 @@ class ArtifactVersion(BaseModel):
     content_snapshot: Dict[str, Any] = Field(default_factory=dict, description="该版本的冻结内容")
     owner: str = Field(default="system", description="创建者")
     status: ArtifactVersionStatus = Field(default=ArtifactVersionStatus.ACTIVE, description="版本状态")
+    environment: str = Field(default="default", description="发布环境")
+    published_environments: List[str] = Field(default_factory=list, description="已发布环境列表")
+    source_proposal_id: str = Field(default="", description="来源提案 ID")
+    release_receipt_id: str = Field(default="", description="关联发布回执 ID")
+    materialization: Dict[str, Any] = Field(default_factory=dict, description="materialization 结果")
+    failure_reason: str = Field(default="", description="失败原因")
     created_at: datetime = Field(default_factory=now_tz)
     superseded_by: Optional[str] = Field(default=None, description="替代版本号")
 
@@ -129,6 +137,7 @@ class ArtifactRegistryEntry(BaseModel):
     name: str = Field(..., description="人类可读名称")
     path: str = Field(default="", description="文件系统或逻辑路径")
     current_version: str = Field(default="1.0.0", description="当前生效版本")
+    environments: Dict[str, str] = Field(default_factory=dict, description="各环境当前生效版本")
     owner: str = Field(default="system", description="负责人")
     rollback_strategy: str = Field(default="previous_stable", description="回滚策略")
     allowlist_patterns: List[str] = Field(default_factory=list, description="允许修改的路径模式")
@@ -147,6 +156,8 @@ class Proposal(BaseModel):
     target_artifact_id: str = Field(..., description="目标 artifact ID")
     target_artifact_type: ArtifactType = Field(..., description="目标 artifact 类型")
     diff: Dict[str, Any] = Field(default_factory=dict, description="候选变更描述")
+    structured_diff: Dict[str, Any] = Field(default_factory=dict, description="结构化 before/after 变更明细")
+    content_diff_status: str = Field(default="legacy_incomplete", description="内容 diff 状态")
     reason: str = Field(default="", description="变更原因")
     sample_failure_ids: List[str] = Field(default_factory=list, description="关联失败样本 ID")
     impact_estimate: Dict[str, Any] = Field(default_factory=dict, description="影响面评估")
@@ -179,6 +190,7 @@ class VerificationRun(BaseModel):
     proposal_id: str = Field(..., description="关联提案 ID")
     baseline_run_id: str = Field(default="", description="基线 run ID")
     candidate_run_id: str = Field(default="", description="候选 run ID")
+    baseline_artifact_version: str = Field(default="", description="验证时的基线 artifact 版本")
     sandbox_path: str = Field(default="", description="sandbox 临时目录路径")
     comparison_result: Dict[str, Any] = Field(default_factory=dict, description="对比结果")
     status: str = Field(default="pending", description="验证状态（复用 RunStatus 值）")
@@ -223,6 +235,18 @@ class EvolutionReceipt(BaseModel):
     request_id: str = Field(default="", description="请求或幂等 ID")
     idempotency_key: str = Field(default="", description="幂等键")
     artifact_id: str = Field(default="", description="关联 artifact ID")
+    environment: str = Field(default="default", description="发布环境")
+    release_status: str = Field(default="", description="发布状态: succeeded/compensated/failed")
+    before_version: str = Field(default="", description="发布前版本")
+    after_version: str = Field(default="", description="发布后版本")
+    version_switch: Dict[str, Any] = Field(default_factory=dict, description="版本切换前后状态")
+    operation_records: List[Dict[str, Any]] = Field(default_factory=list, description="发布/回滚阶段记录")
+    content_diff_status: str = Field(default="", description="发布内容 diff 校验状态")
+    content_summary: str = Field(default="", description="实际发布内容摘要")
+    materialization_files: List[str] = Field(default_factory=list, description="实际发布文件")
+    skill_regression_group_id: str = Field(default="", description="Skill 配对回归组 ID")
+    skill_regression_gate: Dict[str, Any] = Field(default_factory=dict, description="Skill 回归门禁结果")
+    skill_regression_override: Dict[str, Any] = Field(default_factory=dict, description="Skill 回归门禁覆盖审计")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 

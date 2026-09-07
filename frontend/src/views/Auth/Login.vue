@@ -61,6 +61,9 @@
               </el-text>
             </div>
           </el-form-item>
+          <el-form-item>
+            <el-button link style="width: 100%" @click="router.push('/register')">创建新账号</el-button>
+          </el-form-item>
         </el-form>
       </el-card>
 

@@ -37,6 +37,11 @@ class FakeRedis:
 class FakeQueueService:
     async def get_task(self, task_id: str):
         return {"id": task_id, "user": "u1"}
+    async def get_user_task(self, task_id: str, user_id: str):
+        data = await self.get_task(task_id)
+        if not data or str(data.get("user")) != str(user_id):
+            return None
+        return data
     async def get_batch(self, batch_id: str):
         return {"id": batch_id, "user": "u1", "tasks": []}
 
@@ -74,6 +79,21 @@ def test_sse_task_connected_event(monkeypatch):
         body = chunk.decode() if isinstance(chunk, (bytes, bytearray)) else chunk
         # The first line should be the SSE event name
         assert body.strip().startswith("event: connected")
+
+
+def test_sse_task_rejects_cross_user_subscription(monkeypatch):
+    monkeypatch.setattr(sse_router_mod, "get_redis_client", lambda: FakeRedis())
+
+    app = FastAPI()
+    app.include_router(sse_router, prefix="/api/stream")
+    app.dependency_overrides[get_current_user] = lambda: {"id": "u2"}
+    def _get_qsvc():
+        return FakeQueueService()
+    app.dependency_overrides[real_get_queue_service] = _get_qsvc
+
+    client = TestClient(app, raise_server_exceptions=False)
+    with client.stream("GET", "/api/stream/tasks/T123") as resp:
+        assert resp.status_code == 404
 
 
 def test_sse_batch_connected_event(monkeypatch):
@@ -156,4 +176,3 @@ def test_worker_intervals_env_and_dynamic_override(monkeypatch):
     assert w.heartbeat_interval == 5
     assert abs(w.poll_interval - 0.2) < 1e-6
     assert w.cleanup_interval == 10
-

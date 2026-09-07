@@ -56,6 +56,18 @@ class ApprovalService:
             raise ValueError(
                 f"Proposal must be verified before approval (current: {proposal.status.value})"
             )
+        from app.services.evolution.artifact_registry import artifact_registry
+        current_baseline = await artifact_registry.get_current_version(proposal.target_artifact_id)
+        if (
+            proposal.baseline_artifact_version
+            and current_baseline
+            and current_baseline.version != proposal.baseline_artifact_version
+        ):
+            raise ValueError(
+                "baseline drift detected; re-verify before approval "
+                f"(proposal baseline={proposal.baseline_artifact_version}, "
+                f"current={current_baseline.version})"
+            )
         verifications = await verification_service.list_by_proposal(proposal_id)
         latest = verifications[0] if verifications else None
         if not latest or latest.status != "completed":
