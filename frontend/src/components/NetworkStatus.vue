@@ -42,9 +42,9 @@ import { useAppStore } from '@/stores/app'
 const appStore = useAppStore()
 const retrying = ref(false)
 
-// 只在有网络问题时显示状态
+// 只在有网络问题时显示状态（apiConnected 为 null 表示尚未检查，不显示错误）
 const showStatus = computed(() => {
-  return !appStore.isOnline || !appStore.apiConnected
+  return !appStore.isOnline || appStore.apiConnected === false
 })
 
 // 重试连接

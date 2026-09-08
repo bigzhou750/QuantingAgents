@@ -4,20 +4,7 @@
     <NetworkStatus />
 
     <!-- 主要内容区域 -->
-    <router-view v-slot="{ Component, route }">
-      <transition
-        :name="(route?.meta?.transition as string) || 'fade'"
-        mode="out-in"
-        appear
-      >
-        <keep-alive :include="keepAliveComponents">
-      <component
-        :is="Component"
-        :key="route?.path === '/research-agent' ? route.path : (route?.fullPath || 'default')"
-      />
-        </keep-alive>
-      </transition>
-    </router-view>
+    <router-view />
 
     <!-- 配置向导 -->
     <ConfigWizard
@@ -160,7 +147,7 @@ const handleWizardComplete = async (data: any) => {
     localStorage.setItem('config_wizard_completed', 'true')
 
     ElMessage.success({
-      message: '配置完成！欢迎使用 TradingAgents-CN',
+      message: '欢迎使用智投',
       duration: 3000
     })
   } catch (error) {
@@ -189,7 +176,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   z-index: 9999;
-  background: linear-gradient(90deg, #409EFF 0%, #67C23A 100%);
+  background: linear-gradient(90deg, #0EA5E9 0%, #67C23A 100%);
   height: 2px;
 }
 

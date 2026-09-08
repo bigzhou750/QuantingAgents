@@ -458,7 +458,7 @@ class ConfigService:
                     description="阿里云通义千问模型"
                 )
             ],
-            default_llm="glm-4",
+            default_llm="deepseek-chat",
             data_source_configs=[
                 DataSourceConfig(
                     name="AKShare",

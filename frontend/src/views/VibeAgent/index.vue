@@ -16,6 +16,9 @@
         <span>{{ capabilities.tool_count }} tools</span>
         <span>{{ capabilities.skill_count }} skills</span>
         <span>{{ capabilities.swarm_count }} Swarm</span>
+        <span class="balance-chip" :class="{ low: billingStore.isLowBalance, empty: billingStore.isEmptyBalance }">
+          {{ billingStore.balanceDisplay }}
+        </span>
       </div>
 
       <el-scrollbar class="session-scroll">
@@ -58,13 +61,35 @@
           <p>{{ activeSession?.title || '从输入框进入 Vibe 风格的金融研究 Agent' }}</p>
         </div>
         <div class="head-actions">
-          <el-button :icon="Refresh" @click="reconnectStream" :disabled="!activeSessionId">重连</el-button>
-          <el-button :icon="List" @click="router.push('/tasks?tab=running')">任务中心</el-button>
+          <!-- 投资画像设置 -->
+          <div class="profile-settings" v-if="investmentContextEnabled">
+            <el-checkbox v-model="useProfileContext" size="small">
+              <el-icon><UserFilled /></el-icon>
+              投资画像
+            </el-checkbox>
+            <el-select
+              v-model="selectedStrategyId"
+              placeholder="选择策略"
+              clearable
+              size="small"
+              style="width: 140px;"
+            >
+              <el-option
+                v-for="strategy in availableStrategies"
+                :key="strategy.strategy_id"
+                :label="strategy.name"
+                :value="strategy.strategy_id"
+              />
+            </el-select>
+          </div>
+          <el-button :icon="Refresh" @click="reconnectStream" :disabled="!activeSessionId" size="small">重连</el-button>
+          <el-button :icon="List" @click="router.push('/tasks?tab=running')" size="small">任务中心</el-button>
           <el-button
             v-if="activeTask && canCancel(activeTask.status)"
             type="danger"
             :icon="Close"
             @click="cancelTask"
+            size="small"
           >
             取消
           </el-button>
@@ -73,6 +98,7 @@
             type="warning"
             :icon="Refresh"
             @click="retryTask"
+            size="small"
           >
             重试
           </el-button>
@@ -86,7 +112,7 @@
         </div>
         <div>
           <span class="band-label">任务</span>
-          <strong>{{ activeTask?.status || 'idle' }}</strong>
+          <strong>{{ taskStatusLabel(activeTask?.status) }}</strong>
         </div>
         <div>
           <span class="band-label">游标</span>
@@ -230,46 +256,39 @@
           </el-scrollbar>
 
           <form class="composer" @submit.prevent="sendMessage">
-            <!-- 上下文注入选项 -->
-            <div class="context-options" v-if="investmentContextEnabled">
-              <el-checkbox v-model="useProfileContext">
-                <el-icon><UserFilled /></el-icon>
-                带入投资画像
-              </el-checkbox>
-              <el-select
-                v-model="selectedStrategyId"
-                placeholder="选择策略（可选）"
-                clearable
-                size="small"
-                style="width: 180px; margin-left: 12px;"
-              >
-                <el-option
-                  v-for="strategy in availableStrategies"
-                  :key="strategy.strategy_id"
-                  :label="strategy.name"
-                  :value="strategy.strategy_id"
-                />
-              </el-select>
+            <div class="composer-card">
+              <el-input
+                v-model="prompt"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 6 }"
+                resize="none"
+                placeholder="输入消息，或直接发指令... (Enter 发送，Shift+Enter 换行)"
+                :disabled="sending || !activeSessionId"
+                class="composer-input"
+                @keydown.enter.exact.prevent="sendMessage"
+              />
+              <div class="composer-actions">
+                <button type="button" class="attach-btn" title="附件">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+                <button
+                  type="submit"
+                  class="send-btn"
+                  :disabled="!prompt.trim() || !activeSessionId || hasRunningTask || sending || billingStore.isEmptyBalance"
+                  title="发送"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-
-            <el-input
-              v-model="prompt"
-              type="textarea"
-              :autosize="{ minRows: 2, maxRows: 6 }"
-              resize="none"
-              placeholder="输入你的金融研究问题..."
-              :disabled="sending || !activeSessionId"
-            />
-            <el-button
-              type="primary"
-              :icon="Promotion"
-              native-type="submit"
-              :loading="sending"
-              :disabled="!prompt.trim() || !activeSessionId || hasRunningTask"
-            >
-              发送
-            </el-button>
-            <div v-if="hasRunningTask" class="composer-lock">
+            <div v-if="billingStore.isEmptyBalance" class="composer-lock balance-empty">
+              额度不足，请 <router-link to="/token-recharge">充值</router-link> 后继续
+            </div>
+            <div v-else-if="hasRunningTask" class="composer-lock">
               当前有研究任务执行中，请等待完成或先取消任务
             </div>
           </form>
@@ -282,9 +301,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatLineSquare, CircleClose, Close, Delete, DocumentCopy, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
+import { ChatLineSquare, CircleClose, Close, Delete, DocumentCopy, List, Plus, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
-import { vibeAgentApi,
+import { useTokenBillingStore } from '@/stores/tokenBilling'
+import {
+  vibeAgentApi,
   type VibeEvent,
   type VibeMessage,
   type VibeSession,
@@ -301,6 +322,7 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const billingStore = useTokenBillingStore()
 
 const sessions = ref<VibeSession[]>([])
 const activeSessionId = ref('')
@@ -641,6 +663,20 @@ const handleEvent = (event: VibeEvent) => {
     streamError.value = event.payload.error
     scheduleReconnect(streamGeneration)
   }
+  // Token计费：余额更新（后端推送 balance 单位为元）
+  if (event.event_type === 'balance_update' && event.payload) {
+    billingStore.updateBalanceFromSSE(event.payload.balance)
+  }
+  // Token计费：余额耗尽熔断
+  if (event.event_type === 'balance_exhausted') {
+    ElMessageBox.confirm('额度已用完，请充值后继续使用', '余额不足', {
+      confirmButtonText: '去充值',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      router.push('/token-recharge')
+    }).catch(() => {})
+  }
   nextTick(scrollToBottom)
 }
 
@@ -682,7 +718,18 @@ const sendMessage = async () => {
     await nextTick(scrollToBottom)
     reconnectStream()
   } catch (error: any) {
-    ElMessage.error(error?.message || '发送失败')
+    // 402 余额不足 → 引导充值
+    if (error?.status === 402 || error?.code === 40201) {
+      ElMessageBox.confirm('额度不足，无法发起研究任务', '余额不足', {
+        confirmButtonText: '去充值',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        router.push('/token-recharge')
+      }).catch(() => {})
+    } else {
+      ElMessage.error(error?.message || '发送失败')
+    }
   } finally {
     sending.value = false
   }
@@ -725,6 +772,18 @@ const submitFeedback = async (message: VibeMessage, feedbackType: string) => {
   }
 }
 
+const taskStatusMap: Record<string, string> = {
+  idle: '空闲',
+  queued: '排队中',
+  pending: '等待中',
+  processing: '处理中',
+  running: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已取消'
+}
+const taskStatusLabel = (status?: string) => taskStatusMap[status || ''] || status || '空闲'
+
 const canCancel = (status: string) => ['queued', 'processing', 'pending', 'running'].includes(status)
 const formatTime = (value: string) => (value ? formatDateTime(value) : '-')
 const scrollToBottom = () => {
@@ -751,6 +810,7 @@ watch(
 )
 
 onMounted(async () => {
+  billingStore.fetchAccount()
   if (!await loadHealth() || authRequired.value) return
   try {
     await loadSessions()
@@ -969,22 +1029,25 @@ onUnmounted(() => {
 }
 
 .workbench-head {
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .workbench-head h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .workbench-head p {
-  margin: 6px 0 0;
-  color: var(--el-text-color-regular);
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .head-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -1262,10 +1325,21 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
-.markdown-body :deep(h1) { font-size: 20px; }
-.markdown-body :deep(h2) { font-size: 18px; }
-.markdown-body :deep(h3) { font-size: 16px; }
-.markdown-body :deep(h4) { font-size: 14px; }
+.markdown-body :deep(h1) {
+  font-size: 20px;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 18px;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 16px;
+}
+
+.markdown-body :deep(h4) {
+  font-size: 14px;
+}
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
@@ -1339,32 +1413,100 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-.context-options {
+.profile-settings {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  gap: 10px;
+  padding: 4px 10px;
   background: var(--el-fill-color-lighter);
   border-radius: 6px;
   font-size: 13px;
 }
 
-.context-options .el-checkbox {
+.profile-settings .el-checkbox {
   margin-right: 0;
 }
 
 .composer {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 12px;
-  border-top: 1px solid var(--el-border-color-light);
+  padding: 16px;
   background: var(--el-bg-color);
 }
 
+.composer-card {
+  position: relative;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.composer-card:focus-within {
+  border-color: var(--el-color-primary-light-3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.composer-input :deep(.el-textarea__inner) {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 14px 16px 50px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  background: transparent;
+}
+
+.composer-actions {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attach-btn,
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attach-btn {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+}
+
+.attach-btn:hover {
+  background: var(--el-fill-color);
+  color: var(--el-text-color-primary);
+}
+
+.send-btn {
+  background: #10b981;
+  color: white;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-placeholder);
+  cursor: not-allowed;
+}
+
 .composer-lock {
-  grid-column: 1 / -1;
+  margin-top: 8px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
   text-align: center;
@@ -1411,7 +1553,7 @@ onUnmounted(() => {
   color: var(--el-text-color-secondary);
 }
 
-.decision-row + .decision-row {
+.decision-row+.decision-row {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--el-border-color-lighter);
@@ -1447,8 +1589,54 @@ onUnmounted(() => {
 }
 
 @keyframes activity-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+
+.balance-chip.low {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.balance-chip.empty {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.balance-empty {
+  grid-column: 1 / -1;
+  padding: 8px 0;
+  color: var(--el-color-danger);
+  font-size: 13px;
+  text-align: center;
+
+  a {
+    color: var(--el-color-primary);
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 @media (max-width: 960px) {

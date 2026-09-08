@@ -61,7 +61,7 @@
         <el-card class="category-card" shadow="hover" @click="navigateTo('resources')">
           <div class="card-icon">📖</div>
           <h3>源项目与论文</h3>
-          <p>TradingAgents项目介绍和学术论文资源</p>
+          <p>学术论文与研究资源</p>
           <el-tag type="primary" size="small">2篇文章</el-tag>
         </el-card>
       </el-col>
@@ -181,7 +181,7 @@ const openArticle = (articleId: string) => {
     text-align: center;
     margin-bottom: 48px;
     padding: 40px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--zt-gradient-hero);
     border-radius: 16px;
     color: white;
 

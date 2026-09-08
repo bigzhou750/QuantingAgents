@@ -2303,6 +2303,15 @@ class GroundingLedger:
             )
         return issues
 
+    #: Keywords that unambiguously imply CNY for A-share contexts. When the
+    #: answer discusses only A-share instruments (.SH/.SZ/.BJ) and mentions
+    #: one of these terms, the currency is considered surfaced even without
+    #: an explicit "CNY" / "¥" label — A-shares are exclusively RMB-denominated.
+    _CNY_IMPLICIT_KEYWORDS = frozenset({
+        "a股", "a 股", "上证", "深证", "创业板", "科创板", "北交所",
+        "沪深", "沪指", "深指", "两市", "a股市场",
+    })
+
     @staticmethod
     def _currency_is_surfaced(currency: str, content: str) -> bool:
         """Return whether a quote currency or an unambiguous alias is visible."""
@@ -2311,7 +2320,14 @@ class GroundingLedger:
         tokens = _CURRENCY_ALIASES.get(code, (currency.casefold(),))
         if any(token.casefold() in folded for token in tokens):
             return True
-        return code == "CNY" and bool(_BARE_YUAN_RE.search(content))
+        if code == "CNY":
+            if bool(_BARE_YUAN_RE.search(content)):
+                return True
+            # A-share implicit context: if the answer discusses A-share
+            # markets using standard Chinese terminology, CNY is understood.
+            if any(kw in folded for kw in GroundingValidator._CNY_IMPLICIT_KEYWORDS):
+                return True
+        return False
 
     def _validate_price_tables(
         self,

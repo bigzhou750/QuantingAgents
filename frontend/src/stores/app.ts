@@ -11,7 +11,7 @@ export interface AppState {
 
   // 网络状态
   isOnline: boolean
-  apiConnected: boolean
+  apiConnected: boolean | null
   lastApiCheck: number
 
   // 布局状态
@@ -50,11 +50,11 @@ export const useAppStore = defineStore('app', {
   state: (): AppState => ({
     loading: false,
     loadingProgress: 0,
-    theme: (useStorage('app-theme', 'auto').value || 'auto') as 'light' | 'dark' | 'auto',
+    theme: (useStorage('app-theme', 'dark').value || 'dark') as 'light' | 'dark' | 'auto',
     language: (useStorage('app-language', 'zh-CN').value || 'zh-CN') as 'zh-CN' | 'en-US',
 
     isOnline: navigator.onLine,
-    apiConnected: false,
+    apiConnected: null,
     lastApiCheck: 0,
 
     sidebarCollapsed: useStorage('sidebar-collapsed', false).value || false,
@@ -85,7 +85,7 @@ export const useAppStore = defineStore('app', {
     
     // 当前页面标题
     currentPageTitle(): string {
-      return this.currentRoute?.meta?.title as string || 'TradingAgents-CN'
+      return this.currentRoute?.meta?.title as string || '智投'
     },
     
     // 应用信息
@@ -136,7 +136,7 @@ export const useAppStore = defineStore('app', {
       // 更新meta标签
       const themeColorMeta = document.querySelector('meta[name="theme-color"]')
       if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', isDark ? '#1f2937' : '#409EFF')
+        themeColorMeta.setAttribute('content', isDark ? '#1f2937' : '#0EA5E9')
       }
     },
     
@@ -202,7 +202,7 @@ export const useAppStore = defineStore('app', {
       try {
         // 使用 AbortController 实现超时
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3秒超时
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
 
         const response = await fetch('/api/health', {
           method: 'GET',
@@ -230,7 +230,7 @@ export const useAppStore = defineStore('app', {
       try {
         // 使用 AbortController 实现超时
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3秒超时
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
 
         const response = await fetch('/api/health', {
           signal: controller.signal

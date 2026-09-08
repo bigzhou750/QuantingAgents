@@ -616,7 +616,7 @@ const submitBatchAnalysis = async () => {
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 
       :deep(.el-card__header) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--zt-gradient-hero);
         color: white;
         border-radius: 16px 16px 0 0;
         padding: 20px 24px;
