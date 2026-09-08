@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
@@ -336,14 +337,38 @@ class VibeAgentService:
             # 导致用户已关闭的画像内容被强行注入（对应 spec: User disables
             # context injection）。
             final_prompt = payload.content
+            # Short confirmations/follow-ups are highly dependent on the
+            # previous turn.  The runtime receives history as well, but the
+            # explicit bridge here prevents a terse message such as "需要"
+            # from being interpreted as a brand-new, context-free request.
+            try:
+                db = get_mongo_db()
+                prior_messages = await db[self.message_collection].find(
+                    {
+                        "user_id": user["id"],
+                        "session_id": session_id,
+                        "role": {"$in": ["user", "assistant"]},
+                    },
+                    {"_id": 0, "role": 1, "content": 1},
+                ).sort("created_at", DESCENDING).limit(8).to_list(length=8)
+                final_prompt = self._augment_follow_up_prompt(
+                    payload.content,
+                    list(reversed(prior_messages)),
+                )
+            except Exception:
+                logger.debug("Unable to build follow-up context for task %s", task_id, exc_info=True)
             # 画像上下文默认按当前登录用户解析，不能依赖前端传入 profile_id。
             # 旧版/缓存中的前端可能没有该字段，但用户仍然期望已保存持仓可用于研究。
             if HAS_CONTEXT_BUILDER:
                 try:
                     from app.services.personal_investment.profile_service import profile_service
                     profile = await profile_service.get_profile(user["id"])
-                    include_profile = bool(
-                        profile and profile.get("context_injection_enabled", True)
+                    # Profile context is opt-in per request.  The saved
+                    # profile setting is only an upper bound; it must not
+                    # silently turn ordinary research messages into
+                    # personalized requests.
+                    include_profile = self.should_include_profile_context(
+                        payload.profile_id, profile
                     )
                     if profile and not include_profile:
                         logger.info(
@@ -359,7 +384,7 @@ class VibeAgentService:
                         )
                     if context_summary:
                         # 将上下文前置到用户输入前
-                        final_prompt = f"{context_summary}\n\n---\n\n{payload.content}"
+                        final_prompt = f"{context_summary}\n\n---\n\n{final_prompt}"
                         logger.info(f"Injected investment context for task {task_id}")
                 except Exception as e:
                     logger.warning(f"Failed to build investment context: {e}, using original prompt")
@@ -394,6 +419,63 @@ class VibeAgentService:
             self._background_tasks.add(task_handle)
             task_handle.add_done_callback(self._background_tasks.discard)
             return {**task.model_dump(), "session_title": session.get("title")}
+
+    @staticmethod
+    def should_include_profile_context(
+        profile_id: Optional[str], profile: Optional[Dict[str, Any]]
+    ) -> bool:
+        """Require explicit per-request consent before injecting profile data."""
+        return bool(
+            profile_id == "current_user_profile"
+            and profile
+            and profile.get("context_injection_enabled", True)
+        )
+
+    @staticmethod
+    def _augment_follow_up_prompt(content: str, prior_messages: List[Dict[str, Any]]) -> str:
+        """Make terse follow-ups explicit without changing persisted messages."""
+        text = str(content or "").strip()
+        if not text or not VibeAgentService._is_short_follow_up(text):
+            return content
+
+        previous_user = next(
+            (
+                str(item.get("content") or "").strip()
+                for item in reversed(prior_messages)
+                if item.get("role") == "user" and str(item.get("content") or "").strip()
+            ),
+            "",
+        )
+        previous_assistant = next(
+            (
+                str(item.get("content") or "").strip()
+                for item in reversed(prior_messages)
+                if item.get("role") == "assistant" and str(item.get("content") or "").strip()
+            ),
+            "",
+        )
+        if not previous_user and not previous_assistant:
+            return content
+
+        def clip(value: str, limit: int = 3000) -> str:
+            return value if len(value) <= limit else value[:limit] + "\n[上一轮内容已截断]"
+
+        return (
+            "<follow-up-context>\n"
+            "当前消息是对上一轮对话的简短追问或确认。请优先延续上一轮任务，"
+            "不要把当前短消息当成独立的新问题。\n"
+            f"上一轮用户问题：\n{clip(previous_user)}\n"
+            f"上一轮 Agent 回复：\n{clip(previous_assistant)}\n"
+            "</follow-up-context>\n\n"
+            f"当前用户消息：{content}"
+        )
+
+    @staticmethod
+    def _is_short_follow_up(text: str) -> bool:
+        normalized = re.sub(r"\s+", "", text)
+        if len(normalized) <= 24:
+            return True
+        return bool(re.search(r"^(需要|继续|好的|可以|是的|对的|嗯|行|那就|请继续|然后|接着)", normalized))
 
     async def _run_internal_task(self, command: VibeCommand) -> None:
         # Runtime paths are persisted in the command, so validate them again

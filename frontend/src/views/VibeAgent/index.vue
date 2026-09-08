@@ -92,6 +92,18 @@
           <span class="band-label">游标</span>
           <strong>{{ lastSequence || 0 }}</strong>
         </div>
+        <div v-if="activeSessionId" class="id-band">
+          <div class="id-item">
+            <span class="band-label">会话 ID</span>
+            <code :title="activeSessionId">{{ activeSessionId }}</code>
+            <el-button text size="small" :icon="DocumentCopy" aria-label="复制会话 ID" @click="copyId(activeSessionId)" />
+          </div>
+          <div v-if="displayTask" class="id-item">
+            <span class="band-label">本轮对话 ID</span>
+            <code :title="displayTask.task_id">{{ displayTask.task_id }}</code>
+            <el-button text size="small" :icon="DocumentCopy" aria-label="复制本轮对话 ID" @click="copyId(displayTask.task_id)" />
+          </div>
+        </div>
         <div v-if="activeTask?.error_message" class="band-error">
           {{ activeTask.error_message }}
         </div>
@@ -270,7 +282,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatLineSquare, CircleClose, Close, Delete, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
+import { ChatLineSquare, CircleClose, Close, Delete, DocumentCopy, List, Plus, Promotion, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { vibeAgentApi,
   type VibeEvent,
@@ -303,6 +315,7 @@ const selectedStrategyId = ref<string | undefined>(undefined)
 const availableStrategies = ref<any[]>([])
 const sending = ref(false)
 const activeTask = ref<VibeTask | null>(null)
+const lastTaskBySession = ref<Record<string, VibeTask>>({})
 const tasksBySession = ref<Record<string, VibeTask>>({})
 const health = ref({ available: false, status: 'unknown', diagnostics: {} as Record<string, any> })
 const capabilities = ref({ tool_count: 0, skill_count: 0, swarm_count: 0, error: '' })
@@ -335,6 +348,7 @@ const renderMarkdown = (content: string) => {
 }
 
 const activeSession = computed(() => sessions.value.find(item => item.session_id === activeSessionId.value))
+const displayTask = computed(() => activeTask.value || lastTaskBySession.value[activeSessionId.value] || null)
 const runningTask = computed(() => (
   Object.values(tasksBySession.value).find(task => canCancel(task.status)) || null
 ))
@@ -506,6 +520,7 @@ const loadSessionState = async (sessionId: string) => {
   activityOpen.value = {}
   const sessionTasks = (((tasksRes as any).data?.tasks || []) as VibeTask[])
   const currentTask = sessionTasks.find(task => canCancel(task.status)) || null
+  if (sessionTasks[0]) lastTaskBySession.value[sessionId] = sessionTasks[0]
   activeTask.value = currentTask
   if (currentTask) tasksBySession.value[currentTask.session_id] = currentTask
   else delete tasksBySession.value[sessionId]
@@ -615,6 +630,7 @@ const handleEvent = (event: VibeEvent) => {
           activeTask.value = null
         }
       }
+      lastTaskBySession.value[task.session_id] = task
     }
     if (event.payload.status === 'failed') {
       streamState.value = 'disconnected'
@@ -659,6 +675,7 @@ const sendMessage = async () => {
 
     const res = await vibeAgentApi.sendMessage(activeSessionId.value, messagePayload)
     activeTask.value = (res as any).data as VibeTask
+    lastTaskBySession.value[activeTask.value.session_id] = activeTask.value
     tasksBySession.value[activeTask.value.session_id] = activeTask.value
     streamState.value = 'reconnecting'
     await loadSessions()
@@ -668,6 +685,15 @@ const sendMessage = async () => {
     ElMessage.error(error?.message || '发送失败')
   } finally {
     sending.value = false
+  }
+}
+
+const copyId = async (value: string) => {
+  try {
+    await navigator.clipboard.writeText(value)
+    ElMessage.success('ID 已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择 ID')
   }
 }
 
@@ -751,7 +777,8 @@ onMounted(async () => {
       const profileData = await profileResponse.json()
       if (profileData.success && profileData.data?.context_injection_enabled !== false) {
         investmentContextEnabled.value = true
-        useProfileContext.value = true
+        // Personal context is deliberately opt-in for each request.
+        useProfileContext.value = false
       }
     }
 
@@ -1341,6 +1368,28 @@ onUnmounted(() => {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   text-align: center;
+}
+
+.id-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+}
+
+.id-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.id-item code {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-secondary);
 }
 
 .compact-section {

@@ -18,6 +18,12 @@
             style="width: 340px"
           />
         </el-form-item>
+        <el-form-item label="范围">
+          <el-radio-group v-model="scope" size="small">
+            <el-radio-button value="session">会话</el-radio-button>
+            <el-radio-button value="task">单轮对话</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="loadAudit">查询</el-button>
           <el-button @click="loadMetrics">指标</el-button>
@@ -30,8 +36,14 @@
         :closable="false"
         show-icon
       />
+      <el-descriptions v-if="audit" :column="2" border size="small" style="margin-top: 12px">
+        <el-descriptions-item label="查询范围">{{ audit.scope === 'session' ? '会话级' : '单轮对话级' }}</el-descriptions-item>
+        <el-descriptions-item label="业务 ID">{{ audit.business_id || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="会话 ID">{{ audit.session_id || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="任务 ID">{{ audit.task_id || '会话内多任务' }}</el-descriptions-item>
+      </el-descriptions>
       <el-alert
-        v-else-if="audit?.audit_status === 'unavailable'"
+        v-if="audit?.audit_status === 'unavailable'"
         title="未找到决策链、trace 或日志"
         type="info"
         :closable="false"
@@ -66,6 +78,52 @@
           </el-card>
         </el-col>
       </el-row>
+
+      <el-card v-if="audit.scope === 'session' && (audit.tasks || []).length" shadow="never" style="margin-bottom: 24px">
+        <template #header><span>会话内对话</span></template>
+        <el-table :data="audit.tasks" size="small" stripe @row-click="selectTask">
+          <el-table-column prop="task_id" label="单轮对话 ID" min-width="250" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="id-cell">
+                <span>{{ row.task_id }}</span>
+                <el-button text size="small" :icon="DocumentCopy" aria-label="复制单轮对话 ID" @click.stop="copyId(row.task_id)" />
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100" />
+          <el-table-column prop="prompt" label="用户问题" min-width="260" show-overflow-tooltip />
+          <el-table-column prop="created_at" label="时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <el-card v-if="(audit.messages || []).length" shadow="never" style="margin-bottom: 24px">
+        <template #header><span>对话上下文</span></template>
+        <div class="message-context">
+          <div v-for="message in audit.messages" :key="message.message_id || `${message.role}-${message.created_at}`" class="context-message">
+            <span class="context-role">{{ message.role === 'user' ? '用户' : 'Agent' }}</span>
+            <span class="context-content">{{ message.content }}</span>
+            <span class="context-time">{{ formatTime(message.created_at) }}</span>
+          </div>
+        </div>
+      </el-card>
+
+      <el-card v-if="(audit.vibe_events || []).length" shadow="never" style="margin-bottom: 24px">
+        <template #header><span>运行事件</span></template>
+        <el-table :data="audit.vibe_events" size="small" stripe>
+          <el-table-column prop="sequence" label="#" width="70" />
+          <el-table-column prop="event_type" label="事件" width="150" />
+          <el-table-column label="内容" min-width="420">
+            <template #default="{ row }">
+              <pre class="event-content">{{ formatEventPayload(row.payload) }}</pre>
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-card>
 
       <el-card shadow="never" style="margin-bottom: 24px">
         <template #header><span>决策链</span></template>
@@ -132,10 +190,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { List } from '@element-plus/icons-vue'
+import { DocumentCopy, List } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
 import { request } from '@/api/request'
 
+const route = useRoute()
+const router = useRouter()
 const identifier = ref('')
+const scope = ref<'auto' | 'session' | 'task'>('auto')
 const audit = ref<any>(null)
 const metrics = ref<any[]>([])
 const loading = ref(false)
@@ -148,8 +210,8 @@ const loadAudit = async () => {
   }
   loading.value = true
   try {
-    const res = await request.get(`/api/decision-audit/chains/${encodeURIComponent(value)}`)
-    audit.value = res.data?.data || null
+    const res = await request.get(`/api/decision-audit/chains/${encodeURIComponent(value)}`, { params: { scope: scope.value } })
+    audit.value = unwrapApiData(res)
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.detail || '查询决策审计链失败')
   } finally {
@@ -160,13 +222,45 @@ const loadAudit = async () => {
 const loadMetrics = async () => {
   try {
     const res = await request.get('/api/decision-audit/metrics')
-    metrics.value = res.data?.data?.items || []
+    const data = unwrapApiData(res)
+    metrics.value = data?.items || []
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.detail || '读取决策指标失败')
   }
 }
 
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN') : '-'
+const formatEventPayload = (payload: unknown) => {
+  if (payload == null) return '-'
+  if (typeof payload === 'string') return payload
+  try { return JSON.stringify(payload, null, 2) } catch { return String(payload) }
+}
+
+const unwrapApiData = (response: any) => response?.data?.data ?? response?.data ?? response ?? null
+
+const copyId = async (value?: string) => {
+  if (!value) return
+  try {
+    await navigator.clipboard.writeText(value)
+    ElMessage.success('ID 已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择 ID')
+  }
+}
+
+const selectTask = (task: any) => {
+  identifier.value = String(task.task_id || '')
+  scope.value = 'task'
+  void router.replace({ query: { ...route.query, id: identifier.value, scope: 'task' } })
+  void loadAudit()
+}
+
+const initialId = String(route.query.id || '')
+if (initialId) {
+  identifier.value = initialId
+  scope.value = route.query.scope === 'session' ? 'session' : 'task'
+  void loadAudit()
+}
 </script>
 
 <style scoped>
@@ -178,4 +272,12 @@ const formatTime = (value?: string) => value ? new Date(value).toLocaleString('z
 .stat-value { font-size: 24px; font-weight: 600; }
 .stat-label { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; }
 .output-block { max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6; }
+.event-content { max-height: 180px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.45; }
+.id-cell { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.id-cell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-context { display: grid; gap: 8px; max-height: 360px; overflow: auto; }
+.context-message { display: grid; grid-template-columns: 48px minmax(0, 1fr) 150px; gap: 10px; align-items: start; padding: 8px 10px; border-bottom: 1px solid var(--el-border-color-lighter); font-size: 13px; }
+.context-role { color: var(--el-color-primary); font-weight: 600; }
+.context-content { white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.context-time { color: var(--el-text-color-secondary); font-size: 12px; text-align: right; }
 </style>
