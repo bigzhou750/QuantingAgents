@@ -51,6 +51,15 @@ export interface NewsSyncResponse {
 }
 
 /**
+ * 实时快讯响应
+ */
+export interface LiveFeedResponse {
+  total_count: number
+  sources_used: string[]
+  news: NewsItem[]
+}
+
+/**
  * 新闻API
  */
 export const newsApi = {
@@ -93,6 +102,19 @@ export const newsApi = {
       hours_back,
       max_news_per_source
     })
+  },
+
+  /**
+   * 获取7x24小时实时快讯（财联社/东方财富/富途）
+   * @param sources 数据源列表，逗号分隔，默认全部
+   * @param limit 每个数据源返回条数
+   */
+  async getLiveFeed(sources?: string, limit: number = 20) {
+    const params: any = { limit }
+    if (sources) {
+      params.sources = sources
+    }
+    return ApiClient.get<LiveFeedResponse>('/api/news-data/live-feed', params)
   }
 }
 

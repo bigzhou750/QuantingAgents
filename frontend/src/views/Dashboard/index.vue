@@ -424,6 +424,24 @@ const loadRecentAnalyses = async () => {
 
 const loadMarketNews = async () => {
   try {
+    // 优先使用7x24实时快讯接口（财联社/东方财富/富途）
+    const liveResponse = await newsApi.getLiveFeed(undefined, 20)
+    if (liveResponse.success && liveResponse.data && liveResponse.data.news.length > 0) {
+      marketNews.value = liveResponse.data.news.map((item: any) => ({
+        id: item.title,
+        title: item.title,
+        time: item.publish_time,
+        url: item.url,
+        source: item.source
+      }))
+      return
+    }
+  } catch (error) {
+    console.warn('实时快讯获取失败，降级到数据库查询:', error)
+  }
+
+  // 降级：从数据库查询
+  try {
     let response = await newsApi.getLatestNews(undefined, 10, 24)
     if (response.success && response.data && response.data.news.length === 0) {
       response = await newsApi.getLatestNews(undefined, 10, 24 * 365)

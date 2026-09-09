@@ -322,7 +322,7 @@ class NewsWatchService:
             "impact_level": impact_level,
             "evidence_note": evidence_note,
             "latest_news_time": (
-                (
+                str(
                     news_list[0].get("publish_time")
                     or news_list[0].get("published_at")
                     or ""

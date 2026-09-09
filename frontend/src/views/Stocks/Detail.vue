@@ -1479,6 +1479,7 @@ function exportReport() {
 /* 投资建议盒子 - 重点突出 */
 .recommendation-box {
   background: var(--zt-gradient-hero);
+  color: #fff;
   border-radius: 12px;
   padding: 20px 24px;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);

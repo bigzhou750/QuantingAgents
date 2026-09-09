@@ -45,6 +45,18 @@ class ObservationService:
 
     # ==================== 观察标的 CRUD ====================
 
+    async def _resolve_stock_name(self, stock_code: str) -> str:
+        """根据股票代码自动查询股票名称"""
+        try:
+            from app.services.stock_data_service import get_stock_data_service
+            svc = get_stock_data_service()
+            info = await svc.get_stock_basic_info(stock_code)
+            if info and info.name:
+                return info.name
+        except Exception as e:
+            logger.warning(f"Failed to resolve stock name for {stock_code}: {e}")
+        return ""
+
     async def add_observation(
         self,
         user_id: str,
@@ -55,6 +67,13 @@ class ObservationService:
         如果同一用户+股票已存在 ACTIVE 记录，返回已有记录而非重复创建。
         如果之前是 REMOVED 状态，则重新激活。
         """
+        # 当 stock_name 为空时，自动从股票基础数据中补全
+        if not record.stock_name:
+            resolved_name = await self._resolve_stock_name(record.stock_code)
+            if resolved_name:
+                record.stock_name = resolved_name
+                logger.info(f"Auto-resolved stock name: {record.stock_code} -> {resolved_name}")
+
         db = get_mongo_db()
         coll = db[self.OBSERVATIONS_COLLECTION]
 
