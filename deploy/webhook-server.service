@@ -1,0 +1,18 @@
+[Unit]
+Description=TradingAgents Gitee Webhook Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/tradingagents/worktree/deploy/webhook-server.py \
+  --secret H9PDX_HBapcwiinerHuJWzle_BVXw9RTJ_1uZQfN3Dw \
+  --deploy-script /opt/tradingagents/worktree/deploy/deploy.sh \
+  --branch feat/assistant \
+  --port 9000
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/webhook-server.log
+StandardError=append:/var/log/webhook-server.log
+
+[Install]
+WantedBy=multi-user.target

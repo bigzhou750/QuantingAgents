@@ -13,20 +13,25 @@ Gitee Webhook 配置:
 """
 
 import argparse
-import hashlib
 import hmac
 import json
 import logging
 import subprocess
-import sys
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from concurrent.futures import ThreadPoolExecutor
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# 全局部署锁：同一时间只允许一个部署任务运行，避免重复部署浪费内存和 CPU
+_deploy_lock = threading.Lock()
+
+# 子进程输出最大保留字节数（防止 capture_output 吃内存）
+_MAX_OUTPUT_BYTES = 4096
 
 
 class DeployWebhookHandler(BaseHTTPRequestHandler):
@@ -38,8 +43,8 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        # 读取请求体
-        content_length = int(self.headers.get("Content-Length", 0))
+        # 读取请求体（限制最大 1MB，防止恶意大 payload）
+        content_length = min(int(self.headers.get("Content-Length", 0)), 1_048_576)
         body = self.rfile.read(content_length)
 
         # 验证签名 (Gitee 使用 X-Gitee-Token)
@@ -89,12 +94,8 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
         logger.info(f"📥 收到 Push: {pusher} → {ref}")
         logger.info(f"   提交: {commit_id} ({commits_count} commits) {commit_msg}")
 
-        # 异步执行部署（避免阻塞 webhook 响应）
-        threading.Thread(
-            target=self._trigger_deploy,
-            args=(commit_id, pusher, commit_msg),
-            daemon=True,
-        ).start()
+        # 通过线程池异步执行部署（限制并发数，防止内存膨胀）
+        self.server.deploy_executor.submit(self._trigger_deploy, commit_id, pusher, commit_msg)
 
         self.send_response(200)
         self.end_headers()
@@ -119,7 +120,12 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
         return hmac.compare_digest(token, expected)
 
     def _trigger_deploy(self, commit_id: str, pusher: str, commit_msg: str):
-        """触发部署脚本"""
+        """触发部署脚本（加锁，同一时间只运行一个部署）"""
+        # 非阻塞尝试获取锁：如果已有部署在运行，直接跳过
+        if not _deploy_lock.acquire(blocking=False):
+            logger.warning(f"⏭️  跳过部署 ({commit_id}): 上一次部署仍在运行中")
+            return
+
         deploy_script = self.server.deploy_script
         branch = self.server.deploy_branch
 
@@ -134,16 +140,17 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
             if result.returncode == 0:
                 logger.info(f"✅ 部署成功 ({commit_id} by {pusher})")
             else:
+                # 只保留最后 500 字符，防止日志撑爆内存
+                stderr_tail = (result.stderr or "")[-500:]
                 logger.error(f"❌ 部署失败 (exit code: {result.returncode})")
-                logger.error(f"   stderr: {result.stderr[-500:]}")
+                logger.error(f"   stderr: {stderr_tail}")
         except subprocess.TimeoutExpired:
             logger.error("❌ 部署超时 (>10min)")
         except Exception as e:
             logger.error(f"❌ 部署异常: {e}")
-
-    def log_message(self, format, *args):
-        """重写日志输出到 logger"""
-        logger.debug(f"{self.client_address[0]} - {format % args}")
+        finally:
+            _deploy_lock.release()
+            logger.info("🔓 部署锁已释放")
 
 
 def main():
@@ -154,20 +161,26 @@ def main():
     parser.add_argument("--branch", default="feat/assistant", help="监听分支 (默认 feat/assistant)")
     args = parser.parse_args()
 
-    server = HTTPServer(("0.0.0.0", args.port), DeployWebhookHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), DeployWebhookHandler)
     server.webhook_secret = args.secret
     server.deploy_script = args.deploy_script
     server.deploy_branch = args.branch
+
+    # 线程池：最多 2 个 worker（1 个处理 HTTP 请求分发，1 个跑部署脚本）
+    # WebHook 场景并发极低，2 个足够，避免线程过多占用内存
+    server.deploy_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="deploy")
 
     logger.info(f"🎧 Webhook 服务启动: 0.0.0.0:{args.port}")
     logger.info(f"   监听分支: {args.branch}")
     logger.info(f"   部署脚本: {args.deploy_script}")
     logger.info(f"   Secret: {'已配置' if args.secret else '未配置'}")
+    logger.info(f"   部署线程池: max_workers=2")
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         logger.info("🛑 Webhook 服务停止")
+        server.deploy_executor.shutdown(wait=False)
         server.shutdown()
 
 
