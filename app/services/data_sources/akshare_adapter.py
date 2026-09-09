@@ -396,6 +396,106 @@ class AKShareAdapter(DataSourceAdapter):
             raise RuntimeError(f"akshare fetch failed: {msg[:200]}")
         return items if items else None
 
+    def get_live_news(self, sources: list = None, limit_per_source: int = 20) -> list:
+        """获取7x24小时实时快讯（财联社/东方财富/富途）
+
+        Args:
+            sources: 数据源列表，可选 "cls"/"em"/"futu"，默认全部
+            limit_per_source: 每个数据源最多返回条数
+
+        Returns:
+            标准化后的快讯列表
+        """
+        if not self.is_available():
+            return []
+
+        import akshare as ak
+
+        all_sources = ["em", "cls", "futu"]
+        if sources:
+            all_sources = [s for s in sources if s in ("cls", "em", "futu")]
+
+        items = []
+
+        # 东方财富（主力源，数据最全）
+        if "em" in all_sources:
+            try:
+                df = ak.stock_info_global_em()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        summary = str(row.get('摘要', '') or '').strip()
+                        items.append({
+                            "title": title or summary[:60],
+                            "content": summary,
+                            "publish_time": str(row.get('发布时间', '')),
+                            "url": str(row.get('链接', '') or ''),
+                            "source": "东方财富",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 东财快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 东财快讯获取失败: {e}")
+
+        # 财联社
+        if "cls" in all_sources:
+            try:
+                df = ak.stock_info_global_cls()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        content = str(row.get('内容', '') or '').strip()
+                        pub_date = str(row.get('发布日期', '') or '')
+                        pub_time = str(row.get('发布时间', '') or '')
+                        # 拼接完整时间
+                        full_time = f"{pub_date} {pub_time}" if pub_date else pub_time
+                        items.append({
+                            "title": title or content[:60],
+                            "content": content,
+                            "publish_time": full_time.strip(),
+                            "url": "",
+                            "source": "财联社",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 财联社快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 财联社快讯获取失败: {e}")
+
+        # 富途
+        if "futu" in all_sources:
+            try:
+                df = ak.stock_info_global_futu()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        content = str(row.get('内容', '') or '').strip()
+                        items.append({
+                            "title": title or content[:60],
+                            "content": content,
+                            "publish_time": str(row.get('发布时间', '')),
+                            "url": str(row.get('链接', '') or ''),
+                            "source": "富途牛牛",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 富途快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 富途快讯获取失败: {e}")
+
+        # 按时间降序排序
+        items.sort(key=lambda x: x.get("publish_time", ""), reverse=True)
+
+        # 去重：标题精确匹配
+        seen_titles = set()
+        deduped = []
+        for item in items:
+            key = item["title"].strip()
+            if key and key not in seen_titles:
+                seen_titles.add(key)
+                deduped.append(item)
+
+        logger.info(f"📰 实时快讯汇总: {len(deduped)}条（去重前{len(items)}条）")
+        return deduped
+
     def find_latest_trade_date(self) -> Optional[str]:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
         logger.info(f"AKShare: Using yesterday as trade date: {yesterday}")
