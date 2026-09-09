@@ -1,16 +1,16 @@
 #!/bin/bash
-# TradingAgents-CN 部署核心脚本
+# zhitouagent 部署核心脚本
 # 被 setup.sh、post-receive hook、webhook-server 调用
 # 用法: ./deploy.sh [branch]
 
 set -euo pipefail
 
-DEPLOY_DIR="/opt/tradingagents/worktree"
+DEPLOY_DIR="/opt/zhitouagent/worktree"
 LOCAL_COMPOSE="deploy/docker-compose.local-build.yml"
 HUB_COMPOSE="docker-compose.hub.nginx.yml"
 BRANCH="${1:-feat/assistant}"
-LOG_FILE="/opt/tradingagents/logs/deploy.log"
-LOCK_FILE="/tmp/tradingagents-deploy.lock"
+LOG_FILE="/opt/zhitouagent/logs/deploy.log"
+LOCK_FILE="/tmp/zhitouagent-deploy.lock"
 
 # 自动选择 compose 文件：优先本地构建版
 if [ -f "$DEPLOY_DIR/$LOCAL_COMPOSE" ]; then
@@ -41,7 +41,7 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
-log "🚀 开始部署 TradingAgents-CN (分支: $BRANCH)"
+log "🚀 开始部署 zhitouagent (分支: $BRANCH)"
 
 # 1. 拉取最新代码
 log "📥 拉取最新代码..."

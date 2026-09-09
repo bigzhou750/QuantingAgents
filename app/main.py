@@ -1,5 +1,5 @@
 """
-TradingAgents-CN v1.0.0-preview FastAPI Backend
+ zhitouagent FastAPI Backend
 主应用程序入口
 
 Copyright (c) 2025 hsliuping. All rights reserved.
@@ -9,8 +9,8 @@ This software is proprietary and confidential. Unauthorized copying, distributio
 or use of this software, via any medium, is strictly prohibited.
 本软件为专有和机密软件。严禁通过任何媒介未经授权复制、分发或使用本软件。
 
-For commercial licensing, please contact: hsliup@163.com
-商业许可咨询，请联系：hsliup@163.com
+For support, please contact: zh75067197@gmail.com
+技术支持请联系：zh75067197@gmail.com
 """
 
 from fastapi import FastAPI, Request
@@ -24,6 +24,12 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
 from pathlib import Path
+import os
+
+# 新部署使用 ZHITOUAGENT_*；旧部署变量仅作为读取兼容，不再写回或展示。
+for _key, _value in list(os.environ.items()):
+    if _key.startswith("TRADINGAGENTS_"):
+        os.environ.setdefault("ZHITOUAGENT_" + _key[len("TRADINGAGENTS_"):], _value)
 
 # 加载 .env.local（如果存在），覆盖 .env 中的同名变量
 # 用途：本地开发时设置 WXPAY_MOCK=true 等，不影响生产 .env
@@ -101,7 +107,7 @@ async def _print_config_summary(logger):
     """显示配置摘要"""
     try:
         logger.info("=" * 70)
-        logger.info("📋 TradingAgents-CN Configuration Summary")
+        logger.info("📋 zhitouagent Configuration Summary")
         logger.info("=" * 70)
 
         # .env 文件路径信息
@@ -252,7 +258,7 @@ async def lifespan(app: FastAPI):
             admin_user = await user_service.create_admin_user(
                 username="admin",
                 password="admin123",
-                email="admin@tradingagents.cn"
+                email="zh75067197@gmail.com"
             )
             if admin_user:
                 logger.info("✅ 已创建默认管理员账号: admin / admin123")
@@ -363,13 +369,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Token计费模块初始化失败: {e}")
 
-    #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
+    #  配置桥接：将统一配置写入环境变量，供 zhitouagent 核心库使用
     try:
         from app.core.config_bridge import bridge_config_to_env
         bridge_config_to_env()
     except Exception as e:
         logger.warning(f"⚠️  配置桥接失败: {e}")
-        logger.warning("⚠️  TradingAgents 将使用 .env 文件中的配置")
+        logger.warning("⚠️  zhitouagent 将使用 .env 文件中的配置")
 
     # Apply dynamic settings (log_level, enable_monitoring) from ConfigProvider
     try:
@@ -390,7 +396,7 @@ async def lifespan(app: FastAPI):
     # 显示配置摘要
     await _print_config_summary(logger)
 
-    logger.info("TradingAgents FastAPI backend started")
+    logger.info("zhitouagent FastAPI backend started")
 
     # 启动期：若需要在休市时补充上一交易日收盘快照
     if settings.QUOTES_BACKFILL_ON_STARTUP:
@@ -876,12 +882,12 @@ async def lifespan(app: FastAPI):
             logger.warning(f"UserService cleanup error: {e}")
 
         await close_db()
-        logger.info("TradingAgents FastAPI backend stopped")
+        logger.info("zhitouagent FastAPI backend stopped")
 
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="TradingAgents-CN API",
+    title="zhitouagent API",
     description="股票分析与批量队列系统 API",
     version=get_version(),
     docs_url="/docs" if settings.DEBUG else None,
@@ -1033,7 +1039,7 @@ async def root():
     """根路径，返回API信息"""
     print("🏠 根路径被访问")
     return {
-        "name": "TradingAgents-CN API",
+        "name": "zhitouagent API",
         "version": get_version(),
         "status": "running",
         "docs_url": "/docs" if settings.DEBUG else None

@@ -15,12 +15,12 @@ logger = get_logger('async_display')
 
 class AsyncProgressDisplay:
     """异步进度显示组件"""
-    
+
     def __init__(self, container, analysis_id: str, refresh_interval: float = 1.0):
         self.container = container
         self.analysis_id = analysis_id
         self.refresh_interval = refresh_interval
-        
+
         # 创建显示组件
         with self.container:
             self.progress_bar = st.progress(0)
@@ -28,38 +28,38 @@ class AsyncProgressDisplay:
             self.step_info = st.empty()
             self.time_info = st.empty()
             self.refresh_button = st.empty()
-        
+
         # 初始化状态
         self.last_update = 0
         self.is_completed = False
-        
+
         logger.info(f"📊 [异步显示] 初始化: {analysis_id}, 刷新间隔: {refresh_interval}s")
-    
+
     def update_display(self) -> bool:
         """更新显示，返回是否需要继续刷新"""
         current_time = time.time()
-        
+
         # 检查是否需要刷新
         if current_time - self.last_update < self.refresh_interval and not self.is_completed:
             return not self.is_completed
-        
+
         # 获取进度数据
         progress_data = get_progress_by_id(self.analysis_id)
-        
+
         if not progress_data:
             self.status_text.error("❌ 无法获取分析进度，请检查分析是否正在运行")
             return False
-        
+
         # 更新显示
         self._render_progress(progress_data)
         self.last_update = current_time
-        
+
         # 检查是否完成
         status = progress_data.get('status', 'running')
         self.is_completed = status in ['completed', 'failed']
-        
+
         return not self.is_completed
-    
+
     def _render_progress(self, progress_data: Dict[str, Any]):
         """渲染进度显示"""
         try:
@@ -68,25 +68,25 @@ class AsyncProgressDisplay:
             total_steps = progress_data.get('total_steps', 8)
             progress_percentage = progress_data.get('progress_percentage', 0.0)
             status = progress_data.get('status', 'running')
-            
+
             # 更新进度条
             self.progress_bar.progress(min(progress_percentage / 100, 1.0))
-            
+
             # 状态信息
             step_name = progress_data.get('current_step_name', '未知')
             step_description = progress_data.get('current_step_description', '')
             last_message = progress_data.get('last_message', '')
-            
+
             # 状态图标
             status_icon = {
                 'running': '🔄',
                 'completed': '✅',
                 'failed': '❌'
             }.get(status, '🔄')
-            
+
             # 显示当前状态
             self.status_text.info(f"{status_icon} **当前状态**: {last_message}")
-            
+
             # 显示步骤信息
             if status == 'failed':
                 self.step_info.error(f"❌ **分析失败**: {last_message}")
@@ -118,19 +118,19 @@ class AsyncProgressDisplay:
                 self.step_info.info(f"📊 **进度**: 第 {current_step + 1} 步，共 {total_steps} 步 ({progress_percentage:.1f}%)\n\n"
                                   f"**当前步骤**: {step_name}\n\n"
                                   f"**步骤说明**: {step_description}")
-            
+
             # 时间信息 - 直接使用后端计算的时间数据
             real_elapsed_time = progress_data.get('elapsed_time', 0)
             remaining_time = progress_data.get('remaining_time', 0)
             estimated_total_time = progress_data.get('estimated_total_time', 0)
-            
+
             if status == 'completed':
                 self.time_info.success(f"⏱️ **已用时间**: {format_time(real_elapsed_time)} | **总耗时**: {format_time(real_elapsed_time)}")
             elif status == 'failed':
                 self.time_info.error(f"⏱️ **已用时间**: {format_time(real_elapsed_time)} | **分析中断**")
             else:
                 self.time_info.info(f"⏱️ **已用时间**: {format_time(real_elapsed_time)} | **预计剩余**: {format_time(remaining_time)}")
-            
+
             # 刷新按钮（仅在运行时显示）
             if status == 'running':
                 with self.refresh_button:
@@ -140,7 +140,7 @@ class AsyncProgressDisplay:
                             st.rerun()
             else:
                 self.refresh_button.empty()
-                
+
         except Exception as e:
             logger.error(f"📊 [异步显示] 渲染失败: {e}")
             self.status_text.error(f"❌ 显示更新失败: {str(e)}")
@@ -152,27 +152,27 @@ def create_async_progress_display(container, analysis_id: str, refresh_interval:
 def auto_refresh_progress(display: AsyncProgressDisplay, max_duration: float = 1800):
     """自动刷新进度显示"""
     start_time = time.time()
-    
+
     # 使用Streamlit的自动刷新机制
     placeholder = st.empty()
-    
+
     while True:
         # 检查超时
         if time.time() - start_time > max_duration:
             with placeholder:
                 st.warning("⚠️ 分析时间过长，已停止自动刷新。请手动刷新页面查看最新状态。")
             break
-        
+
         # 更新显示
         should_continue = display.update_display()
-        
+
         if not should_continue:
             # 分析完成或失败，停止刷新
             break
-        
+
         # 等待刷新间隔
         time.sleep(display.refresh_interval)
-    
+
     logger.info(f"📊 [异步显示] 自动刷新结束: {display.analysis_id}")
 
 # Streamlit专用的自动刷新组件
@@ -435,7 +435,7 @@ def display_static_progress_with_controls(analysis_id: str, show_refresh_control
     if not progress_data:
         # 如果没有进度数据，显示默认的准备状态
         st.info("🔄 **当前状态**: 准备开始分析...")
-        
+
         # 设置默认状态为initializing
         status = 'initializing'
 

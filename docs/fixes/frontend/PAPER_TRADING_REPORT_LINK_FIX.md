@@ -83,14 +83,14 @@ function viewReport(analysisId: string) {
 ```
 1. 分析报告详情页
    ↓ 点击"应用到交易"
-   
+
 2. 模拟交易页面（自动填充）
    - 股票代码：601288
    - 买卖方向：buy
    - 交易数量：28900
    - 分析ID：abc123
    ↓ 提交订单
-   
+
 3. 订单记录（保存 analysis_id）
    {
      "code": "601288",
@@ -101,7 +101,7 @@ function viewReport(analysisId: string) {
      "created_at": "2025-10-04T03:40:53"
    }
    ↓ 点击"查看报告"
-   
+
 4. 报告详情页 ✅
    - URL: /reports/view/abc123
    - 显示完整的分析报告
@@ -156,16 +156,16 @@ function viewReport(analysisId: string) {
 使用 `params` 而不是 `query`：
 ```typescript
 // ✅ 正确：使用 params
-router.push({ 
-  name: 'ReportDetail', 
-  params: { id: analysisId } 
+router.push({
+  name: 'ReportDetail',
+  params: { id: analysisId }
 })
 // URL: /reports/view/abc123
 
 // ❌ 错误：使用 query
-router.push({ 
-  name: 'SingleAnalysis', 
-  query: { analysis_id: analysisId } 
+router.push({
+  name: 'SingleAnalysis',
+  query: { analysis_id: analysisId }
 })
 // URL: /analysis/single?analysis_id=abc123
 ```

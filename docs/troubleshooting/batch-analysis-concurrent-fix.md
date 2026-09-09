@@ -100,12 +100,12 @@ async def submit_batch_analysis(
     user: dict = Depends(get_current_user)
 ):
     """提交批量分析任务（真正的并发执行）
-    
+
     ⚠️ 注意：不使用 BackgroundTasks，因为它是串行执行的！
     改用 asyncio.create_task 实现真正的并发执行。
     """
     # ... 创建任务 ...
-    
+
     # 🔧 使用 asyncio.create_task 实现真正的并发执行
     async def run_concurrent_analysis():
         """并发执行所有分析任务"""
@@ -115,13 +115,13 @@ async def submit_batch_analysis(
             # 创建异步任务
             task = asyncio.create_task(run_single_analysis(task_id, single_req, user["id"]))
             tasks.append(task)
-        
+
         # 等待所有任务完成（不阻塞响应）
         await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     # 在后台启动并发任务（不等待完成）
     asyncio.create_task(run_concurrent_analysis())
-    
+
     return {"success": True, ...}
 ```
 

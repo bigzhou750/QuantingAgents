@@ -1,4 +1,4 @@
-# Backend Dockerfile for FastAPI service (TradingAgents-CN v1.0.0-preview)
+# Backend Dockerfile for FastAPI service (zhitouagent v1.0.0-preview)
 # 前后端分离架构 - 后端服务
 # 支持多架构: amd64, arm64
 #
@@ -30,7 +30,7 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
 
 # 复制后端代码和必需模块
 COPY app ./app
-COPY tradingagents ./tradingagents
+COPY zhitouagent ./zhitouagent
 COPY vibe_agent_runtime ./vibe_agent_runtime
 COPY config ./config
 COPY scripts ./scripts

@@ -88,15 +88,15 @@ def get_china_stock_info_tushare(ticker: str) -> str:
     """
     try:
         from .data_source_manager import get_data_source_manager
-        
+
         logger.info(f"🔍 [股票代码追踪] 直接调用 Tushare 适配器")
-        
+
         manager = get_data_source_manager()
-        
+
         # 🔥 直接调用 _get_tushare_stock_info()，避免循环调用
         # 不要调用 get_stock_info()，因为它会再次调用 get_china_stock_info_tushare()
         info = manager._get_tushare_stock_info(ticker)
-        
+
         # 格式化返回字符串
         if info and isinstance(info, dict):
             return f"""股票代码: {info.get('symbol', ticker)}

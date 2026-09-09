@@ -161,8 +161,8 @@ tradingagents/
 ## 📞 获取帮助
 
 ### 技术支持
-- **GitHub Issues**: [提交技术问题](https://github.com/hsliuping/TradingAgents-CN/issues)
-- **Discussion**: [参与技术讨论](https://github.com/hsliuping/TradingAgents-CN/discussions)
+- **GitHub Issues**: [提交技术问题](mailto:zh75067197@gmail.com)
+- **Discussion**: [参与技术讨论](mailto:zh75067197@gmail.com)
 - **QQ群**: 782124367
 
 ### 文档反馈

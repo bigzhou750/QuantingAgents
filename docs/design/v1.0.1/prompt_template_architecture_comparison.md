@@ -78,18 +78,18 @@ def create_fundamentals_analyst(llm, toolkit, template_name="default"):
     def fundamentals_analyst_node(state):
         # 1. 加载模版
         template = PromptTemplateManager.load_template(
-            "fundamentals", 
+            "fundamentals",
             template_name
         )
-        
+
         # 2. 提取模版内容
         system_prompt = template["system_prompt"]
         tool_guidance = template["tool_guidance"]
         analysis_requirements = template["analysis_requirements"]
-        
+
         # 3. 组合提示词
         full_prompt = f"{system_prompt}\n{tool_guidance}\n{analysis_requirements}"
-        
+
         # 4. 使用提示词
         prompt = ChatPromptTemplate.from_messages([
             ("system", full_prompt),

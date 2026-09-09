@@ -159,7 +159,7 @@ df, source = manager.get_stock_list_with_fallback()  # 同步调用，返回Data
 1. **多数据源同步** (`multi_source_sync.py`)
    - 用于手动触发的多数据源同步
    - 需要数据源优先级管理
-   
+
 2. **基础信息同步服务** (`multi_source_basics_sync_service.py`)
    - 定时任务中的股票基础信息同步
    - 需要数据源降级和容错
@@ -168,7 +168,7 @@ df, source = manager.get_stock_list_with_fallback()  # 同步调用，返回Data
 1. **实时行情服务** (`quotes_ingestion_service.py`)
    - 实时行情数据摄取
    - 需要高性能和稳定性
-   
+
 2. **股票数据查询** (`stocks.py`)
    - 前端API调用
    - 需要快速响应

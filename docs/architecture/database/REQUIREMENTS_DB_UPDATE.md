@@ -44,7 +44,7 @@ pickle5>=0.0.11  # Python 3.8+兼容
 pymongo>=4.3.0
 motor>=3.1.0  # 异步MongoDB驱动（可选）
 
-# Redis  
+# Redis
 redis>=4.5.0
 hiredis>=2.0.0  # Redis性能优化（可选）
 
@@ -134,6 +134,6 @@ print(f"Pickle协议: {pickle.HIGHEST_PROTOCOL}")
 
 ---
 
-**更新时间**: 2025-07-14  
-**影响版本**: v0.1.7+  
+**更新时间**: 2025-07-14
+**影响版本**: v0.1.7+
 **Python要求**: 3.10+

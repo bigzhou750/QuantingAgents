@@ -1,10 +1,10 @@
-# 🚀 TradingAgents-CN 快速部署指南（Docker Hub 镜像）
+# 🚀 zhitouagent 快速部署指南（Docker Hub 镜像）
 
 > 5 分钟快速部署完整的 AI 股票分析系统
 
 ## 📋 前置要求
 
-- **Docker**: 20.10+ 
+- **Docker**: 20.10+
 - **Docker Compose**: 2.0+
 - **内存**: 4GB+（推荐 8GB+）
 - **磁盘**: 20GB+
@@ -29,14 +29,14 @@ mkdir -p ~/tradingagents-demo
 cd ~/tradingagents-demo
 
 # 下载 Docker Compose 配置文件
-wget https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/docker-compose.hub.nginx.yml
+wget https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/docker-compose.hub.nginx.yml
 
 # 下载环境配置模板
-wget https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/.env.docker -O .env
+wget https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/.env.docker -O .env
 
 # 下载 Nginx 配置文件
 mkdir -p nginx
-wget https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/nginx/nginx.conf -O nginx/nginx.conf
+wget https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/nginx/nginx.conf -O nginx/nginx.conf
 ```
 
 **Windows PowerShell**：
@@ -46,14 +46,14 @@ New-Item -ItemType Directory -Path "$env:USERPROFILE\tradingagents-demo" -Force
 Set-Location "$env:USERPROFILE\tradingagents-demo"
 
 # 下载 Docker Compose 配置
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/docker-compose.hub.nginx.yml" -OutFile "docker-compose.hub.nginx.yml"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/docker-compose.hub.nginx.yml" -OutFile "docker-compose.hub.nginx.yml"
 
 # 下载环境配置
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/.env.docker" -OutFile ".env"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/.env.docker" -OutFile ".env"
 
 # 下载 Nginx 配置
 New-Item -ItemType Directory -Path "nginx" -Force
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/v1.0.0-preview/nginx/nginx.conf" -OutFile "nginx\nginx.conf"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hsliuping/zhitouagent/v1.0.0-preview/nginx/nginx.conf" -OutFile "nginx\nginx.conf"
 ```
 
 ### 步骤 2：拉取 Docker 镜像
@@ -514,9 +514,9 @@ docker-compose -f docker-compose.hub.nginx.yml down -v
 
 ## 🆘 获取帮助
 
-- **GitHub Issues**: https://github.com/hsliuping/TradingAgents-CN/issues
-- **文档**: https://github.com/hsliuping/TradingAgents-CN/tree/v1.0.0-preview/docs
-- **示例**: https://github.com/hsliuping/TradingAgents-CN/tree/v1.0.0-preview/examples
+- **GitHub Issues**: mailto:zh75067197@gmail.com
+- **文档**: mailto:zh75067197@gmail.com/tree/v1.0.0-preview/docs
+- **示例**: mailto:zh75067197@gmail.com/tree/v1.0.0-preview/examples
 
 ---
 
@@ -524,10 +524,10 @@ docker-compose -f docker-compose.hub.nginx.yml down -v
 
 通过本指南，你应该能够：
 
-✅ 在 5 分钟内完成系统部署  
-✅ 配置 AI 模型和数据源  
-✅ 成功访问和使用系统  
-✅ 解决常见部署问题  
+✅ 在 5 分钟内完成系统部署
+✅ 配置 AI 模型和数据源
+✅ 成功访问和使用系统
+✅ 解决常见部署问题
 
 **下一步**：
 1. 探索系统功能，运行第一个股票分析

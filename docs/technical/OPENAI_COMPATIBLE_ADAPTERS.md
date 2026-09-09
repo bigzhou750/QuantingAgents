@@ -29,7 +29,7 @@ TradingAgents v0.1.6引入了统一的OpenAI兼容适配器架构，为所有支
 ```python
 class OpenAICompatibleBase(ChatOpenAI):
     """OpenAI兼容适配器基类"""
-    
+
     def __init__(self, provider_name, model, api_key_env_var, base_url, **kwargs):
         # 统一的初始化逻辑
         # 自动token追踪
@@ -80,14 +80,14 @@ def create_openai_compatible_llm(provider, model, **kwargs):
 #### 强制工具调用机制（阿里百炼专用）
 ```python
 # 检测工具调用失败
-if (len(result.tool_calls) == 0 and 
-    is_china_stock(ticker) and 
+if (len(result.tool_calls) == 0 and
+    is_china_stock(ticker) and
     'DashScope' in llm.__class__.__name__):
-    
+
     # 强制调用数据工具
     stock_data = get_china_stock_data(ticker, start_date, end_date)
     fundamentals_data = get_china_fundamentals(ticker, curr_date)
-    
+
     # 重新生成分析
     enhanced_result = llm.invoke([enhanced_prompt])
 ```
@@ -96,11 +96,11 @@ if (len(result.tool_calls) == 0 and
 ```python
 def _generate(self, messages, **kwargs):
     result = super()._generate(messages, **kwargs)
-    
+
     # 自动追踪token使用量
     if TOKEN_TRACKING_ENABLED:
         self._track_token_usage(result, kwargs, start_time)
-    
+
     return result
 ```
 
@@ -251,7 +251,7 @@ class EnhancedDashScopeAdapter(ChatDashScopeOpenAI):
     def _generate(self, messages, **kwargs):
         # 添加自定义逻辑
         result = super()._generate(messages, **kwargs)
-        
+
         # 自定义后处理
         return self._post_process(result)
 ```

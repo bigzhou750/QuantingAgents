@@ -1,22 +1,27 @@
 #!/bin/bash
-# TradingAgents-CN 腾讯云服务器首次部署初始化脚本
-# 用法: sudo bash setup.sh [gitee-repo-url] [branch]
+# zhitouagent 腾讯云服务器首次部署初始化脚本
+# 用法: sudo bash setup.sh [private-repository-url] [branch]
 #
 # 示例:
-#   sudo bash setup.sh https://gitee.com/bigzhou750/quanting-agent.git feat/assistant
+#   sudo bash setup.sh <private-repository-url> feat/assistant
 
 set -euo pipefail
 
-REPO_URL="${1:-https://gitee.com/bigzhou750/quanting-agent.git}"
+REPO_URL="${1:-}"
 BRANCH="${2:-feat/assistant}"
-DEPLOY_BASE="/opt/tradingagents"
+DEPLOY_BASE="/opt/zhitouagent"
 WORKTREE_DIR="$DEPLOY_BASE/worktree"
 LOG_DIR="$DEPLOY_BASE/logs"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=============================================="
-echo "  TradingAgents-CN 首次部署初始化"
+echo "  zhitouagent 首次部署初始化"
 echo "=============================================="
+
+if [ -z "$REPO_URL" ]; then
+    echo "错误：必须提供私有仓库地址"
+    exit 1
+fi
 echo "仓库地址: $REPO_URL"
 echo "部署分支: $BRANCH"
 echo "部署目录: $DEPLOY_BASE"
@@ -55,9 +60,9 @@ if [ -d "$WORKTREE_DIR/.git" ]; then
     echo "✅ Git 仓库已存在"
     cd "$WORKTREE_DIR"
 
-    # 如果提供了 GITEE_TOKEN，切换到 HTTPS 认证
-    if [ -n "${GITEE_TOKEN:-}" ]; then
-        HTTPS_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
+    # 如果提供了 GIT_TOKEN，切换到 HTTPS 认证
+    if [ -n "${GIT_TOKEN:-}" ]; then
+        HTTPS_URL="$REPO_URL"
         git remote set-url origin "$HTTPS_URL"
         echo "🔑 已配置 HTTPS + Token 认证"
     fi
@@ -73,11 +78,11 @@ if [ -d "$WORKTREE_DIR/.git" ]; then
         read -rp "请选择 [1/2/3]: " FETCH_CHOICE
         case "$FETCH_CHOICE" in
             1)
-                if [ -z "${GITEE_TOKEN:-}" ]; then
-                    read -rsp "请输入 Gitee 私人令牌: " GITEE_TOKEN
+                if [ -z "${GIT_TOKEN:-}" ]; then
+                    read -rsp "请输入代码仓库私人令牌: " GIT_TOKEN
                     echo ""
                 fi
-                HTTPS_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
+                HTTPS_URL="$REPO_URL"
                 git remote set-url origin "$HTTPS_URL"
                 git fetch origin
                 ;;
@@ -141,7 +146,7 @@ if [ "${SKIP_CLONE:-false}" != "true" ] && [ ! -d "$WORKTREE_DIR/.git" ]; then
 
         case "$CHOICE" in
             1)
-                ssh-keygen -t ed25519 -C "tradingagents-deploy" -f ~/.ssh/id_ed25519 -N ""
+                ssh-keygen -t ed25519 -C "zhitouagent-deploy" -f ~/.ssh/id_ed25519 -N ""
                 echo ""
                 echo "📋 请将以下公钥添加到 Gitee → 设置 → SSH公钥:"
                 echo "---"
@@ -156,17 +161,16 @@ if [ "${SKIP_CLONE:-false}" != "true" ] && [ ! -d "$WORKTREE_DIR/.git" ]; then
                 ;;
             3)
                 # 优先从环境变量读取，避免令牌出现在命令历史中
-                if [ -n "${GITEE_TOKEN:-}" ]; then
-                    echo "✅ 已从环境变量 GITEE_TOKEN 获取令牌"
+                if [ -n "${GIT_TOKEN:-}" ]; then
+                    echo "✅ 已从环境变量 GIT_TOKEN 获取令牌"
                 else
-                    read -rsp "请输入 Gitee 私人令牌 (不会显示在屏幕上): " GITEE_TOKEN
+                    read -rsp "请输入代码仓库私人令牌 (不会显示在屏幕上): " GIT_TOKEN
                     echo ""
                 fi
-                if [ -z "$GITEE_TOKEN" ]; then
+                if [ -z "$GIT_TOKEN" ]; then
                     echo "❌ 未提供令牌，退出"
                     exit 1
                 fi
-                REPO_URL="https://oauth2:${GITEE_TOKEN}@gitee.com/bigzhou750/quanting-agent.git"
                 SSH_REPO_URL="$REPO_URL"
                 ;;
         esac
@@ -249,7 +253,7 @@ echo ""
 echo "🔔 [6/7] 配置 CI/CD Webhook 服务..."
 
 WEBHOOK_SCRIPT="$WORKTREE_DIR/deploy/webhook-server.py"
-WEBHOOK_SERVICE="/etc/systemd/system/tradingagents-webhook.service"
+WEBHOOK_SERVICE="/etc/systemd/system/zhitouagent-webhook.service"
 
 if [ -f "$WEBHOOK_SCRIPT" ]; then
     # 获取 webhook secret
@@ -258,7 +262,7 @@ if [ -f "$WEBHOOK_SCRIPT" ]; then
     # 创建 systemd service
     cat > "$WEBHOOK_SERVICE" << EOF
 [Unit]
-Description=TradingAgents-CN Gitee Webhook Server
+Description=zhitouagent Gitee Webhook Server
 After=docker.service
 Requires=docker.service
 
@@ -276,8 +280,8 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable tradingagents-webhook
-    systemctl start tradingagents-webhook
+    systemctl enable zhitouagent-webhook
+    systemctl start zhitouagent-webhook
     echo "✅ Webhook 服务已启动 (端口 9000)"
 else
     echo "⚠️  webhook-server.py 不存在，跳过 CI/CD 配置"

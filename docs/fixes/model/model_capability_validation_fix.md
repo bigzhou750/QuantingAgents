@@ -67,15 +67,15 @@ try:
 try:
     from pymongo import MongoClient
     from app.core.config import settings
-    
+
     # 使用同步 MongoDB 客户端
     client = MongoClient(settings.MONGO_URI)
     db = client[settings.MONGO_DB]
     collection = db.system_configs  # ✅ 集合名是复数
-    
+
     # 查询系统配置（与 config_service 保持一致）
     doc = collection.find_one({"is_active": True}, sort=[("version", -1)])  # ✅ 查询最新的活跃配置
-    
+
     if doc and "llm_configs" in doc:
         llm_configs = doc["llm_configs"]
         for config_dict in llm_configs:
@@ -204,11 +204,11 @@ suitable_roles: [<ModelRole.BOTH: 'both'>]
 def test_model_capability_validation():
     """测试模型能力验证"""
     service = ModelCapabilityService()
-    
+
     # 测试 gemini-2.5-flash
     config = service.get_model_config("gemini-2.5-flash")
     assert ModelFeature.TOOL_CALLING in config["features"]
-    
+
     # 测试模型对验证
     result = service.validate_model_pair(
         quick_model="gemini-2.5-flash",

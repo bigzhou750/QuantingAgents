@@ -77,7 +77,7 @@ config = {
 
 # 平衡配置
 config = {
-    "llm_provider": "google", 
+    "llm_provider": "google",
     "quick_think_llm": "gemini-1.5-pro",
     "deep_think_llm": "gemini-2.5-flash"
 }

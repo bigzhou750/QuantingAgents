@@ -1,4 +1,4 @@
-# LLM Adapters for TradingAgents
+# LLM Adapters for zhitouagent
 from .dashscope_openai_adapter import ChatDashScopeOpenAI
 from .google_openai_adapter import ChatGoogleOpenAI
 

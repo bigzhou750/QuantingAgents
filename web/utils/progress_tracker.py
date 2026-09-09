@@ -93,7 +93,7 @@ class SmartAnalysisProgressTracker:
 
         total_time = (base_time + analyst_time) * model_multiplier * depth_multiplier
         return total_time
-    
+
     def update(self, message: str, step: Optional[int] = None, total_steps: Optional[int] = None):
         """更新进度"""
         current_time = time.time()
@@ -157,7 +157,7 @@ class SmartAnalysisProgressTracker:
         # 使用预估的总时长（固定值）
         # 预计剩余 = 预估总时长 - 已用时间
         return max(self.estimated_duration - elapsed_time, 0)
-    
+
     def _detect_step_from_message(self, message: str) -> Optional[int]:
         """根据消息内容智能检测当前步骤"""
         message_lower = message.lower()
@@ -236,7 +236,7 @@ class SmartAnalysisProgressTracker:
             return len(self.analysis_steps) - 1
 
         return None
-    
+
     def get_current_step_info(self) -> Dict:
         """获取当前步骤信息"""
         if self.current_step < len(self.analysis_steps):
@@ -304,7 +304,7 @@ class SmartStreamlitProgressDisplay:
             time_text += f" | **预计剩余:** {self._format_time(remaining_time)}"
 
         self.time_info.markdown(time_text)
-    
+
     def _format_time(self, seconds: float) -> str:
         """格式化时间显示"""
         if seconds < 60:
@@ -315,7 +315,7 @@ class SmartStreamlitProgressDisplay:
         else:
             hours = seconds / 3600
             return f"{hours:.1f}小时"
-    
+
     def clear(self):
         """清除显示"""
         self.container.empty()

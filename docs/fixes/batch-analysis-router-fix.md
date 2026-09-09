@@ -162,7 +162,7 @@ onMounted(async () => {
    const router = useRouter()
    const store = useStore()
    const route = useRoute()
-   
+
    const handleClick = () => {
      router.push('/home')  // 使用顶层定义的 router
    }
@@ -174,7 +174,7 @@ onMounted(async () => {
    setTimeout(() => {
      const router = useRouter()  // 错误！
    }, 1000)
-   
+
    // ❌ 错误
    fetch('/api/data').then(() => {
      const store = useStore()  // 错误！
@@ -187,7 +187,7 @@ onMounted(async () => {
    if (condition) {
      const router = useRouter()  // 错误！
    }
-   
+
    // ✅ 正确
    const router = useRouter()
    if (condition) {

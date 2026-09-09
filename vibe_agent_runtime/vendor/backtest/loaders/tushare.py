@@ -119,7 +119,7 @@ class DataLoader:
 
     name = "tushare"
     markets = {"a_share", "hk_equity", "futures", "fund"}
-    # Tushare daily() documents vol in board lots (HKUDS/Vibe-Trading#1062).
+    # Tushare daily() documents vol in board lots (HKUDS/zhitouagent#1062).
     # hk_equity (hk_daily) stays undeclared until empirically verified.
     volume_units = {"a_share": "lots"}
     requires_auth = True

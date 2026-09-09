@@ -1,9 +1,14 @@
 import os
 
+
+def _env(name: str, default: str) -> str:
+    """Read the product variable and fall back to the legacy deployment key."""
+    return os.getenv(name, os.getenv(name.replace("ZHITOUAGENT_", "TRADINGAGENTS_"), default))
+
 DEFAULT_CONFIG = {
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
-    "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", "./results"),
-    "data_dir": os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "data"),
+    "results_dir": _env("ZHITOUAGENT_RESULTS_DIR", "./results"),
+    "data_dir": os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data"),
     "data_cache_dir": os.path.join(
         os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
         "dataflows/data_cache",

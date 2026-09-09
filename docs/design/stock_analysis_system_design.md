@@ -1,19 +1,19 @@
-# TradingAgents-CN 股票分析系统详细设计文档
+# zhitouagent 股票分析系统详细设计文档
 
 ## 📋 文档概述
 
-本文档详细描述了TradingAgents-CN股票分析系统的完整架构、数据流程、模块协作机制以及各组件的输入输出规范。
+本文档详细描述了zhitouagent股票分析系统的完整架构、数据流程、模块协作机制以及各组件的输入输出规范。
 
-**版本**: v0.1.7  
-**更新日期**: 2025-07-16  
-**作者**: TradingAgents-CN团队
+**版本**: v0.1.7
+**更新日期**: 2025-07-16
+**作者**: zhitouagent团队
 
 ---
 
 ## 🎯 系统总览
 
 ### 核心理念
-TradingAgents-CN采用**多智能体协作**的设计理念，模拟真实金融机构的分析团队，通过专业化分工和协作机制，实现全面、客观的股票投资分析。
+zhitouagent采用**多智能体协作**的设计理念，模拟真实金融机构的分析团队，通过专业化分工和协作机制，实现全面、客观的股票投资分析。
 
 ### 设计原则
 1. **专业化分工**: 每个智能体专注特定领域的分析
@@ -50,18 +50,18 @@ graph TB
             NA[新闻分析师]
             SA[社交媒体分析师]
         end
-        
+
         subgraph "研究员团队"
             BR[看涨研究员]
             BEAR[看跌研究员]
         end
-        
+
         subgraph "风险管理团队"
             AGG[激进风险评估]
             CON[保守风险评估]
             NEU[中性风险评估]
         end
-        
+
         subgraph "决策层"
             TRADER[交易员]
             RM[研究经理]
@@ -77,13 +77,13 @@ graph TB
             FINNHUB[FinnHub]
             YFINANCE[Yahoo Finance]
         end
-        
+
         subgraph "数据处理"
             DSM[数据源管理器]
             CACHE[缓存系统]
             VALIDATOR[数据验证器]
         end
-        
+
         subgraph "分析工具"
             TOOLKIT[统一工具包]
             TECH[技术分析工具]
@@ -101,33 +101,33 @@ graph TB
     WEB --> MA
     WEB --> NA
     WEB --> SA
-    
+
     FA --> TOOLKIT
     MA --> TOOLKIT
     NA --> TOOLKIT
     SA --> TOOLKIT
-    
+
     TOOLKIT --> DSM
     DSM --> TUSHARE
     DSM --> AKSHARE
     DSM --> BAOSTOCK
-    
+
     FA --> BR
     FA --> BEAR
     MA --> BR
     MA --> BEAR
-    
+
     BR --> TRADER
     BEAR --> TRADER
-    
+
     TRADER --> AGG
     TRADER --> CON
     TRADER --> NEU
-    
+
     AGG --> RISKM
     CON --> RISKM
     NEU --> RISKM
-    
+
     CACHE --> MONGO
     CACHE --> REDIS
     CACHE --> FILE
@@ -152,7 +152,7 @@ sequenceDiagram
     Web->>Graph: 启动分析流程
     Graph->>DSM: 请求股票数据
     DSM->>Cache: 检查缓存
-    
+
     alt 缓存命中
         Cache-->>DSM: 返回缓存数据
     else 缓存未命中
@@ -160,7 +160,7 @@ sequenceDiagram
         API-->>DSM: 返回原始数据
         DSM->>Cache: 存储到缓存
     end
-    
+
     DSM-->>Graph: 返回格式化数据
     Graph->>Graph: 分发给各分析师
 ```
@@ -182,25 +182,25 @@ sequenceDiagram
     Graph->>MA: 启动市场分析
     Graph->>NA: 启动新闻分析
     Graph->>SA: 启动社交媒体分析
-    
+
     par 并行分析
         FA->>FA: 财务数据分析
         MA->>MA: 技术指标分析
         NA->>NA: 新闻情绪分析
         SA->>SA: 社交媒体分析
     end
-    
+
     FA-->>BR: 基本面报告
     MA-->>BR: 市场分析报告
     NA-->>BEAR: 新闻分析报告
     SA-->>BEAR: 情绪分析报告
-    
+
     BR->>BR: 生成看涨观点
     BEAR->>BEAR: 生成看跌观点
-    
+
     BR-->>TRADER: 看涨建议
     BEAR-->>TRADER: 看跌建议
-    
+
     TRADER->>TRADER: 综合决策分析
     TRADER-->>Graph: 最终投资建议
 ```
@@ -669,7 +669,7 @@ services:
 
 ## 📋 总结
 
-TradingAgents-CN股票分析系统通过多智能体协作、数据驱动分析、风险控制机制等设计，实现了专业、全面、可靠的股票投资分析。系统具备良好的扩展性、可维护性和性能表现，能够满足个人投资者和机构用户的多样化需求。
+zhitouagent股票分析系统通过多智能体协作、数据驱动分析、风险控制机制等设计，实现了专业、全面、可靠的股票投资分析。系统具备良好的扩展性、可维护性和性能表现，能够满足个人投资者和机构用户的多样化需求。
 
 ### 核心优势
 1. **专业分工**: 模拟真实投资团队的专业化分工

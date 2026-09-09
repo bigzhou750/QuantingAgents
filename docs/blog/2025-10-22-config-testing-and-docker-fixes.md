@@ -1,7 +1,7 @@
 # 配置测试与 Docker 环境适配：解决实际部署中的关键问题
 
-**日期**: 2025-10-22  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-22
+**作者**: zhitouagent 开发团队
 **标签**: `bug-fix`, `docker`, `configuration`, `llm`, `testing`
 
 ---
@@ -38,7 +38,7 @@ def _test_google_api(self, api_key: str, display_name: str, base_url: str = None
     if not model_name:
         model_name = "gemini-2.0-flash-exp"  # 默认回退
         logger.info(f"⚠️ 未指定模型，使用默认模型: {model_name}")
-    
+
     logger.info(f"🔍 [Google AI 测试] 使用模型: {model_name}")
 ```
 
@@ -85,18 +85,18 @@ if not username or not password:
     env_username = os.getenv('MONGODB_USERNAME')
     env_password = os.getenv('MONGODB_PASSWORD')
     env_auth_source = os.getenv('MONGODB_AUTH_SOURCE', 'admin')
-    
+
     if env_username and env_password:
         username = env_username
         password = env_password
         auth_source = env_auth_source
-        
+
         # 同时使用环境变量的 host 和 port
         if env_host:
             host = env_host
         if env_port:
             port = int(env_port)
-        
+
         used_env_config = True
 
 # 2. Docker 环境检测和自动适配
@@ -178,7 +178,7 @@ if is_google_official:
         api_endpoint = base_url[:-3]
     else:
         api_endpoint = base_url
-    
+
     logger.info(f"✅ [Google官方] SDK 会自动添加 /v1beta 路径")
 else:
     # 🔄 中转地址：直接使用完整 URL，不让 SDK 添加 /v1beta
@@ -271,7 +271,7 @@ else:
 elif response.status_code == 503:
     error_detail = response.json()
     error_code = error_detail.get("code", "")
-    
+
     if error_code == "NO_KEYS_AVAILABLE":
         return {
             "success": False,

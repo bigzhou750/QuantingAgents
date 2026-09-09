@@ -4,7 +4,6 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Version](https://img.shields.io/badge/Version-v1.1.0-green.svg)](./VERSION)
 [![Documentation](https://img.shields.io/badge/docs-中文文档-green.svg)](./docs/)
-[![Original](https://img.shields.io/badge/基于-TauricResearch/TradingAgents-orange.svg)](https://github.com/TauricResearch/TradingAgents)
 
 ---
 
@@ -20,9 +19,9 @@
 - ⚠️ **请大家注意识别，避免上当受骗**
 
 **✅ 官方唯一渠道**：
-- 📦 GitHub 仓库：https://github.com/hsliuping/TradingAgents-CN
-- 📧 官方邮箱：hsliup@163.com
-- 📱 微信公众号：TradingAgents-CN
+- 📦 项目交付：私有部署
+- 📧 官方邮箱：zh75067197@gmail.com
+- 📱 微信公众号：zhitouagent
 
 如发现任何未经授权的商业使用，请通过上述渠道联系我们。
 
@@ -31,7 +30,7 @@
 #### v1.1.0（已开源）
 - ✅ **个人使用**：完全开源，可自由使用
 - ❌ **商业使用**：**必须获得商业授权**，未经授权禁止商业使用
-- 📧 **授权联系**：[hsliup@163.com](mailto:hsliup@163.com)
+- 📧 **授权联系**：[zh75067197@gmail.com](mailto:zh75067197@gmail.com)
 
 #### v2.0（即将开源）
 - 🔄 **开发状态**：已开发完成，稳定运行中
@@ -43,7 +42,7 @@
 - 🎉 **开发状态**：开发完成，内测启动中
 - ✨ **新功能**：AI 工作流设计器、复盘研究、持仓研究、Skill 系统、智能助手等
 - 🚀 **版本定位**：最新版本，包含全部专业功能
-- 📧 **内测申请**：[hsliup@163.com](mailto:hsliup@163.com)
+- 📧 **内测申请**：[zh75067197@gmail.com](mailto:zh75067197@gmail.com)
 
 ### 📄 许可证详情
 
@@ -70,7 +69,7 @@
 
 ### 🤖 个人投资助手（新增）
 
-本项目已集成**个人投资助手**功能模块，基于 TradingAgents-CN 二次开发，接入 vibe-trading 自然语言交互模式，为用户提供个性化的投资研究支持：
+本项目已集成**个人投资助手**功能模块，基于 zhitouagent 二次开发，接入 zhitouagent 自然语言交互模式，为用户提供个性化的投资研究支持：
 
 #### ✨ 核心功能
 
@@ -130,9 +129,9 @@
 
 面向中文用户的**多智能体与大模型股票分析学习平台**。帮助你系统化学习如何使用多智能体交易框架与 AI 大模型进行合规的股票研究与策略实验，不提供实盘交易指令，平台定位为学习与研究用途。
 
-## 🙏 致敬源项目
+## 产品定位
 
-感谢 [Tauric Research](https://github.com/TauricResearch) 团队创造的革命性多智能体交易框架 [TradingAgents](https://github.com/TauricResearch/TradingAgents)！
+智能投研助手由个人团队持续维护，专注于研究与学习场景下的多智能体投研工作流。
 
 **🎯 我们的定位与使命**: 专注学习与研究，提供中文化学习中心与工具，合规友好，支持 A股/港股/美股 的分析与教学，推动 AI 金融技术在中文社区的普及与正确使用。
 
@@ -216,13 +215,13 @@
 - **[v1.1.0 使用手册](./docs/guides/v1.1.0-user-manual.md)**
 - **[v1.1.0 升级指南](./docs/releases/upgrade-guide.md)**
 - **[完整更新日志](./docs/releases/CHANGELOG.md)**
-- **[0、📘 TradingAgents-CN v1.0.0-preview 快速入门视频](https://www.bilibili.com/video/BV1i2CeBwEP7/?vd_source=5d790a5b8d2f46d2c10fd4e770be1594)**
+- **[0、📘 zhitouagent v1.0.0-preview 快速入门视频](https://www.bilibili.com/video/BV1i2CeBwEP7/?vd_source=5d790a5b8d2f46d2c10fd4e770be1594)**
 
-- **[1、📘 TradingAgents-CN v1.0.0-preview 使用指南](https://mp.weixin.qq.com/s/ppsYiBncynxlsfKFG8uEbw)**
-- **[2、📘 使用 Docker Compose 部署TradingAgents-CN v1.0.0-preview（完全版）](https://mp.weixin.qq.com/s/JkA0cOu8xJnoY_3LC5oXNw)**
+- **[1、📘 zhitouagent v1.0.0-preview 使用指南](https://mp.weixin.qq.com/s/ppsYiBncynxlsfKFG8uEbw)**
+- **[2、📘 使用 Docker Compose 部署zhitouagent v1.0.0-preview（完全版）](https://mp.weixin.qq.com/s/JkA0cOu8xJnoY_3LC5oXNw)**
 - **[3、📘 从 Docker Hub 更新 TradingAgents‑CN 镜像](https://mp.weixin.qq.com/s/WKYhW8J80Watpg8K6E_dSQ)**
-- **[4、📘 TradingAgents-CN v1.0.0-preview绿色版安装和升级指南](https://mp.weixin.qq.com/s/eoo_HeIGxaQZVT76LBbRJQ)**
-- **[5、📘 TradingAgents-CN v1.0.0-preview绿色版端口配置说明](https://mp.weixin.qq.com/s/o5QdNuh2-iKkIHzJXCj7vQ)**
+- **[4、📘 zhitouagent v1.0.0-preview绿色版安装和升级指南](https://mp.weixin.qq.com/s/eoo_HeIGxaQZVT76LBbRJQ)**
+- **[5、📘 zhitouagent v1.0.0-preview绿色版端口配置说明](https://mp.weixin.qq.com/s/o5QdNuh2-iKkIHzJXCj7vQ)**
 - **[6、📘 TradingAgents v1.0.0-preview 源码版安装手册（修订版）](https://mp.weixin.qq.com/s/cqUGf-sAzcBV19gdI4sYfA)**
 - **[7、📘 TradingAgents v1.0.0-preview 源码安装视频教程](https://www.bilibili.com/video/BV1FxCtBHEte/?vd_source=5d790a5b8d2f46d2c10fd4e770be1594)**
 
@@ -256,11 +255,11 @@
 
 #### 关注公众号
 
-1. **关注公众号**: 微信搜索 **"TradingAgents-CN"** 并关注
+1. **关注公众号**: 微信搜索 **"zhitouagent"** 并关注
 2. 公众号每天推送项目最新进展和使用教程
 
 
-- **微信公众号**: TradingAgents-CN（推荐）
+- **微信公众号**: zhitouagent（推荐）
 
   <img src="assets/wexin.png" alt="微信公众号" width="200"/>
 
@@ -307,7 +306,7 @@
 ### 🔒 专有部分（需商业授权）
 - **适用范围**：`app/`（FastAPI后端）和 `frontend/`（Vue前端）目录
 - **商业使用**：需要单独许可协议
-- **联系授权**：[hsliup@163.com](mailto:hsliup@163.com)
+- **联系授权**：[zh75067197@gmail.com](mailto:zh75067197@gmail.com)
 
 ### 📋 许可证选择建议
 - **个人学习/研究**：可自由使用全部功能
@@ -323,9 +322,9 @@
 
 ## 🙏 致谢与感恩
 
-### 🌟 向源项目开发者致敬
+### 🌟 内部维护说明
 
-我们向 [Tauric Research](https://github.com/TauricResearch) 团队表达最深的敬意和感谢：
+项目通过内部测试、发布和许可证审计流程持续维护：
 
 - **🎯 愿景领导者**: 感谢您们在AI金融领域的前瞻性思考和创新实践
 - **💎 珍贵源码**: 感谢您们开源的每一行代码，它们凝聚着无数的智慧和心血
@@ -335,7 +334,7 @@
 
 ### 🤝 社区贡献者致谢
 
-感谢所有为TradingAgents-CN项目做出贡献的开发者和用户！
+感谢所有为zhitouagent项目做出贡献的开发者和用户！
 
 详细的贡献者名单和贡献内容请查看：**[📋 贡献者名单](CONTRIBUTORS.md)**
 
@@ -350,7 +349,7 @@
 - **🌍 开源贡献**: 感谢您们选择Apache 2.0协议，给予开发者最大的自由
 - **📚 知识分享**: 感谢您们提供的详细文档和最佳实践指导
 
-**特别感谢**：[TradingAgents](https://github.com/TauricResearch/TradingAgents) 项目为我们提供了坚实的技术基础。虽然Apache 2.0协议赋予了我们使用源码的权利，但我们深知每一行代码的珍贵价值，将永远铭记并感谢您们的无私贡献。
+**许可证说明**：发布包保留适用的第三方许可证、版权声明和必要归属，详见内部合规材料。
 
 ### 🇨🇳 推广使命的初心
 
@@ -378,10 +377,10 @@
 
 <table>
     <tr>
-        <td width="180"><a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=TradingAgents-CN"><img src="assets/huoshan.png" alt="火山引擎" width="150"></a></td>
-        <td>感谢<a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=TradingAgents-CN">字节火山引擎</a>赞助本项目！<br>
+        <td width="180"><a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=zhitouagent"><img src="assets/huoshan.png" alt="火山引擎" width="150"></a></td>
+        <td>感谢<a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=zhitouagent">字节火山引擎</a>赞助本项目！<br>
 【专属活动优惠】19元Tokens包！享字节自研豆包模型+满血版开源 SOTA模型，覆盖文本、VLM、图像生成，全模态一站配齐：Seed-2.1、Seedream-5.0、GLM-5.2、DeepSeek、Qwen等。不止编程、更能解决 Agent 复杂长程任务 → 注册即领2500万Tokens，立即前往<br>
-👉 <a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=TradingAgents-CN">点击链接抢购</a></td>
+👉 <a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=zhitouagent">点击链接抢购</a></td>
     </tr>
 </table>
 
@@ -408,14 +407,13 @@
 
 ## 📞 联系方式
 
-- **GitHub Issues**: [提交问题和建议](https://github.com/hsliuping/TradingAgents-CN/issues)
-- **邮箱**: hsliup@163.com
+- **技术支持**: [联系支持邮箱](mailto:zh75067197@gmail.com)
+- **邮箱**: zh75067197@gmail.com
 - 项目ＱＱ群：1091917201
-- 项目微信公众号：TradingAgents-CN
+- 项目微信公众号：zhitouagent
 
   <img src="assets/wexin.png" alt="微信公众号" width="200"/>
 
-- **原项目**: [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
 - **文档**: [完整文档目录](docs/)
 
 ## ⚠️ 风险提示
@@ -433,6 +431,6 @@
 
 **🌟 如果这个项目对您有帮助，请给我们一个 Star！**
 
-[⭐ Star this repo](https://github.com/hsliuping/TradingAgents-CN) | [🍴 Fork this repo](https://github.com/hsliuping/TradingAgents-CN/fork) | [📖 Read the docs](./docs/)
+[📖 内部文档](./docs/)
 
 </div>

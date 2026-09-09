@@ -24,7 +24,7 @@
   ```python
   # 旧
   from .chinese_finance_utils import get_chinese_social_sentiment
-  
+
   # 新
   from .news.chinese_finance import get_chinese_social_sentiment
   ```
@@ -47,7 +47,7 @@
   ```python
   # 旧
   from tradingagents.dataflows.fundamentals_snapshot import get_cn_fund_snapshot
-  
+
   # 新
   from tradingagents.dataflows.providers.china.fundamentals_snapshot import get_cn_fund_snapshot
   ```

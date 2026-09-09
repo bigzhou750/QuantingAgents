@@ -37,6 +37,24 @@ const routes: RouteRecordRaw[] = [
       transition: 'fade'
     }
   },
+  {
+    path: '/pricing',
+    name: 'Pricing',
+    component: () => import('@/views/Public/Pricing.vue'),
+    meta: { title: '定价说明', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
+  {
+    path: '/privacy',
+    name: 'Privacy',
+    component: () => import('@/views/Public/Privacy.vue'),
+    meta: { title: '隐私政策', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
+  {
+    path: '/terms',
+    name: 'Terms',
+    component: () => import('@/views/Public/Terms.vue'),
+    meta: { title: '服务条款', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
   // 兼容文档链接
   {
     path: '/paper/:name.md',
@@ -769,7 +787,7 @@ router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - 智投`
+    document.title = `${title} - 智能投研助手`
   }
 
   console.log(' 路由守卫检查:', {

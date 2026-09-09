@@ -48,7 +48,7 @@ class ExampleSDKProvider(BaseStockDataProvider):
         
         # 请求头
         self.headers = {
-            "User-Agent": "TradingAgents/1.0",
+            "User-Agent": "zhitouagent/1.0",
             "Accept": "application/json",
             "Content-Type": "application/json"
         }

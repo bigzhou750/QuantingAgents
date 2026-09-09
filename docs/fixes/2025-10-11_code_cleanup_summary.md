@@ -21,7 +21,7 @@
 - **导入**: `from langchain import hub`
 
 #### 删除原因
-1. **未被使用**: 
+1. **未被使用**:
    - `__init__.py` 只导出 `create_market_analyst`
    - `setup.py` 只使用 `create_market_analyst`
    - 没有任何地方调用 `create_market_analyst_react`
@@ -146,7 +146,7 @@ logger.info(f"🔀 [条件判断] ✅ 无tool_calls，返回: Msg Clear Fundamen
 ### 删除的代码
 - **文件**: `tradingagents/agents/analysts/market_analyst.py`
 - **删除行数**: 183行
-- **删除内容**: 
+- **删除内容**:
   - `create_market_analyst_react` 函数
   - ReAct Agent 相关导入
 
@@ -264,7 +264,7 @@ git commit -m "refactor: 删除未使用的ReAct Agent代码，添加详细调�
 
 ---
 
-**创建日期**: 2025-10-11  
-**创建人员**: AI Assistant  
+**创建日期**: 2025-10-11
+**创建人员**: AI Assistant
 **状态**: ✅ 已完成
 

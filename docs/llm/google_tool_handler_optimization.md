@@ -108,7 +108,7 @@ safe_messages.append(HumanMessage(content=analysis_prompt_template))
 total_length = sum(len(str(msg.content)) for msg in safe_messages if hasattr(msg, 'content'))
 if total_length > 50000:
     logger.warning(f"[{analyst_name}] ⚠️ 消息序列过长 ({total_length} 字符)，进行优化...")
-    
+
     # 优化策略：保留最重要的消息
     optimized_messages = []
     # ... 复杂的优化逻辑 ...

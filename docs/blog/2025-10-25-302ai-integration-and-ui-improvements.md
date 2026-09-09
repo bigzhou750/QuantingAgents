@@ -1,7 +1,7 @@
 # 302.ai 聚合平台接入与系统优化：深色主题、配置管理、WebSocket 改进
 
-**日期**: 2025-10-25  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-25
+**作者**: zhitouagent 开发团队
 **标签**: `feature`, `bug-fix`, `ui`, `integration`, `configuration`, `websocket`
 
 ---
@@ -348,7 +348,7 @@ def _sanitize_document(self, doc: dict) -> dict:
     """递归清空敏感字段"""
     SENSITIVE_KEYWORDS = ['api_key', 'password', 'token', 'secret']
     EXCLUDED_FIELDS = ['max_tokens', 'timeout', 'retry_times', 'context_length']
-    
+
     for key, value in doc.items():
         if key in EXCLUDED_FIELDS:
             continue
@@ -361,7 +361,7 @@ def _sanitize_document(self, doc: dict) -> dict:
 
 #### 配置导入优化
 
-**提交**: 
+**提交**:
 - `fb79f49` - fix: 修复配置导出导入时 max_tokens 等字段为空字符串的问题
 - `857bbae` - fix: 修复数据库导出时 max_tokens 等配置字段被错误脱敏的问题
 - `eb0d02e` - feat: 配置导入脚本默认使用覆盖模式
@@ -394,7 +394,7 @@ def _sanitize_document(self, doc: dict) -> dict:
    if (isTokenExpiringSoon(token, 5)) {
      await autoRefreshToken()
    }
-   
+
    // 设置定时器每分钟检查并刷新 token
    setInterval(async () => {
      if (authStore.isAuthenticated) {
@@ -436,7 +436,7 @@ def _sanitize_document(self, doc: dict) -> dict:
 
 ### 10. Docker 构建优化
 
-**提交**: 
+**提交**:
 - `06b8880` - fix: 构建脚本同时推送 VERSION 和 latest 标签
 - `8d0fdc4` - fix: build-multiarch.sh 支持通过环境变量覆盖 PLATFORMS
 - `d0f1e6e` - fix: 修复通知 store 中未定义的方法引用

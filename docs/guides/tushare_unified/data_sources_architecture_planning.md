@@ -103,17 +103,17 @@ tradingagents/                   # 纯分析工具
 # tradingagents/dataflows/providers/base_provider.py
 class BaseStockDataProvider(ABC):
     """统一的股票数据提供器基类"""
-    
+
     @abstractmethod
     async def get_stock_basic_info(self, symbol: str = None) -> Optional[Dict[str, Any]]:
         """获取股票基础信息"""
         pass
-    
+
     @abstractmethod
     async def get_stock_quotes(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取实时行情"""
         pass
-    
+
     @abstractmethod
     async def get_historical_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """获取历史数据"""
@@ -125,7 +125,7 @@ class BaseStockDataProvider(ABC):
 # tradingagents/dataflows/manager.py
 class DataSourceManager:
     """统一数据源管理器"""
-    
+
     def __init__(self):
         self.providers = {
             'tushare': TushareProvider(),
@@ -134,7 +134,7 @@ class DataSourceManager:
             'yahoo': YahooProvider(),
             'finnhub': FinnhubProvider(),
         }
-    
+
     async def get_data(self, source: str, method: str, **kwargs):
         """统一数据获取接口"""
         provider = self.providers.get(source)
@@ -168,7 +168,7 @@ class StockDataSyncService:
     def __init__(self):
         self.data_manager = DataSourceManager()
         self.stock_service = get_stock_data_service()
-    
+
     async def sync_from_source(self, source: str):
         data = await self.data_manager.get_data(source, 'get_stock_basic_info')
         # 写入数据库

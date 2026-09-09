@@ -1,6 +1,6 @@
 """
 配置桥接模块
-将统一配置系统的配置桥接到环境变量，供 TradingAgents 核心库使用
+将统一配置系统的配置桥接到环境变量，供 zhitouagent 核心库使用
 """
 
 import os
@@ -23,7 +23,7 @@ def bridge_config_to_env():
     4. 将数据源配置写入环境变量（API 密钥、超时、重试等）
     5. 将系统运行时配置写入环境变量
 
-    这样 TradingAgents 核心库就能通过环境变量读取到用户配置的数据
+    这样 zhitouagent 核心库就能通过环境变量读取到用户配置的数据
     """
     try:
         from app.core.unified_config import unified_config
@@ -135,19 +135,19 @@ def bridge_config_to_env():
         # 2. 桥接默认模型配置
         default_model = unified_config.get_default_model()
         if default_model:
-            os.environ['TRADINGAGENTS_DEFAULT_MODEL'] = default_model
+            os.environ['ZHITOUAGENT_DEFAULT_MODEL'] = default_model
             logger.info(f"  ✓ 桥接默认模型: {default_model}")
             bridged_count += 1
 
         quick_model = unified_config.get_quick_analysis_model()
         if quick_model:
-            os.environ['TRADINGAGENTS_QUICK_MODEL'] = quick_model
+            os.environ['ZHITOUAGENT_QUICK_MODEL'] = quick_model
             logger.info(f"  ✓ 桥接快速分析模型: {quick_model}")
             bridged_count += 1
 
         deep_model = unified_config.get_deep_analysis_model()
         if deep_model:
-            os.environ['TRADINGAGENTS_DEEP_MODEL'] = deep_model
+            os.environ['ZHITOUAGENT_DEEP_MODEL'] = deep_model
             logger.info(f"  ✓ 桥接深度分析模型: {deep_model}")
             bridged_count += 1
 
@@ -298,7 +298,7 @@ def bridge_config_to_env():
 
     except Exception as e:
         logger.error(f"❌ 配置桥接失败: {e}", exc_info=True)
-        logger.warning("⚠️  TradingAgents 将使用 .env 文件中的配置")
+        logger.warning("⚠️  zhitouagent 将使用 .env 文件中的配置")
         return False
 
 
@@ -406,7 +406,7 @@ def _bridge_system_settings() -> int:
         logger.debug(f"  📋 获取到 {len(system_settings)} 个系统设置")
         bridged_count = 0
 
-        # TradingAgents 运行时配置
+        # zhitouagent 运行时配置
         ta_settings = {
             'ta_hk_min_request_interval_seconds': 'TA_HK_MIN_REQUEST_INTERVAL_SECONDS',
             'ta_hk_timeout_seconds': 'TA_HK_TIMEOUT_SECONDS',
@@ -526,11 +526,11 @@ def get_bridged_model(model_type: str = "default") -> Optional[str]:
         模型名称，如果不存在返回 None
     """
     if model_type == "quick":
-        return os.environ.get('TRADINGAGENTS_QUICK_MODEL')
+        return os.environ.get('ZHITOUAGENT_QUICK_MODEL')
     elif model_type == "deep":
-        return os.environ.get('TRADINGAGENTS_DEEP_MODEL')
+        return os.environ.get('ZHITOUAGENT_DEEP_MODEL')
     else:
-        return os.environ.get('TRADINGAGENTS_DEFAULT_MODEL')
+        return os.environ.get('ZHITOUAGENT_DEFAULT_MODEL')
 
 
 def clear_bridged_config():
@@ -541,9 +541,9 @@ def clear_bridged_config():
     """
     keys_to_clear = [
         # 模型配置
-        'TRADINGAGENTS_DEFAULT_MODEL',
-        'TRADINGAGENTS_QUICK_MODEL',
-        'TRADINGAGENTS_DEEP_MODEL',
+        'ZHITOUAGENT_DEFAULT_MODEL',
+        'ZHITOUAGENT_QUICK_MODEL',
+        'ZHITOUAGENT_DEEP_MODEL',
         # 数据源 API 密钥
         'TUSHARE_TOKEN',
         'FINNHUB_API_KEY',
@@ -568,7 +568,7 @@ def clear_bridged_config():
             f'{ds}_CACHE_ENABLED',
         ])
 
-    # 清除 TradingAgents 运行时配置
+    # 清除 zhitouagent 运行时配置
     ta_runtime_keys = [
         'TA_HK_MIN_REQUEST_INTERVAL_SECONDS',
         'TA_HK_TIMEOUT_SECONDS',

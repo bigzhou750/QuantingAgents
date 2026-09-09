@@ -1,7 +1,7 @@
 # stock_basic_info 集合缺少 symbol 字段修复
 
-**日期**: 2025-10-27  
-**问题**: MongoDB 中 `stock_basic_info` 集合缺少 `symbol` 字段  
+**日期**: 2025-10-27
+**问题**: MongoDB 中 `stock_basic_info` 集合缺少 `symbol` 字段
 **严重程度**: 高（影响股票数据查询和名称对应）
 
 ---
@@ -77,11 +77,11 @@ async def _update_stock_basic_info(self, basic_info: Dict[str, Any]):
     """更新股票基础信息到数据库"""
     try:
         collection = self.db.stock_basic_info
-        
+
         # ✅ 确保 symbol 字段存在
         if "symbol" not in basic_info and "code" in basic_info:
             basic_info["symbol"] = basic_info["code"]
-        
+
         # 使用upsert更新或插入
         await collection.update_one(
             {"code": basic_info["code"]},

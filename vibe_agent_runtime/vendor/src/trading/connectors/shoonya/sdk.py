@@ -548,7 +548,7 @@ def _login(cfg: ShoonyaConfig):
     if missing:
         raise ShoonyaConfigError(
             f"Shoonya connector not configured: missing {', '.join(missing)}. "
-            "Set them in ~/.vibe-trading/shoonya.json"
+            "Set them in ~/.zhitouagent/shoonya.json"
         )
 
     cached = _api_cache.get(cfg.user_id)
@@ -582,7 +582,7 @@ def _login(cfg: ShoonyaConfig):
         twoFA=totp,
         vendor_code=cfg.vendor_code,
         api_secret=cfg.api_secret,
-        imei="vibe-trading",
+        imei="zhitouagent",
     )
 
     if ret is None or ret.get("stat") != "Ok":

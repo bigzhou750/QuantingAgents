@@ -47,7 +47,7 @@ return {
 
 从日志分析可以看出：
 1. **第1次调用**：DeepSeek使用 `get_stock_news_unified`，生成报告长度0字符
-2. **第2次调用**：DeepSeek使用 `get_finnhub_news`，生成报告长度0字符  
+2. **第2次调用**：DeepSeek使用 `get_finnhub_news`，生成报告长度0字符
 3. **第3次调用**：DeepSeek使用 `get_google_news`，生成报告长度0字符
 4. **第4次调用**：DeepSeek使用 `get_global_news_openai`，生成报告长度0字符
 5. **第5次调用**：DeepSeek使用 `get_reddit_news`，生成报告长度0字符
@@ -83,17 +83,17 @@ def should_continue_news(self, state: AgentState):
     """Determine if news analysis should continue."""
     messages = state["messages"]
     last_message = messages[-1]
-    
+
     # 检查是否已经多次调用新闻分析师
-    news_call_count = sum(1 for msg in messages if 
-                         hasattr(msg, 'content') and 
+    news_call_count = sum(1 for msg in messages if
+                         hasattr(msg, 'content') and
                          '[新闻分析师]' in str(msg.content))
-    
+
     # 如果调用次数过多，强制退出
     if news_call_count > 3:
         logger.warning(f"[工作流] 新闻分析师调用次数过多({news_call_count})，强制退出")
         return "Msg Clear News"
-    
+
     # 原有逻辑
     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
         return "tools_news"
@@ -107,8 +107,8 @@ def should_continue_news(self, state: AgentState):
 ```python
 # 检查是否真正完成了分析
 analysis_completed = (
-    report and 
-    len(report.strip()) > 100 and 
+    report and
+    len(report.strip()) > 100 and
     ('分析' in report or '新闻' in report or '影响' in report)
 )
 

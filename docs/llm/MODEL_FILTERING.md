@@ -146,11 +146,11 @@ def _filter_popular_models(self, models: list) -> list:
 if "data" in result and isinstance(result["data"], list):
     all_models = result["data"]
     print(f"📊 API 返回 {len(all_models)} 个模型")
-    
+
     # 过滤：只保留主流大厂的常用模型
     filtered_models = self._filter_popular_models(all_models)
     print(f"✅ 过滤后保留 {len(filtered_models)} 个常用模型")
-    
+
     return {
         "success": True,
         "models": filtered_models,
@@ -240,7 +240,7 @@ if "data" in result and isinstance(result["data"], list):
 
 ---
 
-**功能开发日期**：2025-10-12  
-**开发人员**：AI Assistant  
+**功能开发日期**：2025-10-12
+**开发人员**：AI Assistant
 **需求提出人**：用户
 

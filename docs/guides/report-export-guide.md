@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-TradingAgents-CN v0.1.7 引入了专业级的报告导出功能，支持将股票分析结果导出为Word、PDF、Markdown三种格式。本指南将详细介绍如何使用报告导出功能。
+zhitouagent v0.1.7 引入了专业级的报告导出功能，支持将股票分析结果导出为Word、PDF、Markdown三种格式。本指南将详细介绍如何使用报告导出功能。
 
 ## 🎯 导出功能特色
 
@@ -348,10 +348,10 @@ symbols = ['000001', '600519', '000858', 'AAPL', 'TSLA']
 for symbol in symbols:
     # 获取分析结果
     analysis_result = get_analysis_result(symbol)
-    
+
     # 导出所有格式
     exporter.export_all_formats(
-        analysis_result, 
+        analysis_result,
         output_dir=f'exports/{symbol}'
     )
 ```
@@ -363,7 +363,7 @@ for symbol in symbols:
 crontab -e
 
 # 每日导出重要股票分析
-0 18 * * 1-5 cd /path/to/TradingAgents-CN && python scripts/daily_export.py
+0 18 * * 1-5 cd /path/to/zhitouagent && python scripts/daily_export.py
 ```
 
 ## 📈 最佳实践
@@ -410,12 +410,12 @@ tar -czf exports_archive_$(date +%Y%m).tar.gz exports/
 
 如果在使用报告导出功能时遇到问题：
 
-- 🐛 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues)
-- 💬 [GitHub Discussions](https://github.com/hsliuping/TradingAgents-CN/discussions)
+- 🐛 [GitHub Issues](mailto:zh75067197@gmail.com)
+- 💬 [GitHub Discussions](mailto:zh75067197@gmail.com)
 - 📚 [Pandoc文档](https://pandoc.org/MANUAL.html)
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *贡献者: [@baiyuxiong](https://github.com/baiyuxiong)*

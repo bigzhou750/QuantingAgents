@@ -90,10 +90,10 @@ use trading_agents
 // 更新厂家配置
 db.llm_providers.updateOne(
   { "name": "google" },
-  { 
-    "$set": { 
-      "default_base_url": "https://generativelanguage.googleapis.com/v1" 
-    } 
+  {
+    "$set": {
+      "default_base_url": "https://generativelanguage.googleapis.com/v1"
+    }
   }
 )
 ```

@@ -2,13 +2,13 @@
 
 ## 🎉 功能概述
 
-TradingAgents-CN系统已成功集成Tushare新闻接口，提供了业界领先的多源新闻数据获取能力。
+zhitouagent系统已成功集成Tushare新闻接口，提供了业界领先的多源新闻数据获取能力。
 
 ### ✅ 核心功能
 
 1. **多新闻源支持**
    - 新浪财经 (sina)
-   - 东方财富 (eastmoney) 
+   - 东方财富 (eastmoney)
    - 同花顺 (10jqka)
    - 华尔街见闻 (wallstreetcn)
    - 财联社 (cls)
@@ -176,7 +176,7 @@ TUSHARE_TOKEN=your_tushare_token_here
 ### 新闻源测试结果
 
 - **新浪财经**: ✅ 成功获取5条新闻
-- **东方财富**: ✅ 成功获取5条新闻  
+- **东方财富**: ✅ 成功获取5条新闻
 - **同花顺**: ✅ 成功获取5条新闻
 - **财联社**: ✅ 成功获取5条新闻
 
@@ -200,7 +200,7 @@ TUSHARE_TOKEN=your_tushare_token_here
    ```
    ⚠️ 未获取到任何Tushare新闻数据
    ```
-   **解决方案**: 
+   **解决方案**:
    - 检查时间范围设置
    - 尝试不同新闻源
    - 确认网络连接
@@ -264,7 +264,7 @@ async def batch_get_news(symbols):
     for symbol in symbols:
         task = provider.get_stock_news(symbol=symbol, limit=5)
         tasks.append(task)
-    
+
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 ```
@@ -317,6 +317,6 @@ await cache.set(cache_key, news, expire=3600)  # 1小时缓存
 
 ---
 
-**Tushare新闻接口已成功集成到TradingAgents-CN系统！** 🎉
+**Tushare新闻接口已成功集成到zhitouagent系统！** 🎉
 
 通过多新闻源支持、智能数据处理和完整的系统集成，为您的股票投资分析提供强大的新闻数据支持。

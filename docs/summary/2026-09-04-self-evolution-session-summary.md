@@ -8,7 +8,7 @@
 
 ### 用户层目录是什么
 
-- 路径：`~/.vibe-trading/skills/user/`
+- 路径：`~/.zhitouagent/skills/user/`
 - 含义：操作系统用户级别的本地正式生效层，不是业务账号级别
 - 作用：运行时会优先扫描这里，用户层同名 skill 会覆盖内置 skill
 
@@ -146,7 +146,7 @@
 
 ## 8. 最终结论
 
-- `~/.vibe-trading/skills/user/` 是用户层正式生效目录
+- `~/.zhitouagent/skills/user/` 是用户层正式生效目录
 - 当前项目已经有自进化闭环雏形，但生产级边界还不够硬
 - 评测后定位优化类型，当前靠失败聚类和规则映射
 - skill 候选是基于当前版本生成 sandbox 里的候选再比较

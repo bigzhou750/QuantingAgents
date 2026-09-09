@@ -2,8 +2,8 @@
 
 > **目标**: 参考原版 TradingAgents 实现，为美股添加 yfinance 和 Alpha Vantage 支持，提高数据准确性
 
-**创建日期**: 2025-11-10  
-**状态**: 规划中  
+**创建日期**: 2025-11-10
+**状态**: 规划中
 **优先级**: 高
 
 ---
@@ -81,15 +81,15 @@ def get_vendor(tool_name, category, config):
     """
     tool_vendors = config.get("tool_vendors", {})
     data_vendors = config.get("data_vendors", {})
-    
+
     # 工具级配置优先
     if tool_name in tool_vendors:
         return tool_vendors[tool_name]
-    
+
     # 类别级配置
     if category in data_vendors:
         return data_vendors[category]
-    
+
     # 默认值
     return "yfinance"
 ```
@@ -181,7 +181,7 @@ def get_vendor(tool_name, category, config):
 ```python
 class Settings(BaseSettings):
     # ... 现有配置 ...
-    
+
     # 美股数据源配置
     US_DATA_VENDORS: Dict[str, str] = Field(
         default={
@@ -192,13 +192,13 @@ class Settings(BaseSettings):
         },
         description="美股数据源配置"
     )
-    
+
     # 工具级数据源配置（可选，优先级更高）
     US_TOOL_VENDORS: Dict[str, str] = Field(
         default={},
         description="美股工具级数据源配置"
     )
-    
+
     # Alpha Vantage API 配置
     ALPHA_VANTAGE_API_KEY: Optional[str] = Field(
         default=None,
@@ -230,26 +230,26 @@ class USDataSourceManager:
             "alpha_vantage": AlphaVantageProvider(),
             "finnhub": FinnhubProvider(),  # 保留作为备用
         }
-    
+
     def get_vendor(self, tool_name, category):
         """获取工具的数据源"""
         # 1. 工具级配置优先
         tool_vendors = self.config.get("US_TOOL_VENDORS", {})
         if tool_name in tool_vendors:
             return self.vendors[tool_vendors[tool_name]]
-        
+
         # 2. 类别级配置
         data_vendors = self.config.get("US_DATA_VENDORS", {})
         if category in data_vendors:
             return self.vendors[data_vendors[category]]
-        
+
         # 3. 默认值
         return self.vendors["yfinance"]
-    
+
     def get_stock_data(self, ticker, start_date, end_date):
         """获取股票数据，支持降级"""
         vendor = self.get_vendor("get_stock_data", "core_stock_apis")
-        
+
         try:
             return vendor.get_stock_data(ticker, start_date, end_date)
         except Exception as e:
@@ -324,7 +324,7 @@ class USDataSourceManager:
 
 #### 6.1 更新文档
 
-**文件**: 
+**文件**:
 - `docs/integration/data-sources/US_DATA_SOURCES.md` - 美股数据源说明
 - `docs/guides/INSTALLATION_GUIDE_V1.md` - 更新安装指南
 - `README.md` - 更新功能说明
@@ -410,14 +410,14 @@ US_NEWS_DATA=alpha_vantage
 
 ## 📚 参考资源
 
-- **原版 TradingAgents**: https://github.com/TauricResearch/TradingAgents
+- **原版 TradingAgents**: mailto:zh75067197@gmail.com
 - **yfinance 文档**: https://pypi.org/project/yfinance/
 - **Alpha Vantage 文档**: https://www.alphavantage.co/documentation/
 - **Alpha Vantage API Key**: https://www.alphavantage.co/support/#api-key
 
 ---
 
-**最后更新**: 2025-11-10  
-**负责人**: AI Assistant  
+**最后更新**: 2025-11-10
+**负责人**: AI Assistant
 **审核人**: 待定
 

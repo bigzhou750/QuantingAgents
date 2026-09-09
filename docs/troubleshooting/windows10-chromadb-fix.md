@@ -10,7 +10,7 @@ Configuration error: An instance of Chroma already exists for ephemeral with dif
 而同样的代码在Windows 11上运行正常。这是由于Windows 10和Windows 11在以下方面的差异导致的：
 
 1. **文件系统权限管理不同**
-2. **临时文件处理机制不同**  
+2. **临时文件处理机制不同**
 3. **进程隔离级别不同**
 4. **内存管理策略不同**
 

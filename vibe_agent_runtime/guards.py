@@ -10,7 +10,7 @@ FORBIDDEN_SOURCE_MARKERS = (
     ".pycache",
     "__pycache__",
 )
-EXTERNAL_VIBE_PATH = re.compile(r"/Users/[^\"']*/Vibe-Trading")
+EXTERNAL_VIBE_PATH = re.compile(r"/Users/[^\"']*/zhitouagent")
 
 
 def validate_vendor_tree(root: Path) -> list[str]:

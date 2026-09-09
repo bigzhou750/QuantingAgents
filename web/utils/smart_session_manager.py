@@ -9,28 +9,28 @@ from typing import Optional, Dict, Any
 
 class SmartSessionManager:
     """智能会话管理器"""
-    
+
     def __init__(self):
         self.redis_manager = None
         self.file_manager = None
         self.use_redis = self._init_redis_manager()
         self._init_file_manager()
-        
+
     def _init_redis_manager(self) -> bool:
         """尝试初始化Redis管理器"""
         try:
             from .redis_session_manager import redis_session_manager
-            
+
             # 测试Redis连接
             if redis_session_manager.use_redis:
                 self.redis_manager = redis_session_manager
                 return True
             else:
                 return False
-                
+
         except Exception:
             return False
-    
+
     def _init_file_manager(self):
         """初始化文件管理器"""
         try:
@@ -38,13 +38,13 @@ class SmartSessionManager:
             self.file_manager = file_session_manager
         except Exception as e:
             st.error(f"❌ 文件会话管理器初始化失败: {e}")
-    
+
     def save_analysis_state(self, analysis_id: str, status: str = "running",
                            stock_symbol: str = "", market_type: str = "",
                            form_config: Dict[str, Any] = None):
         """保存分析状态和表单配置"""
         success = False
-        
+
         # 优先使用Redis
         if self.use_redis and self.redis_manager:
             try:
@@ -63,9 +63,9 @@ class SmartSessionManager:
             except Exception as e:
                 st.error(f"❌ 文件存储也失败了: {e}")
                 return False
-        
+
         return False
-    
+
     def load_analysis_state(self) -> Optional[Dict[str, Any]]:
         """加载分析状态"""
         # 优先从Redis加载
@@ -77,7 +77,7 @@ class SmartSessionManager:
             except Exception as e:
                 st.warning(f"⚠️ Redis加载失败，切换到文件存储: {e}")
                 self.use_redis = False
-        
+
         # 从文件存储加载
         if self.file_manager:
             try:
@@ -85,9 +85,9 @@ class SmartSessionManager:
             except Exception as e:
                 st.error(f"❌ 文件存储加载失败: {e}")
                 return None
-        
+
         return None
-    
+
     def clear_analysis_state(self):
         """清除分析状态"""
         # 清除Redis中的数据
@@ -96,14 +96,14 @@ class SmartSessionManager:
                 self.redis_manager.clear_analysis_state()
             except Exception:
                 pass
-        
+
         # 清除文件中的数据
         if self.file_manager:
             try:
                 self.file_manager.clear_analysis_state()
             except Exception:
                 pass
-    
+
     def get_debug_info(self) -> Dict[str, Any]:
         """获取调试信息"""
         debug_info = {
@@ -112,7 +112,7 @@ class SmartSessionManager:
             "file_manager_available": self.file_manager is not None,
             "use_redis": self.use_redis
         }
-        
+
         # 获取当前使用的管理器的调试信息
         if self.use_redis and self.redis_manager:
             try:
@@ -120,14 +120,14 @@ class SmartSessionManager:
                 debug_info.update({"redis_debug": redis_debug})
             except Exception as e:
                 debug_info["redis_debug_error"] = str(e)
-        
+
         if self.file_manager:
             try:
                 file_debug = self.file_manager.get_debug_info()
                 debug_info.update({"file_debug": file_debug})
             except Exception as e:
                 debug_info["file_debug_error"] = str(e)
-        
+
         return debug_info
 
 # 全局智能会话管理器实例
@@ -139,7 +139,7 @@ def get_persistent_analysis_id() -> Optional[str]:
         # 1. 首先检查session state
         if st.session_state.get('current_analysis_id'):
             return st.session_state.current_analysis_id
-        
+
         # 2. 从会话存储加载
         session_data = smart_session_manager.load_analysis_state()
         if session_data:
@@ -151,7 +151,7 @@ def get_persistent_analysis_id() -> Optional[str]:
                 st.session_state.last_stock_symbol = session_data.get('stock_symbol', '')
                 st.session_state.last_market_type = session_data.get('market_type', '')
                 return analysis_id
-        
+
         # 3. 最后从分析数据恢复最新分析
         try:
             from .async_progress_tracker import get_latest_analysis_id
@@ -161,9 +161,9 @@ def get_persistent_analysis_id() -> Optional[str]:
                 return latest_id
         except Exception:
             pass
-        
+
         return None
-        
+
     except Exception as e:
         st.warning(f"⚠️ 获取持久化分析ID失败: {e}")
         return None

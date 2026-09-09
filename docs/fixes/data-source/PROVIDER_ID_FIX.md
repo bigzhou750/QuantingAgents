@@ -91,7 +91,7 @@ try:
         {"_id": ObjectId(provider_id)},
         {"$set": update_data}
     )
-    
+
     # 如果没有匹配到，再尝试作为字符串查询
     if result.matched_count == 0:
         result = await providers_collection.update_one(
@@ -256,7 +256,7 @@ if not api_key:
 
 ---
 
-**修复日期**：2025-10-12  
-**修复人员**：AI Assistant  
+**修复日期**：2025-10-12
+**修复人员**：AI Assistant
 **问题报告人**：用户
 

@@ -109,7 +109,7 @@ const Component = {
   setup() {
     // 计算派生值
     const total = computed(() => state.price * state.quantity)
-    
+
     return () => h('div', [
       h('input', {
         type: 'number',
@@ -313,7 +313,7 @@ const form = reactive({ name: '' })
 export default {
   setup() {
     const count = ref(0)
-    
+
     return () => h('div', [
       h('button', { onClick: () => count.value++ }, '+1'),
       h('span', count.value)

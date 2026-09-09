@@ -1,7 +1,7 @@
 # 用户偏好设置与财务指标计算优化：TTM 计算、WebSocket 连接、UI 改进
 
-**日期**: 2025-10-26  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-26
+**作者**: zhitouagent 开发团队
 **标签**: `feature`, `bug-fix`, `optimization`, `ui`, `websocket`, `financial-metrics`
 
 ---
@@ -75,26 +75,26 @@ setAuthInfo(token: string, refreshToken: string, user: User) {
   this.token = token
   this.refreshToken = refreshToken
   this.user = user
-  
+
   // 同步用户偏好设置到 appStore
   this.syncUserPreferencesToAppStore()
 }
 
 syncUserPreferencesToAppStore() {
   const appStore = useAppStore()
-  
+
   if (this.user?.preferences) {
     // 同步主题设置
     if (this.user.preferences.theme) {
       appStore.theme = this.user.preferences.theme
       appStore.applyTheme()
     }
-    
+
     // 同步分析偏好
     if (this.user.preferences.analysis) {
       appStore.analysisPreferences = this.user.preferences.analysis
     }
-    
+
     // 同步通知设置
     if (this.user.preferences.notifications) {
       appStore.notificationSettings = this.user.preferences.notifications
@@ -111,10 +111,10 @@ async def migrate_user_preferences():
     """迁移用户偏好设置到数据库"""
     db = get_database()
     users_collection = db[settings.USERS_COLLECTION]
-    
+
     # 查找所有用户
     users = await users_collection.find({}).to_list(None)
-    
+
     for user in users:
         # 如果用户没有 preferences 字段，添加默认值
         if "preferences" not in user or not user["preferences"]:
@@ -129,7 +129,7 @@ async def migrate_user_preferences():
                     "browser_enabled": True
                 }
             }
-            
+
             await users_collection.update_one(
                 {"_id": user["_id"]},
                 {"$set": {"preferences": default_preferences}}
@@ -238,7 +238,7 @@ def _calculate_ttm_metrics(self, reports: List[Dict]) -> Optional[Dict]:
     if not annual_reports:
         return None
     latest_annual = annual_reports[0]
-    
+
     # 2. 找到最新季报
     quarterly_reports = [r for r in reports if r["report_type"] in ["一季报", "中报", "三季报"]]
     if not quarterly_reports:
@@ -247,41 +247,41 @@ def _calculate_ttm_metrics(self, reports: List[Dict]) -> Optional[Dict]:
             "revenue_ttm": latest_annual.get("revenue"),
             "net_profit_ttm": latest_annual.get("net_profit")
         }
-    
+
     latest_quarterly = quarterly_reports[0]
-    
+
     # 3. 找到去年同期季报
     latest_quarter = latest_quarterly["report_type"]
     latest_year = int(latest_quarterly["end_date"][:4])
     last_year = latest_year - 1
-    
+
     last_year_same_quarter = None
     for report in reports:
-        if (report["report_type"] == latest_quarter and 
+        if (report["report_type"] == latest_quarter and
             int(report["end_date"][:4]) == last_year):
             last_year_same_quarter = report
             break
-    
+
     if not last_year_same_quarter:
         # 如果没有去年同期数据，使用年报数据
         return {
             "revenue_ttm": latest_annual.get("revenue"),
             "net_profit_ttm": latest_annual.get("net_profit")
         }
-    
+
     # 4. 计算 TTM
     revenue_ttm = (
         latest_annual.get("revenue", 0) +
         latest_quarterly.get("revenue", 0) -
         last_year_same_quarter.get("revenue", 0)
     )
-    
+
     net_profit_ttm = (
         latest_annual.get("net_profit", 0) +
         latest_quarterly.get("net_profit", 0) -
         last_year_same_quarter.get("net_profit", 0)
     )
-    
+
     return {
         "revenue_ttm": revenue_ttm if revenue_ttm > 0 else None,
         "net_profit_ttm": net_profit_ttm if net_profit_ttm != 0 else None
@@ -330,22 +330,22 @@ def get_fundamental_data(self, code: str) -> Dict:
     """获取基本面数据"""
     # 1. 获取财报数据
     reports = self._get_financial_reports(code)
-    
+
     # 2. 计算 TTM 指标
     ttm_metrics = self._calculate_ttm_metrics(reports)
-    
+
     # 3. 获取实时股价和市值
     quote = self.get_realtime_quote(code)
     market_cap = quote.get("market_cap")  # 总市值（亿元）
-    
+
     # 4. 计算估值指标
     if ttm_metrics and market_cap:
         # 市销率 = 市值 / TTM营业收入
         ps = market_cap / ttm_metrics["revenue_ttm"] if ttm_metrics["revenue_ttm"] else None
-        
+
         # 市盈率 = 市值 / TTM净利润
         pe_ttm = market_cap / ttm_metrics["net_profit_ttm"] if ttm_metrics["net_profit_ttm"] else None
-    
+
     return {
         "ps": ps,
         "pe_ttm": pe_ttm,
@@ -389,13 +389,13 @@ async def get_data_source_config(self, source_name: str) -> Optional[Dict]:
     db_config = await self._get_from_database(source_name)
     if db_config and db_config.get("api_key"):
         return db_config
-    
+
     # 2. 降级使用环境变量
     env_key = f"{source_name.upper()}_TOKEN"
     env_value = os.getenv(env_key)
     if env_value:
         return {"api_key": env_value}
-    
+
     return None
 ```
 
@@ -408,14 +408,14 @@ class TushareAdapter:
         # 同步初始化，使用环境变量
         self.token = os.getenv("TUSHARE_TOKEN")
         self._provider = None
-    
+
     async def initialize(self):
         """异步初始化，从数据库读取配置"""
         config_service = ConfigService()
         config = await config_service.get_data_source_config("tushare")
         if config and config.get("api_key"):
             self.token = config["api_key"]
-        
+
         # 初始化 provider
         if self.token:
             self._provider = ts.pro_api(self.token)
@@ -471,7 +471,7 @@ const connectWebSocket = () => {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
   const wsUrl = `${wsProtocol}//${host}/api/ws/notifications?token=${token}`
-  
+
   ws = new WebSocket(wsUrl)
 }
 ```
@@ -555,13 +555,13 @@ html.dark {
   .page-container {
     background-color: var(--el-bg-color) !important;
   }
-  
+
   // 卡片背景
   .el-card {
     background-color: var(--el-bg-color) !important;
     color: var(--el-text-color-primary) !important;
   }
-  
+
   // 表单背景
   .el-form {
     background-color: transparent !important;
@@ -758,7 +758,7 @@ docker-compose -f docker-compose.hub.nginx.yml up -d
 
 ---
 
-**感谢使用 TradingAgents-CN！** 🚀
+**感谢使用 zhitouagent！** 🚀
 
-如有问题或建议，欢迎在 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues) 中反馈。
+如有问题或建议，欢迎在 [GitHub Issues](mailto:zh75067197@gmail.com) 中反馈。
 

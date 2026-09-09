@@ -3,7 +3,7 @@ Alpha Vantage 新闻数据提供者
 
 提供高质量的市场新闻和情感分析数据
 
-参考原版 TradingAgents 实现
+参考原版 zhitouagent 实现
 """
 
 from typing import Annotated, Dict, Any

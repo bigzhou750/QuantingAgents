@@ -273,7 +273,7 @@ logger.info(f"🔀 [条件判断] ✅ 无tool_calls，返回: Msg Clear Fundamen
 
 ---
 
-**创建日期**: 2025-10-11  
-**创建人员**: AI Assistant  
+**创建日期**: 2025-10-11
+**创建人员**: AI Assistant
 **状态**: ✅ 已完成
 

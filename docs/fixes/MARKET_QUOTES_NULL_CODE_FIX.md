@@ -4,7 +4,7 @@
 
 ### 错误信息
 ```
-E11000 duplicate key error collection: tradingagents.market_quotes 
+E11000 duplicate key error collection: tradingagents.market_quotes
 index: code_1 dup key: { code: null }
 ```
 
@@ -215,7 +215,7 @@ print(f"symbol: {record.get('symbol')}")  # 应该是 "603175"
 
 ### Q4: 我应该选择哪个后续方案？
 
-**A**: 
+**A**:
 - **如果系统稳定运行**：选择**选项 1**（保持双字段），风险最小
 - **如果准备重构**：选择**选项 2**（迁移到 symbol），数据结构更清晰
 

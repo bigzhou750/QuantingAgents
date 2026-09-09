@@ -19,7 +19,7 @@ def is_docker_environment() -> bool:
         # 检查/.dockerenv文件
         if os.path.exists('/.dockerenv'):
             return True
-        
+
         # 检查cgroup信息
         with open('/proc/1/cgroup', 'r') as f:
             content = f.read()
@@ -27,7 +27,7 @@ def is_docker_environment() -> bool:
                 return True
     except:
         pass
-    
+
     # 检查环境变量
     return os.environ.get('DOCKER_CONTAINER', '').lower() == 'true'
 
@@ -83,14 +83,14 @@ def test_docker_pdf_generation() -> bool:
     """测试Docker环境下的PDF生成"""
     if not is_docker_environment():
         return True
-    
+
     try:
         import pypandoc
 
-        
+
         # 设置虚拟显示器
         setup_xvfb_display()
-        
+
         # 测试内容
         test_html = """
         <html>
@@ -105,10 +105,10 @@ def test_docker_pdf_generation() -> bool:
         </body>
         </html>
         """
-        
+
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
             output_file = tmp.name
-        
+
         # Docker环境下使用简化的参数
         extra_args = [
             '--pdf-engine=wkhtmltopdf',
@@ -123,7 +123,7 @@ def test_docker_pdf_generation() -> bool:
             outputfile=output_file,
             extra_args=extra_args
         )
-        
+
         # 检查文件是否生成
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
             os.unlink(output_file)  # 清理测试文件
@@ -132,7 +132,7 @@ def test_docker_pdf_generation() -> bool:
         else:
             logger.error(f"❌ Docker PDF生成测试失败")
             return False
-            
+
     except Exception as e:
         logger.error(f"❌ Docker PDF测试失败: {e}")
         return False
@@ -163,41 +163,41 @@ def check_docker_pdf_dependencies():
     """检查Docker环境下PDF生成的依赖"""
     if not is_docker_environment():
         return True, "非Docker环境"
-    
+
     missing_deps = []
-    
+
     # 检查wkhtmltopdf
     try:
-        result = subprocess.run(['wkhtmltopdf', '--version'], 
+        result = subprocess.run(['wkhtmltopdf', '--version'],
                               capture_output=True, timeout=10)
         if result.returncode != 0:
             missing_deps.append('wkhtmltopdf')
     except:
         missing_deps.append('wkhtmltopdf')
-    
+
     # 检查Xvfb
     try:
-        result = subprocess.run(['Xvfb', '-help'], 
+        result = subprocess.run(['Xvfb', '-help'],
                               capture_output=True, timeout=10)
         if result.returncode not in [0, 1]:  # Xvfb -help 返回1是正常的
             missing_deps.append('xvfb')
     except:
         missing_deps.append('xvfb')
-    
+
     # 检查字体
     font_paths = [
         '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
         '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
         '/usr/share/fonts/truetype/liberation/'
     ]
-    
+
     font_found = any(os.path.exists(path) for path in font_paths)
     if not font_found:
         missing_deps.append('chinese-fonts')
-    
+
     if missing_deps:
         return False, f"缺少依赖: {', '.join(missing_deps)}"
-    
+
     return True, "所有依赖已安装"
 
 def get_docker_status_info():
@@ -208,7 +208,7 @@ def get_docker_status_info():
         'dependency_message': '',
         'pdf_test_ok': False
     }
-    
+
     if info['is_docker']:
         info['dependencies_ok'], info['dependency_message'] = check_docker_pdf_dependencies()
         if info['dependencies_ok']:
@@ -217,19 +217,19 @@ def get_docker_status_info():
         info['dependencies_ok'] = True
         info['dependency_message'] = '非Docker环境，使用标准配置'
         info['pdf_test_ok'] = True
-    
+
     return info
 
 if __name__ == "__main__":
     logger.info(f"🐳 Docker PDF适配器测试")
     logger.info(f"=")
-    
+
     status = get_docker_status_info()
-    
+
     logger.info(f"Docker环境: {'是' if status['is_docker'] else '否'}")
     logger.error(f"依赖检查: {'✅' if status['dependencies_ok'] else '❌'} {status['dependency_message']}")
     logger.error(f"PDF测试: {'✅' if status['pdf_test_ok'] else '❌'}")
-    
+
     if status['is_docker'] and status['dependencies_ok'] and status['pdf_test_ok']:
         logger.info(f"\n🎉 Docker PDF功能完全正常！")
     elif status['is_docker'] and not status['dependencies_ok']:

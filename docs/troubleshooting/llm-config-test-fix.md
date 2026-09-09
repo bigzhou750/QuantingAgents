@@ -1,7 +1,7 @@
 # 大模型配置测试功能修复说明
 
-> **修复版本**: v1.0.0-preview  
-> **修复日期**: 2025-10-21  
+> **修复版本**: v1.0.0-preview
+> **修复日期**: 2025-10-21
 > **问题编号**: #用户反馈
 
 ---
@@ -28,7 +28,7 @@ async def test_llm_config(self, llm_config: LLMConfig) -> Dict[str, Any]:
         # 这里应该实际调用LLM API进行测试
         # 目前返回模拟结果
         await asyncio.sleep(1)  # 模拟API调用  ❌ 只是 sleep，没有真正测试！
-        
+
         return {
             "success": True,  # ❌ 永远返回成功！
             "message": f"成功连接到 {provider_str} {llm_config.model_name}",
@@ -58,12 +58,12 @@ async def test_llm_config(self, llm_config: LLMConfig) -> Dict[str, Any]:
    ```python
    # 构建标准的 OpenAI 兼容 API 请求
    url = f"{api_base}/v1/chat/completions"
-   
+
    headers = {
        "Content-Type": "application/json",
        "Authorization": f"Bearer {api_key}"
    }
-   
+
    data = {
        "model": llm_config.model_name,
        "messages": [
@@ -77,7 +77,7 @@ async def test_llm_config(self, llm_config: LLMConfig) -> Dict[str, Any]:
 3. **发送HTTP请求并验证响应**：
    ```python
    response = requests.post(url, json=data, headers=headers, timeout=15)
-   
+
    if response.status_code == 200:
        # 验证响应内容
        result = response.json()
@@ -108,15 +108,15 @@ def _is_valid_api_key(self, api_key: Optional[str]) -> bool:
     """判断 API Key 是否有效"""
     if not api_key:
         return False
-    
+
     # 检查是否为截断的密钥（包含 '...'）
     if '...' in api_key:
         return False  # ❌ 截断的密钥无效
-    
+
     # 检查长度
     if len(api_key) <= 10:
         return False
-    
+
     return True
 ```
 
@@ -311,6 +311,6 @@ graph TD
 
 ---
 
-**文档版本**: v1.0  
+**文档版本**: v1.0
 **最后更新**: 2025-10-21
 

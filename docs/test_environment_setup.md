@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档介绍如何使用独立的测试环境来验证 TradingAgents-CN 的部署，而不影响现有的生产数据。
+本文档介绍如何使用独立的测试环境来验证 zhitouagent 的部署，而不影响现有的生产数据。
 
 ## 方案说明
 
@@ -302,7 +302,7 @@ docker logs -f tradingagents-redis-test
 
 ### Q4: 测试环境的数据存储在哪里？
 
-**A**: 
+**A**:
 - **数据卷**：Docker 管理的卷（`tradingagents_test_mongodb_data`, `tradingagents_test_redis_data`）
 - **日志文件**：`logs-test/` 目录
 - **配置文件**：`config-test/` 目录
@@ -331,10 +331,10 @@ docker volume rm tradingagents_test_redis_data
 
 使用独立测试环境的优势：
 
-✅ **安全**：不影响生产数据  
-✅ **灵活**：可以随时切换  
-✅ **完整**：完全模拟真实部署  
-✅ **易用**：一键启动和清理  
+✅ **安全**：不影响生产数据
+✅ **灵活**：可以随时切换
+✅ **完整**：完全模拟真实部署
+✅ **易用**：一键启动和清理
 
 推荐在以下场景使用测试环境：
 

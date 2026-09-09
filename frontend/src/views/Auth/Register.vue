@@ -2,7 +2,7 @@
   <div class="register-page">
     <el-card class="register-card" shadow="always">
       <div class="header">
-        <img src="/logo.svg" alt="TradingAgents-CN" class="logo" />
+        <img src="/logo.svg" alt="智能投研助手" class="logo" />
         <h1>创建账号</h1>
         <p>注册后开始使用独立的投资研究空间</p>
       </div>

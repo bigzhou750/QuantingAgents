@@ -1,4 +1,4 @@
-# TradingAgents-CN 生产环境 Docker Compose 覆盖文件
+# zhitouagent 生产环境 Docker Compose 覆盖文件
 # 用法: docker compose -f docker-compose.hub.nginx.yml -f deploy/docker-compose.prod.override.yml up -d
 #
 # 此文件覆盖安全相关配置，确保数据库和缓存不暴露到公网

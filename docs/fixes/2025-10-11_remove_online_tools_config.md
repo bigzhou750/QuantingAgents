@@ -9,7 +9,7 @@
 从日志中发现死循环模式：
 ```
 11:01:56 | 消息数量: 12 | 报告长度: 0 | tool_call[0]: get_china_stock_data
-11:02:15 | 消息数量: 14 | 报告长度: 0 | tool_call[0]: get_china_fundamentals  
+11:02:15 | 消息数量: 14 | 报告长度: 0 | tool_call[0]: get_china_fundamentals
 11:02:23 | 消息数量: 16 | 报告长度: 0 | tool_call[0]: get_china_stock_data
 11:02:23 | 消息数量: 17 | 报告长度: 0 | tool_call[0]: get_china_fundamentals
 11:02:50 | 消息数量: 18 | 报告长度: 0 | tool_call[0]: get_china_fundamentals
@@ -51,7 +51,7 @@ if is_china:
     # 1. 获取股票价格数据
     stock_data = get_china_stock_data_unified(ticker, start_date, end_date)
     result_data.append(f"## A股价格数据\n{stock_data}")
-    
+
     # 2. 获取基本面数据
     fundamentals_data = analyzer._generate_fundamentals_report(ticker, stock_data)
     result_data.append(f"## A股基本面数据\n{fundamentals_data}")
@@ -343,7 +343,7 @@ is_us = market_info['is_us']
 
 ---
 
-**创建日期**: 2025-10-11  
-**创建人员**: AI Assistant  
+**创建日期**: 2025-10-11
+**创建人员**: AI Assistant
 **状态**: ✅ 已完成
 

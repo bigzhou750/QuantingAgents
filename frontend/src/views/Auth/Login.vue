@@ -2,8 +2,8 @@
   <div class="login-page">
     <div class="login-container">
       <div class="login-header">
-        <img src="/logo.svg" alt="智投" class="logo" />
-        <h1 class="title">智投</h1>
+        <img src="/logo.svg" alt="智能投研助手" class="logo" />
+        <h1 class="title">智能投研助手</h1>
         <p class="subtitle">AI智能股票分析平台</p>
       </div>
 
@@ -68,7 +68,7 @@
       </el-card>
 
       <div class="login-footer">
-        <p>&copy; 2025 智投. All rights reserved.</p>
+        <p>&copy; 2026 智能投研助手 · zhitouagent</p>
         <p class=”disclaimer”>
           本平台AI分析结果仅供学习研究参考，不构成投资建议。市场有风险，投资需谨慎。
         </p>

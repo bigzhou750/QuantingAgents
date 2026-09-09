@@ -34,27 +34,27 @@
 {
   "_id": ObjectId("..."),
   "user_id": "user123",
-  
+
   // 多货币账户
   "cash": {
     "CNY": 1000000.0,    // 人民币账户（A股）
     "HKD": 0.0,          // 港币账户（港股）
     "USD": 0.0           // 美元账户（美股）
   },
-  
+
   // 已实现盈亏（按货币）
   "realized_pnl": {
     "CNY": 0.0,
     "HKD": 0.0,
     "USD": 0.0
   },
-  
+
   // 账户设置
   "settings": {
     "auto_currency_conversion": false,  // 是否自动货币转换
     "default_market": "CN"              // 默认市场
   },
-  
+
   "created_at": "2024-01-01T00:00:00Z",
   "updated_at": "2024-01-01T00:00:00Z"
 }
@@ -450,23 +450,23 @@ async def _get_last_price(code: str, market: str) -> Optional[float]:
 def calculate_commission(market: str, side: str, amount: float, rules: dict) -> float:
     """计算手续费"""
     commission = 0.0
-    
+
     # 佣金
     comm_rate = rules["commission"]["rate"]
     comm_min = rules["commission"]["min"]
     commission += max(amount * comm_rate, comm_min)
-    
+
     # 印花税（仅卖出）
     if side == "sell" and "stamp_duty" in rules["commission"]:
         commission += amount * rules["commission"]["stamp_duty"]
-    
+
     # 其他费用（港股）
     if market == "HK":
         if "transaction_levy" in rules["commission"]:
             commission += amount * rules["commission"]["transaction_levy"]
         if "trading_fee" in rules["commission"]:
             commission += amount * rules["commission"]["trading_fee"]
-    
+
     return round(commission, 2)
 ```
 
@@ -477,12 +477,12 @@ async def get_available_quantity(user_id: str, code: str, market: str) -> int:
     """获取可用数量（考虑T+1）"""
     db = get_mongo_db()
     pos = await db["paper_positions"].find_one({"user_id": user_id, "code": code})
-    
+
     if not pos:
         return 0
-    
+
     total_qty = pos.get("quantity", 0)
-    
+
     # A股T+1：今天买入的不能卖出
     if market == "CN":
         today = datetime.utcnow().date().isoformat()
@@ -495,10 +495,10 @@ async def get_available_quantity(user_id: str, code: str, market: str) -> int:
             }},
             {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
         ]).to_list(1)
-        
+
         today_buy_qty = today_buy[0]["total"] if today_buy else 0
         return total_qty - today_buy_qty
-    
+
     # 港股/美股T+0：全部可用
     return total_qty
 ```
@@ -514,7 +514,7 @@ async def migrate_accounts():
     """迁移账户表：单一现金 -> 多货币"""
     db = get_mongo_db()
     accounts = await db["paper_accounts"].find({}).to_list(None)
-    
+
     for acc in accounts:
         # 将旧的 cash 字段转换为多货币格式
         old_cash = acc.get("cash", 0.0)
@@ -523,14 +523,14 @@ async def migrate_accounts():
             "HKD": 0.0,
             "USD": 0.0
         }
-        
+
         old_pnl = acc.get("realized_pnl", 0.0)
         new_pnl = {
             "CNY": old_pnl,
             "HKD": 0.0,
             "USD": 0.0
         }
-        
+
         await db["paper_accounts"].update_one(
             {"_id": acc["_id"]},
             {"$set": {
@@ -547,7 +547,7 @@ async def migrate_positions():
     """迁移持仓表：添加市场和货币字段"""
     db = get_mongo_db()
     positions = await db["paper_positions"].find({}).to_list(None)
-    
+
     for pos in positions:
         code = pos.get("code")
         # 假设旧数据都是A股

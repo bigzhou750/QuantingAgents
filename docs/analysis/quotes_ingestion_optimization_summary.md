@@ -52,7 +52,7 @@ QUOTES_INGEST_INTERVAL_SECONDS: int = Field(
 def get_realtime_quotes(self, source: str = "eastmoney"):
     """
     获取全市场实时快照
-    
+
     Args:
         source: "eastmoney"（东方财富）或 "sina"（新浪财经）
     """
@@ -82,7 +82,7 @@ def _get_next_source(self) -> Tuple[str, Optional[str]]:
     """获取下一个数据源（轮换机制）"""
     current_source = self._rotation_sources[self._rotation_index]
     self._rotation_index = (self._rotation_index + 1) % len(self._rotation_sources)
-    
+
     if current_source == "tushare":
         return "tushare", None
     elif current_source == "akshare_eastmoney":
@@ -104,20 +104,20 @@ def _can_call_tushare(self) -> bool:
     """判断是否可以调用 Tushare rt_k 接口"""
     if self._tushare_has_premium:
         return True  # 付费用户不限制
-    
+
     # 免费用户：检查每小时调用次数
     now = datetime.now(self.tz)
     one_hour_ago = now - timedelta(hours=1)
-    
+
     # 清理1小时前的记录
     while self._tushare_call_times and self._tushare_call_times[0] < one_hour_ago:
         self._tushare_call_times.popleft()
-    
+
     # 检查是否超过限制
     if len(self._tushare_call_times) >= self._tushare_hourly_limit:
         logger.warning("⚠️ Tushare rt_k 接口已达到每小时调用限制，跳过本次调用")
         return False
-    
+
     return True
 ```
 
@@ -135,7 +135,7 @@ def _check_tushare_permission(self) -> bool:
     try:
         adapter = TushareAdapter()
         df = adapter._provider.api.rt_k(ts_code='000001.SZ')
-        
+
         if df is not None and not getattr(df, 'empty', True):
             logger.info("✅ 检测到 Tushare rt_k 接口权限（付费用户）")
             self._tushare_has_premium = True
@@ -145,7 +145,7 @@ def _check_tushare_permission(self) -> bool:
     except Exception as e:
         if "权限" in str(e) or "permission" in str(e):
             self._tushare_has_premium = False
-    
+
     return self._tushare_has_premium
 ```
 

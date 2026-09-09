@@ -10,8 +10,8 @@
 
 ```bash
 # 1. 克隆预览分支
-git clone -b feature/deepseek-v3-integration https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone -b feature/deepseek-v3-integration mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 2. 创建虚拟环境
 python -m venv env
@@ -118,7 +118,7 @@ print('分析结果:', result)
 
 **测试股票建议**：
 - `000001` - 平安银行
-- `600519` - 贵州茅台  
+- `600519` - 贵州茅台
 - `000858` - 五粮液
 - `002594` - 比亚迪
 - `300750` - 宁德时代
@@ -299,7 +299,7 @@ print('数据获取结果:', data[:200] if data else '获取失败')
 
 ## 📞 获取帮助
 
-- **GitHub Issues**：https://github.com/hsliuping/TradingAgents-CN/issues
+- **GitHub Issues**：mailto:zh75067197@gmail.com
 - **测试讨论**：GitHub Discussions
 - **实时反馈**：在Issue中@hsliuping
 

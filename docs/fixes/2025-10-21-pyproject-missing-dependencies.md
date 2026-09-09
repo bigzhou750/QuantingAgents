@@ -1,8 +1,8 @@
 # pyproject.toml 缺失依赖包修复
 
-**日期**: 2025-10-21  
-**版本**: v0.1.13-preview (main 分支)  
-**类型**: Bug Fix  
+**日期**: 2025-10-21
+**版本**: v0.1.13-preview (main 分支)
+**类型**: Bug Fix
 **优先级**: High
 
 ## 问题描述
@@ -59,7 +59,7 @@
 ```toml
 dependencies = [
     # ... 原有依赖 ...
-    
+
     # 🆕 新增依赖
     "beautifulsoup4>=4.12.0",        # HTML 解析
     "langchain>=0.3.0",              # LangChain 核心库

@@ -24,7 +24,7 @@ def get_realtime_quotes_with_fallback(self):
     1. Tushare (优先级 1)
     2. AKShare (优先级 2)
     3. BaoStock (优先级 3，但不支持实时行情)
-    
+
     返回首个成功的结果
     """
     available_adapters = self.get_available_adapters()

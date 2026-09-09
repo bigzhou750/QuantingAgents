@@ -880,7 +880,7 @@ class PortfolioService:
         """
         url = "https://api.frankfurter.app/latest?from=USD&to=CNY,HKD"
         request = urllib.request.Request(
-            url, headers={"User-Agent": "Vibe-Trading/portfolio"}
+            url, headers={"User-Agent": "zhitouagent/portfolio"}
         )
         with urllib.request.urlopen(
             request, timeout=8

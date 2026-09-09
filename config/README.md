@@ -1,6 +1,6 @@
 # Config 目录
 
-此目录用于存储TradingAgents的配置文件和使用统计数据。
+此目录用于存储zhitouagent的配置文件和使用统计数据。
 
 ## 文件说明
 

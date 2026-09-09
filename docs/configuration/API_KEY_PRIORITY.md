@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-本文档说明 TradingAgents-CN 系统中 API Key 的配置优先级和验证逻辑。
+本文档说明 zhitouagent 系统中 API Key 的配置优先级和验证逻辑。
 
 ## 🎯 配置来源
 
@@ -170,18 +170,18 @@ api_key = "AIzaSyD1234567890"
 def _is_valid_api_key(self, api_key: Optional[str]) -> bool:
     if not api_key:
         return False
-    
+
     api_key = api_key.strip()
-    
+
     if not api_key:
         return False
-    
+
     if api_key.startswith('your_') or api_key.startswith('your-'):
         return False
-    
+
     if len(api_key) <= 10:
         return False
-    
+
     return True
 ```
 
@@ -197,13 +197,13 @@ def _get_env_api_key(self, provider_name: str) -> Optional[str]:
         "dashscope": "DASHSCOPE_API_KEY",
         # ...
     }
-    
+
     env_var = env_key_mapping.get(provider_name)
     if env_var:
         api_key = os.getenv(env_var)
         if self._is_valid_api_key(api_key):
             return api_key
-    
+
     return None
 ```
 
@@ -215,13 +215,13 @@ def _get_env_api_key(self, provider_name: str) -> Optional[str]:
 async def get_llm_providers(self) -> List[LLMProvider]:
     providers_data = await providers_collection.find().to_list(length=None)
     providers = []
-    
+
     for provider_data in providers_data:
         provider = LLMProvider(**provider_data)
-        
+
         # 判断数据库中的 Key 是否有效
         db_key_valid = self._is_valid_api_key(provider.api_key)
-        
+
         if not db_key_valid:
             # 尝试从环境变量获取
             env_key = self._get_env_api_key(provider.name)
@@ -230,9 +230,9 @@ async def get_llm_providers(self) -> List[LLMProvider]:
                 provider.extra_config["source"] = "environment"
         else:
             provider.extra_config["source"] = "database"
-        
+
         providers.append(provider)
-    
+
     return providers
 ```
 

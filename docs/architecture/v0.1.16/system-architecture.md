@@ -1,8 +1,8 @@
-# TradingAgents-CN v0.1.16 系统架构设计
+# zhitouagent v0.1.16 系统架构设计
 
 ## 架构概览
 
-TradingAgents-CN v0.1.16 采用现代化的前后端分离架构，引入任务队列系统和选股功能，实现高并发、可扩展的股票分析平台。
+zhitouagent v0.1.16 采用现代化的前后端分离架构，引入任务队列系统和选股功能，实现高并发、可扩展的股票分析平台。
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -170,13 +170,13 @@ async def worker_lifecycle():
             if not task:
                 await asyncio.sleep(1)
                 continue
-            
+
             # 2. 执行任务
             await execute_analysis_task(task)
-            
+
             # 3. 确认完成
             await queue_service.ack(task.id)
-            
+
         except Exception as e:
             # 4. 错误处理
             await handle_error(task, e)
@@ -191,7 +191,7 @@ sequenceDiagram
     participant F as 前端
     participant A as API
     participant D as 数据源
-    
+
     U->>F: 设置筛选条件
     F->>A: POST /api/screening/filter
     A->>D: 查询股票数据
@@ -210,13 +210,13 @@ sequenceDiagram
     participant A as API
     participant Q as 队列
     participant W as Worker
-    
+
     U->>F: 提交批量分析
     F->>A: POST /api/analysis/batch
     A->>Q: 创建批次任务
     Q-->>A: 返回批次ID
     A-->>F: 返回批次信息
-    
+
     loop 每个股票任务
         W->>Q: 拉取任务
         W->>W: 执行分析
@@ -234,7 +234,7 @@ sequenceDiagram
     participant A as API
     participant R as Redis
     participant W as Worker
-    
+
     F->>A: 建立SSE连接
     W->>R: 更新任务进度
     R->>A: 进度变更通知
@@ -397,7 +397,7 @@ HASH screening:{cache_key}
 
 ---
 
-**文档版本**: v1.0  
-**创建日期**: 2025-08-17  
-**最后更新**: 2025-08-17  
-**维护人员**: TradingAgents-CN开发团队
+**文档版本**: v1.0
+**创建日期**: 2025-08-17
+**最后更新**: 2025-08-17
+**维护人员**: zhitouagent开发团队

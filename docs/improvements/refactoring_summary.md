@@ -13,7 +13,7 @@
 
 1. **`app/services/data_source_adapters.py`** (单文件，754行)
    - 使用者：`app/routers/multi_source_sync.py`、`app/services/multi_source_basics_sync_service.py`
-   
+
 2. **`app/services/data_sources/`** (模块化目录)
    - 使用者：`app/routers/stocks.py`、`app/services/quotes_ingestion_service.py`
 

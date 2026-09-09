@@ -1,8 +1,8 @@
-# TradingAgents vs TradingAgents-CN 分析报告对比总结
+# TradingAgents vs zhitouagent 分析报告对比总结
 
 ## 📋 执行摘要
 
-**结论**: ✅ TradingAgents-CN 的分析报告功能**已完整实现**，与原版 TradingAgents 保持一致，并在某些方面有所改进。
+**结论**: ✅ zhitouagent 的分析报告功能**已完整实现**，与原版 TradingAgents 保持一致，并在某些方面有所改进。
 
 **不需要任何修复或补充！**
 
@@ -63,7 +63,7 @@ self.report_sections = {
 - 动态从 `risk_debate_state` 提取 `risky_history`, `safe_history`, `neutral_history`, `judge_decision`
 - 在CLI界面实时展示，不保存独立的 debate state 文件
 
-### TradingAgents-CN (Web)
+### zhitouagent (Web)
 
 #### 报告定义
 **文件**: `web/utils/report_exporter.py` 第675-722行
@@ -270,15 +270,15 @@ def _add_team_decision_reports(self, md_content: str, state: Dict[str, Any]) -> 
     if 'investment_debate_state' in state and state['investment_debate_state']:
         md_content += "\n---\n\n## 🔬 研究团队决策\n\n"
         debate_state = state['investment_debate_state']
-        
+
         if debate_state.get('bull_history'):
             md_content += "### 📈 多头研究员分析\n\n"
             md_content += f"{debate_state['bull_history']}\n\n"
-        
+
         if debate_state.get('bear_history'):
             md_content += "### 📉 空头研究员分析\n\n"
             md_content += f"{debate_state['bear_history']}\n\n"
-        
+
         if debate_state.get('judge_decision'):
             md_content += "### 🎯 研究经理综合决策\n\n"
             md_content += f"{debate_state['judge_decision']}\n\n"
@@ -287,7 +287,7 @@ def _add_team_decision_reports(self, md_content: str, state: Dict[str, Any]) -> 
     if 'risk_debate_state' in state and state['risk_debate_state']:
         md_content += "\n---\n\n## ⚖️ 风险管理团队决策\n\n"
         risk_state = state['risk_debate_state']
-        
+
         # ... 类似的提取逻辑
 ```
 
@@ -308,7 +308,7 @@ def _add_team_decision_reports(self, md_content: str, state: Dict[str, Any]) -> 
 
 ## 🎉 最终结论
 
-**TradingAgents-CN 的分析报告功能完全达标，甚至超越原版！**
+**zhitouagent 的分析报告功能完全达标，甚至超越原版！**
 
 ### 核心优势
 1. ✅ **功能完整**: 所有13个报告模块全部实现

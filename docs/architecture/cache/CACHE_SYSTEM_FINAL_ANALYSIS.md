@@ -20,7 +20,7 @@
 from tradingagents.dataflows.integrated_cache import get_cache
 ```
 
-**功能**: 
+**功能**:
 - 集成缓存管理器
 - 提供统一的 `get_cache()` 接口
 - 自动选择最佳缓存策略

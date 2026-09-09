@@ -15,18 +15,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import NetworkStatus from '@/components/NetworkStatus.vue'
 import axios from 'axios'
 import { configApi } from '@/api/config'
-
-// 需要缓存的组件
-const keepAliveComponents = computed(() => [
-  'Dashboard',
-  'StockScreening',
-  'AnalysisHistory'
-])
 
 // 配置向导
 const showConfigWizard = ref(false)
@@ -147,7 +140,7 @@ const handleWizardComplete = async (data: any) => {
     localStorage.setItem('config_wizard_completed', 'true')
 
     ElMessage.success({
-      message: '欢迎使用智投',
+      message: '欢迎使用智能投研助手',
       duration: 3000
     })
   } catch (error) {

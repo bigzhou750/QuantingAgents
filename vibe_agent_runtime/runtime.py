@@ -479,7 +479,7 @@ class EmbeddedAgentRuntime:
             forbidden_roots.append(evolution_artifact_runtime_root())
         except Exception:
             pass
-        forbidden_roots.append(Path.home() / ".vibe-trading")
+        forbidden_roots.append(Path.home() / ".zhitouagent")
 
         violations: list[str] = []
         resolved = root.resolve()

@@ -65,8 +65,8 @@ TUSHARE_TOKEN=your_tushare_token      # Tushare数据
 ### 1. 克隆项目
 ```bash
 # 克隆中文增强版
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 ```
 
 ### 2. 创建虚拟环境
@@ -182,11 +182,11 @@ config = {
     "llm_provider": "openai",           # 或 "anthropic", "google"
     "deep_think_llm": "gpt-4o-mini",    # 深度思考模型
     "quick_think_llm": "gpt-4o-mini",   # 快速思考模型
-    
+
     # 辩论设置
     "max_debate_rounds": 1,             # 辩论轮次 (1-5)
     "max_risk_discuss_rounds": 1,       # 风险讨论轮次
-    
+
     # 数据设置
     "online_tools": True,               # 使用在线数据
 }
@@ -219,51 +219,51 @@ import json
 
 def analyze_stock(symbol, date):
     """分析指定股票"""
-    
+
     # 配置
     config = DEFAULT_CONFIG.copy()
     config["deep_think_llm"] = "gpt-4o-mini"
     config["quick_think_llm"] = "gpt-4o-mini"
     config["max_debate_rounds"] = 2
     config["online_tools"] = True
-    
+
     # 创建分析器
     ta = TradingAgentsGraph(
         selected_analysts=["market", "fundamentals", "news", "social"],
         debug=True,
         config=config
     )
-    
+
     print(f"正在分析 {symbol} ({date})...")
-    
+
     try:
         # 执行分析
         state, decision = ta.propagate(symbol, date)
-        
+
         # 输出详细结果
         print("\n" + "="*50)
         print(f"股票: {symbol}")
         print(f"日期: {date}")
         print("="*50)
-        
+
         print(f"\n📊 最终决策:")
         print(f"  动作: {decision.get('action', 'hold').upper()}")
         print(f"  数量: {decision.get('quantity', 0)}")
         print(f"  置信度: {decision.get('confidence', 0.5):.1%}")
         print(f"  风险评分: {decision.get('risk_score', 0.5):.1%}")
-        
+
         print(f"\n💭 推理过程:")
         print(f"  {decision.get('reasoning', 'N/A')}")
-        
+
         # 分析师报告摘要
         if hasattr(state, 'analyst_reports'):
             print(f"\n📈 分析师报告摘要:")
             for analyst, report in state.analyst_reports.items():
                 score = report.get('overall_score', report.get('score', 0.5))
                 print(f"  {analyst}: {score:.1%}")
-        
+
         return decision
-        
+
     except Exception as e:
         print(f"❌ 分析失败: {e}")
         return None
@@ -272,7 +272,7 @@ def analyze_stock(symbol, date):
 if __name__ == "__main__":
     # 分析苹果公司股票
     result = analyze_stock("AAPL", "2024-01-15")
-    
+
     if result:
         print("\n✅ 分析完成!")
     else:
@@ -343,7 +343,7 @@ config["online_tools"] = False  # 使用缓存数据而不是实时数据
 
 如果遇到问题，可以：
 - 查看 [常见问题](../faq/faq.md)
-- 访问 [GitHub Issues](https://github.com/TauricResearch/TradingAgents/issues)
+- 访问 [GitHub Issues](mailto:zh75067197@gmail.com)
 - 加入 [Discord 社区](https://discord.com/invite/hk9PGKShPK)
 - 查看 [故障排除指南](../faq/troubleshooting.md)
 

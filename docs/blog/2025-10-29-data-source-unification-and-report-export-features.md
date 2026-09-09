@@ -1,7 +1,7 @@
 # 数据源统一与报告导出功能：完善系统数据一致性与用户体验
 
-**日期**: 2025-10-29  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-29
+**作者**: zhitouagent 开发团队
 **标签**: `数据源` `报告导出` `数据一致性` `用户体验` `系统优化`
 
 ---
@@ -52,7 +52,7 @@ async def search_stocks(q: str, limit: int = 10):
     configs = await UnifiedConfigManager.get_data_source_configs_async()
     # 按优先级排序
     sorted_configs = sorted(configs, key=lambda x: x.priority, reverse=True)
-    
+
     # 只查询优先级最高的数据源
     if sorted_configs:
         primary_source = sorted_configs[0].source
@@ -122,13 +122,13 @@ if not record.get('source'):
 # app/utils/report_exporter.py
 class ReportExporter:
     """报告导出工具类"""
-    
+
     @staticmethod
     async def export_markdown(report: Report) -> bytes:
         """导出为 Markdown 格式"""
         content = f"# {report.title}\n\n{report.content}"
         return content.encode('utf-8')
-    
+
     @staticmethod
     async def export_json(report: Report) -> bytes:
         """导出为 JSON 格式"""
@@ -140,7 +140,7 @@ class ReportExporter:
             "model": report.model
         }
         return json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
-    
+
     @staticmethod
     async def export_docx(report: Report) -> bytes:
         """导出为 DOCX 格式"""
@@ -152,7 +152,7 @@ class ReportExporter:
             capture_output=True
         ).stdout
         return docx_content
-    
+
     @staticmethod
     async def export_pdf(report: Report) -> bytes:
         """导出为 PDF 格式"""
@@ -174,7 +174,7 @@ class ReportExporter:
 async def download_report(report_id: str, format: str = "markdown"):
     """下载报告，支持多种格式"""
     report = await get_report(report_id)
-    
+
     exporter = ReportExporter()
     if format == "markdown":
         content = await exporter.export_markdown(report)
@@ -192,7 +192,7 @@ async def download_report(report_id: str, format: str = "markdown"):
         content = await exporter.export_pdf(report)
         media_type = "application/pdf"
         filename = f"{report.title}.pdf"
-    
+
     return StreamingResponse(
         iter([content]),
         media_type=media_type,
@@ -788,7 +788,7 @@ const syncRequest = axios.create({
 
 ---
 
-**感谢使用 TradingAgents-CN！** 🚀
+**感谢使用 zhitouagent！** 🚀
 
-如有问题或建议，欢迎在 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues) 中反馈。
+如有问题或建议，欢迎在 [GitHub Issues](mailto:zh75067197@gmail.com) 中反馈。
 

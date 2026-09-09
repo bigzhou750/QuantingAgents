@@ -104,7 +104,7 @@
 // 技术指标分类扩展
 "indicators": {
   "trend": {...},      // 趋势指标
-  "oscillator": {...}, // 震荡指标  
+  "oscillator": {...}, // 震荡指标
   "channel": {...},    // 通道指标
   "volume": {...},     // 成交量指标
   "custom": {...}      // 自定义指标

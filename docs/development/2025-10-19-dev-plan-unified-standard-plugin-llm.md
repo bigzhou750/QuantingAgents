@@ -1,8 +1,8 @@
 # 开发计划：统一数据标准、插件体系、提示词策略化（基于 v1.0.0-preview）
 
-日期：2025-10-19  
-基线分支：`v1.0.0-preview`  
-新开发分支：`feature/unified-standard-plugin-llm-v1`  
+日期：2025-10-19
+基线分支：`v1.0.0-preview`
+新开发分支：`feature/unified-standard-plugin-llm-v1`
 范围：数据一致性（PIT）、插件架构、LLM 提示策略化与最小后端接口
 
 ## 1. 目标与可交付物（Deliverables）

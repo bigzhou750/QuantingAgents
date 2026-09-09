@@ -84,10 +84,10 @@
 // 批量获取股票名称
 async function fetchStockNames(items: any[]) {
   if (!items || items.length === 0) return
-  
+
   // 获取所有唯一的股票代码
   const codes = [...new Set(items.map(item => item.code).filter(Boolean))]
-  
+
   // 并行获取所有股票的名称
   await Promise.all(
     codes.map(async (code) => {
@@ -385,13 +385,13 @@ await Promise.all(
 # app/routers/paper.py
 async def get_positions():
     positions = await db["paper_positions"].find(...).to_list(None)
-    
+
     for p in positions:
         code6 = p.get("code")
         # 从 stock_basic_info 获取股票名称
         stock_info = await db["stock_basic_info"].find_one({"code": code6})
         p["name"] = stock_info.get("name") if stock_info else None
-    
+
     return positions
 ```
 
@@ -413,14 +413,14 @@ async function getStockName(code: string): Promise<string> {
   if (stockNameCache.has(code)) {
     return stockNameCache.get(code)!
   }
-  
+
   // 获取名称
   const res = await stocksApi.getQuote(code)
   const name = res.data?.name || code
-  
+
   // 存入缓存
   stockNameCache.set(code, name)
-  
+
   return name
 }
 ```

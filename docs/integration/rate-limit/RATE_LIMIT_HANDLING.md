@@ -39,7 +39,7 @@ async def get_stock_quotes(self, symbol: str) -> Optional[Dict[str, Any]]:
         if self._is_rate_limit_error(str(e)):
             self.logger.error(f"❌ 获取实时行情失败 symbol={symbol}: {e}")
             raise  # 抛出限流错误，让上层处理
-        
+
         self.logger.error(f"❌ 获取实时行情失败 symbol={symbol}: {e}")
         return None
 ```
@@ -77,11 +77,11 @@ async def _process_quotes_batch(self, batch: List[str]) -> Dict[str, Any]:
         "errors": [],
         "rate_limit_hit": False  # 新增：限流标记
     }
-    
+
     # 并发获取行情数据
     tasks = [self._get_and_save_quotes(symbol) for symbol in batch]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     # 统计结果
     for i, result in enumerate(results):
         if isinstance(result, Exception):
@@ -92,13 +92,13 @@ async def _process_quotes_batch(self, batch: List[str]) -> Dict[str, Any]:
                 "error": error_msg,
                 "context": "_process_quotes_batch"
             })
-            
+
             # 检测 API 限流错误
             if self._is_rate_limit_error(error_msg):
                 batch_stats["rate_limit_hit"] = True
                 logger.warning(f"⚠️ 检测到 API 限流错误: {error_msg}")
         # ... 其他处理 ...
-    
+
     return batch_stats
 ```
 
@@ -117,20 +117,20 @@ async def sync_realtime_quotes(self, symbols: List[str] = None) -> Dict[str, Any
         "errors": [],
         "stopped_by_rate_limit": False  # 新增：限流停止标记
     }
-    
+
     try:
         # ... 获取股票列表 ...
-        
+
         # 批量处理
         for i in range(0, len(symbols), self.batch_size):
             batch = symbols[i:i + self.batch_size]
             batch_stats = await self._process_quotes_batch(batch)
-            
+
             # 更新统计
             stats["success_count"] += batch_stats["success_count"]
             stats["error_count"] += batch_stats["error_count"]
             stats["errors"].extend(batch_stats["errors"])
-            
+
             # 检查是否遇到 API 限流错误
             if batch_stats.get("rate_limit_hit"):
                 stats["stopped_by_rate_limit"] = True
@@ -138,13 +138,13 @@ async def sync_realtime_quotes(self, symbols: List[str] = None) -> Dict[str, Any
                 logger.warning(f"📊 已处理: {min(i + self.batch_size, len(symbols))}/{len(symbols)} "
                              f"(成功: {stats['success_count']}, 错误: {stats['error_count']})")
                 break  # 立即停止循环
-            
+
             # ... 进度日志和延迟 ...
-        
+
         # 完成统计
         stats["end_time"] = datetime.utcnow()
         stats["duration"] = (stats["end_time"] - stats["start_time"]).total_seconds()
-        
+
         if stats["stopped_by_rate_limit"]:
             logger.warning(f"⚠️ 实时行情同步因 API 限流而停止: "
                          f"总计 {stats['total_processed']} 只, "
@@ -153,7 +153,7 @@ async def sync_realtime_quotes(self, symbols: List[str] = None) -> Dict[str, Any
                          f"耗时 {stats['duration']:.2f} 秒")
         else:
             logger.info(f"✅ 实时行情同步完成: ...")
-        
+
         return stats
     except Exception as e:
         logger.error(f"❌ 实时行情同步失败: {e}")

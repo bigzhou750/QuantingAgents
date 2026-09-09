@@ -28,7 +28,7 @@ async def health():
             "status": "ok",
             "version": get_version(),
             "timestamp": int(time.time()),
-            "service": "TradingAgents-CN API"
+            "service": "zhitouagent API"
         },
         "message": "服务运行正常"
     }

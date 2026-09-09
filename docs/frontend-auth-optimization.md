@@ -39,7 +39,7 @@ instance.interceptors.response.use(
           ElMessage.error(data.message || '登录已过期，请重新登录')
           return Promise.reject(new Error(data.message || '认证失败'))
         }
-        
+
         // 其他业务错误
         if (!config.skipErrorHandler) {
           handleBusinessError(data)
@@ -93,7 +93,7 @@ const handleBusinessError = (data: ApiResponse) => {
 ```typescript
 app.config.errorHandler = (err, vm, info) => {
   console.error('全局错误:', err, info)
-  
+
   // 检查是否是认证错误
   if (err && typeof err === 'object') {
     const error = err as any

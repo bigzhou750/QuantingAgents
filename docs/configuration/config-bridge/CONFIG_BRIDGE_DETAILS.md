@@ -160,14 +160,14 @@ os.environ['CURRENCY_PREFERENCE'] = "CNY"
 async def lifespan(app: FastAPI):
     # 初始化数据库
     await init_db()
-    
+
     # 🔧 配置桥接
     try:
         from app.core.config_bridge import bridge_config_to_env
         bridge_config_to_env()
     except Exception as e:
         logger.warning(f"⚠️  配置桥接失败: {e}")
-    
+
     yield
 ```
 
@@ -285,12 +285,12 @@ def get_number(env_var: str, system_key: Optional[str], default: float | int, ca
         eff = _get_system_settings_sync()
         if isinstance(eff, dict) and system_key in eff:
             return _coerce(eff.get(system_key), caster, default)
-    
+
     # 2) 环境变量
     env_val = os.getenv(env_var)
     if env_val is not None and str(env_val).strip() != "":
         return _coerce(env_val, caster, default)
-    
+
     # 3) 代码默认
     return default
 ```

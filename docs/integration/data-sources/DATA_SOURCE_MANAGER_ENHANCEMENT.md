@@ -56,7 +56,7 @@ def get_fundamentals_data(self, symbol: str) -> str:
     优先级：MongoDB → Tushare → AKShare → 生成分析
     """
     logger.info(f"📊 [数据来源: {self.current_source.value}] 开始获取基本面数据: {symbol}")
-    
+
     try:
         # 根据数据源调用相应的获取方法
         if self.current_source == ChinaDataSource.MONGODB:
@@ -75,10 +75,10 @@ def _get_mongodb_fundamentals(self, symbol: str) -> str:
     """从 MongoDB 获取财务数据"""
     from tradingagents.dataflows.enhanced_data_adapter import get_enhanced_data_adapter
     adapter = get_enhanced_data_adapter()
-    
+
     # 从 MongoDB 获取财务数据
     financial_data = adapter.get_financial_data(symbol)
-    
+
     if financial_data:
         logger.info(f"✅ [数据来源: MongoDB-财务数据] 成功获取: {symbol}")
         return self._format_financial_data(financial_data)
@@ -91,7 +91,7 @@ def _get_tushare_fundamentals(self, symbol: str) -> str:
     from .tushare_adapter import get_tushare_adapter
     adapter = get_tushare_adapter()
     fundamentals = adapter.get_fundamentals(symbol)
-    
+
     if fundamentals:
         logger.info(f"✅ [数据来源: Tushare-基本面] 成功获取: {symbol}")
         return fundamentals
@@ -105,24 +105,24 @@ def _try_fallback_fundamentals(self, symbol: str) -> str:
         ChinaDataSource.TUSHARE,
         ChinaDataSource.AKSHARE,
     ]
-    
+
     for source in fallback_order:
         if source != self.current_source and source in self.available_sources:
             try:
                 logger.info(f"🔄 尝试备用数据源获取基本面: {source.value}")
-                
+
                 if source == ChinaDataSource.TUSHARE:
                     result = self._get_tushare_fundamentals(symbol)
                 elif source == ChinaDataSource.AKSHARE:
                     result = self._get_akshare_fundamentals(symbol)
-                
+
                 if result and "❌" not in result:
                     logger.info(f"✅ [数据来源: 备用数据源] 降级成功: {source.value}")
                     return result
             except Exception as e:
                 logger.error(f"❌ 备用数据源{source.value}失败: {e}")
                 continue
-    
+
     # 所有数据源都失败，生成基本分析
     logger.warning(f"⚠️ [数据来源: 生成分析] 所有数据源失败，生成基本分析: {symbol}")
     return self._generate_fundamentals_analysis(symbol)
@@ -138,7 +138,7 @@ def _try_fallback_fundamentals(self, symbol: str) -> str:
 def get_stock_info(self, symbol: str) -> Dict:
     """获取股票基本信息，统一使用数据源管理"""
     logger.info(f"📊 [数据来源: {self.current_source.value}] 开始获取股票信息: {symbol}")
-    
+
     try:
         # 根据数据源调用相应的获取方法
         if self.current_source == ChinaDataSource.MONGODB:
@@ -157,7 +157,7 @@ def _get_mongodb_stock_info(self, symbol: str) -> Dict:
     """从 MongoDB 获取股票基本信息"""
     from .app_cache_adapter import get_basics_from_cache
     doc = get_basics_from_cache(symbol)
-    
+
     if doc:
         logger.info(f"✅ [数据来源: MongoDB-stock_basic_info] 缓存命中: {symbol}")
         return self._format_stock_info(doc)
@@ -171,15 +171,15 @@ def _get_mongodb_stock_info(self, symbol: str) -> Dict:
 #### 改进方案
 ```python
 def get_stock_data(
-    self, 
-    symbol: str, 
-    start_date: str, 
+    self,
+    symbol: str,
+    start_date: str,
     end_date: str,
     period: str = "daily"  # 新增参数：daily/weekly/monthly
 ) -> str:
     """
     获取股票数据，支持多周期
-    
+
     Args:
         symbol: 股票代码
         start_date: 开始日期
@@ -187,7 +187,7 @@ def get_stock_data(
         period: 数据周期（daily/weekly/monthly）
     """
     logger.info(f"📊 [数据来源: {self.current_source.value}] 开始获取{period}数据: {symbol}")
-    
+
     try:
         if self.current_source == ChinaDataSource.MONGODB:
             return self._get_mongodb_data(symbol, start_date, end_date, period)
@@ -199,19 +199,19 @@ def get_stock_data(
         return self._try_fallback_sources(symbol, start_date, end_date, period)
 
 def _get_mongodb_data(
-    self, 
-    symbol: str, 
-    start_date: str, 
+    self,
+    symbol: str,
+    start_date: str,
     end_date: str,
     period: str = "daily"
 ) -> str:
     """从 MongoDB 获取多周期数据"""
     from tradingagents.dataflows.enhanced_data_adapter import get_enhanced_data_adapter
     adapter = get_enhanced_data_adapter()
-    
+
     # 从 MongoDB 获取指定周期的数据
     df = adapter.get_historical_data(symbol, start_date, end_date, period=period)
-    
+
     if df is not None and not df.empty:
         logger.info(f"✅ [数据来源: MongoDB-{period}] 成功获取: {symbol} ({len(df)}条)")
         return df.to_string()
@@ -225,8 +225,8 @@ def _get_mongodb_data(
 #### 改进方案
 ```python
 def get_news_data(
-    self, 
-    symbol: str, 
+    self,
+    symbol: str,
     hours_back: int = 24,
     limit: int = 20
 ) -> List[Dict]:
@@ -235,7 +235,7 @@ def get_news_data(
     优先级：MongoDB → Tushare → AKShare → Finnhub
     """
     logger.info(f"📰 [数据来源: {self.current_source.value}] 开始获取新闻: {symbol}")
-    
+
     try:
         if self.current_source == ChinaDataSource.MONGODB:
             return self._get_mongodb_news(symbol, hours_back, limit)
@@ -253,9 +253,9 @@ def _get_mongodb_news(self, symbol: str, hours_back: int, limit: int) -> List[Di
     """从 MongoDB 获取新闻数据"""
     from tradingagents.dataflows.enhanced_data_adapter import get_enhanced_data_adapter
     adapter = get_enhanced_data_adapter()
-    
+
     news_data = adapter.get_news_data(symbol, hours_back=hours_back)
-    
+
     if news_data:
         logger.info(f"✅ [数据来源: MongoDB-新闻] 成功获取: {symbol} ({len(news_data)}条)")
         return news_data[:limit]

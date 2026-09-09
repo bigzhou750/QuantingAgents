@@ -2,7 +2,7 @@
 
 ## 概述
 
-TradingAgents-CN 提供了统一的配置系统，所有配置通过 `.env` 文件管理。本指南详细介绍了所有可用的配置选项和最佳实践，包括v0.1.7新增的Docker部署和报告导出配置。
+zhitouagent 提供了统一的配置系统，所有配置通过 `.env` 文件管理。本指南详细介绍了所有可用的配置选项和最佳实践，包括v0.1.7新增的Docker部署和报告导出配置。
 
 ## 🎯 v0.1.7 配置新特性
 
@@ -26,7 +26,7 @@ TradingAgents-CN 提供了统一的配置系统，所有配置通过 `.env` 文�
 ### .env 配置文件 (推荐)
 ```bash
 # ===========================================
-# TradingAgents-CN 配置文件 (v0.1.7)
+# zhitouagent 配置文件 (v0.1.7)
 # ===========================================
 
 # 🧠 LLM 配置 (多模型支持)
@@ -338,26 +338,26 @@ prod_config = {
 ```python
 class ConfigValidator:
     """配置验证器"""
-    
+
     def validate(self, config: Dict) -> Tuple[bool, List[str]]:
         """验证配置的有效性"""
         errors = []
-        
+
         # 检查必需字段
         required_fields = ["llm_provider", "deep_think_llm", "quick_think_llm"]
         for field in required_fields:
             if field not in config:
                 errors.append(f"Missing required field: {field}")
-        
+
         # 检查LLM提供商
         valid_providers = ["openai", "anthropic", "google"]
         if config.get("llm_provider") not in valid_providers:
             errors.append(f"Invalid llm_provider. Must be one of: {valid_providers}")
-        
+
         # 检查数值范围
         if config.get("max_debate_rounds", 1) < 1:
             errors.append("max_debate_rounds must be >= 1")
-        
+
         return len(errors) == 0, errors
 
 # 使用示例
@@ -374,30 +374,30 @@ if not is_valid:
 class TradingAgentsGraph:
     def update_config(self, new_config: Dict):
         """运行时更新配置"""
-        
+
         # 验证新配置
         validator = ConfigValidator()
         is_valid, errors = validator.validate(new_config)
-        
+
         if not is_valid:
             raise ValueError(f"Invalid configuration: {errors}")
-        
+
         # 更新配置
         self.config.update(new_config)
-        
+
         # 重新初始化受影响的组件
         self._reinitialize_components()
-    
+
     def _reinitialize_components(self):
         """重新初始化组件"""
         # 重新初始化LLM
         self._setup_llms()
-        
+
         # 重新初始化智能体
         self._setup_agents()
 ```
 
-通过合理的配置，您可以根据不同的使用场景优化 TradingAgents-CN 的性能和成本。
+通过合理的配置，您可以根据不同的使用场景优化 zhitouagent 的性能和成本。
 
 ## 🐳 Docker部署配置 (v0.1.7新增)
 

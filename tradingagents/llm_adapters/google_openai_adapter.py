@@ -1,6 +1,6 @@
 """
 Google AI OpenAI兼容适配器
-为 TradingAgents 提供Google AI (Gemini)模型的 OpenAI 兼容接口
+为 zhitouagent 提供Google AI (Gemini)模型的 OpenAI 兼容接口
 解决Google模型工具调用格式不匹配的问题
 """
 

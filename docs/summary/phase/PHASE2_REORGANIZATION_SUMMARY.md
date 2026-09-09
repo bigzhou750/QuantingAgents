@@ -2,9 +2,9 @@
 
 ## 📊 执行概览
 
-**执行时间**: 2025-10-01  
-**阶段**: 第二阶段 - 重组 dataflows 目录  
-**风险等级**: 中  
+**执行时间**: 2025-10-01
+**阶段**: 第二阶段 - 重组 dataflows 目录
+**风险等级**: 中
 **状态**: ✅ 完成
 
 ---
@@ -307,7 +307,7 @@ from tradingagents.dataflows.technical import StockstatsUtils
 
 ---
 
-**完成时间**: 2025-10-01  
-**执行人**: AI Assistant  
+**完成时间**: 2025-10-01
+**执行人**: AI Assistant
 **审核状态**: 待审核
 

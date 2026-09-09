@@ -23,16 +23,16 @@ except ImportError:
 
 class MongoDBReportManager:
     """MongoDB报告管理器"""
-    
+
     def __init__(self):
         self.client = None
         self.db = None
         self.collection = None
         self.connected = False
-        
+
         if MONGODB_AVAILABLE:
             self._connect()
-    
+
     def _connect(self):
         """连接到MongoDB"""
         try:
@@ -69,24 +69,24 @@ class MongoDBReportManager:
 
             # 连接MongoDB
             self.client = MongoClient(**connect_kwargs)
-            
+
             # 测试连接
             self.client.admin.command('ping')
-            
+
             # 选择数据库和集合
             self.db = self.client[mongodb_database]
             self.collection = self.db["analysis_reports"]
-            
+
             # 创建索引
             self._create_indexes()
-            
+
             self.connected = True
             logger.info(f"✅ MongoDB连接成功: {mongodb_database}.analysis_reports")
-            
+
         except Exception as e:
             logger.error(f"❌ MongoDB连接失败: {e}")
             self.connected = False
-    
+
     def _create_indexes(self):
         """创建索引以提高查询性能"""
         try:
@@ -96,16 +96,16 @@ class MongoDBReportManager:
                 ("analysis_date", -1),
                 ("timestamp", -1)
             ])
-            
+
             # 创建单字段索引
             self.collection.create_index("analysis_id")
             self.collection.create_index("status")
-            
+
             logger.info("✅ MongoDB索引创建成功")
-            
+
         except Exception as e:
             logger.error(f"❌ MongoDB索引创建失败: {e}")
-    
+
     def save_analysis_report(self, stock_symbol: str, analysis_results: Dict[str, Any],
                            reports: Dict[str, str]) -> bool:
         """保存分析报告到MongoDB"""
@@ -203,20 +203,20 @@ class MongoDBReportManager:
         except Exception as e:
             logger.error(f"❌ 保存分析报告到MongoDB失败: {e}")
             return False
-    
+
     def get_analysis_reports(self, limit: int = 100, stock_symbol: str = None,
                            start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
         """从MongoDB获取分析报告"""
         if not self.connected:
             return []
-        
+
         try:
             # 构建查询条件
             query = {}
-            
+
             if stock_symbol:
                 query["stock_symbol"] = stock_symbol
-            
+
             if start_date or end_date:
                 date_query = {}
                 if start_date:
@@ -224,10 +224,10 @@ class MongoDBReportManager:
                 if end_date:
                     date_query["$lte"] = end_date
                 query["analysis_date"] = date_query
-            
+
             # 查询数据
             cursor = self.collection.find(query).sort("timestamp", -1).limit(limit)
-            
+
             results = []
             for doc in cursor:
                 # 处理timestamp字段，兼容不同的数据类型
@@ -242,7 +242,7 @@ class MongoDBReportManager:
                     # 其他情况，使用当前时间
                     from datetime import datetime
                     timestamp = datetime.now().timestamp()
-                
+
                 # 转换为Web应用期望的格式
                 result = {
                     "analysis_id": doc["analysis_id"],
@@ -259,22 +259,22 @@ class MongoDBReportManager:
                     "source": "mongodb"
                 }
                 results.append(result)
-            
+
             logger.info(f"✅ 从MongoDB获取到 {len(results)} 个分析报告")
             return results
-            
+
         except Exception as e:
             logger.error(f"❌ 从MongoDB获取分析报告失败: {e}")
             return []
-    
+
     def get_report_by_id(self, analysis_id: str) -> Optional[Dict[str, Any]]:
         """根据ID获取单个分析报告"""
         if not self.connected:
             return None
-        
+
         try:
             doc = self.collection.find_one({"analysis_id": analysis_id})
-            
+
             if doc:
                 # 转换为Web应用期望的格式
                 result = {
@@ -292,28 +292,28 @@ class MongoDBReportManager:
                     "source": "mongodb"
                 }
                 return result
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"❌ 从MongoDB获取报告失败: {e}")
             return None
-    
+
     def delete_report(self, analysis_id: str) -> bool:
         """删除分析报告"""
         if not self.connected:
             return False
-        
+
         try:
             result = self.collection.delete_one({"analysis_id": analysis_id})
-            
+
             if result.deleted_count > 0:
                 logger.info(f"✅ 已删除分析报告: {analysis_id}")
                 return True
             else:
                 logger.warning(f"⚠️ 未找到要删除的报告: {analysis_id}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ 删除分析报告失败: {e}")
             return False

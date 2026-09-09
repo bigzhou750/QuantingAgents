@@ -3,9 +3,9 @@
 
 ## 📋 概述 / Overview
 
-TradingAgents-CN 支持多种货币单位的模型定价，不同的 LLM 厂家使用不同的货币进行计费。
+zhitouagent 支持多种货币单位的模型定价，不同的 LLM 厂家使用不同的货币进行计费。
 
-TradingAgents-CN supports multiple currency units for model pricing. Different LLM providers use different currencies for billing.
+zhitouagent supports multiple currency units for model pricing. Different LLM providers use different currencies for billing.
 
 ## 💱 货币单位规范 / Currency Standards
 
@@ -217,11 +217,11 @@ const modelConfig = {
 
 For currency-related questions, please contact:
 
-- 📧 邮箱 / Email: hsliup@163.com
+- 📧 邮箱 / Email: zh75067197@gmail.com
 - 💬 QQ群 / QQ Group: 782124367
-- 🌐 GitHub: https://github.com/hsliuping/TradingAgents-CN
+- 🌐 GitHub: mailto:zh75067197@gmail.com
 
 ---
 
-**最后更新 / Last Updated**: 2025年10月 / October 2025  
+**最后更新 / Last Updated**: 2025年10月 / October 2025
 **版本 / Version**: v1.0

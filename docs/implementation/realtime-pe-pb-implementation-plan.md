@@ -58,11 +58,11 @@ async def calculate_realtime_pe_pb(
 ) -> Optional[Dict[str, Any]]:
     """
     基于实时行情和财务数据计算PE/PB
-    
+
     Args:
         symbol: 6位股票代码
         db_client: MongoDB客户端（可选，用于同步调用）
-    
+
     Returns:
         {
             "pe": 22.5,              # 实时市盈率
@@ -85,51 +85,51 @@ async def calculate_realtime_pe_pb(
                 logger.warning("MongoDB不可用，无法计算实时PE/PB")
                 return None
             db_client = db_manager.get_mongodb_client()
-        
+
         db = db_client['tradingagents']
         code6 = str(symbol).zfill(6)
-        
+
         # 1. 获取实时行情（market_quotes）
         quote = db.market_quotes.find_one({"code": code6})
         if not quote:
             logger.debug(f"未找到股票 {code6} 的实时行情")
             return None
-        
+
         realtime_price = quote.get("close")
         if not realtime_price or realtime_price <= 0:
             logger.debug(f"股票 {code6} 的实时价格无效: {realtime_price}")
             return None
-        
+
         # 2. 获取基础信息和财务数据（stock_basic_info）
         basic_info = db.stock_basic_info.find_one({"code": code6})
         if not basic_info:
             logger.debug(f"未找到股票 {code6} 的基础信息")
             return None
-        
+
         # 获取财务数据
         total_shares = basic_info.get("total_share")  # 总股本（万股）
         net_profit = basic_info.get("net_profit")     # 净利润（万元）
         total_equity = basic_info.get("total_hldr_eqy_exc_min_int")  # 净资产（万元）
-        
+
         if not total_shares or total_shares <= 0:
             logger.debug(f"股票 {code6} 的总股本无效: {total_shares}")
             return None
-        
+
         # 3. 计算实时市值（万元）
         realtime_market_cap = realtime_price * total_shares
-        
+
         # 4. 计算实时PE
         pe = None
         pe_ttm = None
         if net_profit and net_profit > 0:
             pe = realtime_market_cap / net_profit
             pe_ttm = pe  # 如果有TTM净利润，可以单独计算
-        
+
         # 5. 计算实时PB
         pb = None
         if total_equity and total_equity > 0:
             pb = realtime_market_cap / total_equity
-        
+
         # 6. 构建返回结果
         result = {
             "pe": round(pe, 2) if pe else None,
@@ -142,10 +142,10 @@ async def calculate_realtime_pe_pb(
             "is_realtime": True,
             "note": "基于实时价格和最新财报计算"
         }
-        
+
         logger.debug(f"股票 {code6} 实时PE/PB计算成功: PE={result['pe']}, PB={result['pb']}")
         return result
-        
+
     except Exception as e:
         logger.error(f"计算股票 {symbol} 的实时PE/PB失败: {e}", exc_info=True)
         return None
@@ -154,11 +154,11 @@ async def calculate_realtime_pe_pb(
 def validate_pe_pb(pe: Optional[float], pb: Optional[float]) -> bool:
     """
     验证PE/PB是否在合理范围内
-    
+
     Args:
         pe: 市盈率
         pb: 市净率
-    
+
     Returns:
         bool: 是否合理
     """
@@ -166,12 +166,12 @@ def validate_pe_pb(pe: Optional[float], pb: Optional[float]) -> bool:
     if pe is not None and (pe < -100 or pe > 1000):
         logger.warning(f"PE异常: {pe}")
         return False
-    
+
     # PB合理范围：0.1 到 100
     if pb is not None and (pb < 0.1 or pb > 100):
         logger.warning(f"PB异常: {pb}")
         return False
-    
+
     return True
 
 
@@ -181,11 +181,11 @@ async def get_pe_pb_with_fallback(
 ) -> Dict[str, Any]:
     """
     获取PE/PB，优先使用实时计算，失败时降级到静态数据
-    
+
     Args:
         symbol: 6位股票代码
         db_client: MongoDB客户端（可选）
-    
+
     Returns:
         {
             "pe": 22.5,
@@ -204,7 +204,7 @@ async def get_pe_pb_with_fallback(
             return realtime_metrics
         else:
             logger.warning(f"股票 {symbol} 的实时PE/PB数据异常，降级到静态数据")
-    
+
     # 2. 降级到静态数据
     try:
         if db_client is None:
@@ -213,14 +213,14 @@ async def get_pe_pb_with_fallback(
             if not db_manager.is_mongodb_available():
                 return {}
             db_client = db_manager.get_mongodb_client()
-        
+
         db = db_client['tradingagents']
         code6 = str(symbol).zfill(6)
-        
+
         basic_info = db.stock_basic_info.find_one({"code": code6})
         if not basic_info:
             return {}
-        
+
         return {
             "pe": basic_info.get("pe"),
             "pb": basic_info.get("pb"),
@@ -231,7 +231,7 @@ async def get_pe_pb_with_fallback(
             "updated_at": basic_info.get("updated_at"),
             "note": "使用最近一个交易日的数据"
         }
-        
+
     except Exception as e:
         logger.error(f"获取股票 {symbol} 的静态PE/PB失败: {e}")
         return {}
@@ -282,7 +282,7 @@ realtime_metrics = await get_pe_pb_with_fallback(code6, db.client)
 async def enrich_results_with_realtime_metrics(self, results: List[Dict]) -> List[Dict]:
     """为筛选结果添加实时PE/PB"""
     from tradingagents.dataflows.realtime_metrics import calculate_realtime_pe_pb
-    
+
     for item in results:
         code = item.get("code") or item.get("symbol")
         if code:
@@ -292,7 +292,7 @@ async def enrich_results_with_realtime_metrics(self, results: List[Dict]) -> Lis
                 item["pb"] = realtime_metrics.get("pb") or item.get("pb")
                 item["pe_ttm"] = realtime_metrics.get("pe_ttm") or item.get("pe_ttm")
                 item["pe_is_realtime"] = True
-    
+
     return results
 ```
 
@@ -406,7 +406,7 @@ async def test_calculate_realtime_pe_pb():
    curl -H "Authorization: Bearer <token>" \
         http://localhost:8000/api/stocks/000001/fundamentals
    ```
-   
+
    验证返回数据包含：
    - `pe_is_realtime: true`
    - `pe_source: "realtime_calculated"`
@@ -418,7 +418,7 @@ async def test_calculate_realtime_pe_pb():
         -d '{"conditions": {"logic": "AND", "children": []}}' \
         http://localhost:8000/api/screening/screen
    ```
-   
+
    验证返回的股票列表中PE/PB是实时计算的
 
 3. **测试分析功能**

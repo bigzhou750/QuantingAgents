@@ -14,7 +14,7 @@
 查询股票：招商银行（600036）
 实际返回的新闻主题：
 - 上证180ETF指数基金（530280）
-- A500ETF基金（512050）  
+- A500ETF基金（512050）
 - 银行ETF指数（512730）
 - 大湾区发展主题指数
 ```
@@ -79,14 +79,14 @@ def filter_relevant_news(news_df, stock_code, company_name):
     for _, row in news_df.iterrows():
         title = row.get('新闻标题', '')
         content = row.get('新闻内容', '')
-        
+
         # 检查是否直接提及公司
-        if (company_name in title or company_name in content or 
+        if (company_name in title or company_name in content or
             stock_code in title or stock_code in content):
             # 排除ETF、指数基金相关新闻
             if not any(keyword in title.lower() for keyword in ['etf', '指数基金', '基金']):
                 relevant_news.append(row)
-    
+
     return pd.DataFrame(relevant_news)
 ```
 
@@ -102,17 +102,17 @@ def filter_relevant_news(news_df, stock_code, company_name):
 def calculate_news_relevance(title, content, stock_code, company_name):
     """计算新闻与公司的相关性评分"""
     score = 0
-    
+
     # 直接提及公司名称或股票代码
     if company_name in title: score += 50
     if stock_code in title: score += 40
     if company_name in content: score += 30
     if stock_code in content: score += 20
-    
+
     # 减分项：ETF、指数基金等
     if any(keyword in title.lower() for keyword in ['etf', '指数', '基金']):
         score -= 30
-    
+
     return score
 ```
 
@@ -158,12 +158,12 @@ print('新闻标题示例:', [row.get('新闻标题', '无标题') for _, row in
 
 **核心问题：** 数据源质量 > 分析逻辑 > 输出质量
 
-**解决重点：** 
+**解决重点：**
 1. 新闻质量过滤（立即修复）
-2. 数据源多样化（中期优化）  
+2. 数据源多样化（中期优化）
 3. 分析专业化（长期改进）
 
 ---
-**报告生成时间：** 2025-07-28 22:59  
-**问题严重程度：** 高（影响新闻分析师核心功能）  
+**报告生成时间：** 2025-07-28 22:59
+**问题严重程度：** 高（影响新闻分析师核心功能）
 **修复优先级：** P1（需要立即处理）

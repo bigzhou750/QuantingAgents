@@ -60,11 +60,11 @@ def create_safe_debator(llm):
         # 获取基础信息
         company_name = state["company_of_interest"]
         trader_recommendation = state.get("trader_recommendation", "")
-        
+
         # 获取股票市场信息
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(company_name)
-        
+
         # 确定股票类型和货币信息
         if market_info.get("is_china"):
             stock_type = "A股"
@@ -78,28 +78,28 @@ def create_safe_debator(llm):
         else:
             stock_type = "未知市场"
             currency_unit = "未知货币"
-        
+
         # 获取各类分析报告
         market_report = state.get("market_report", "")
         sentiment_report = state.get("sentiment_report", "")
         news_report = state.get("news_report", "")
         fundamentals_report = state.get("fundamentals_report", "")
-        
+
         # 构建保守风险分析提示
         safe_prompt = f"""
         作为安全/保守风险分析师，请对以下投资决策进行风险评估：
-        
+
         公司名称: {company_name}
         股票类型: {stock_type}
         货币单位: {currency_unit}
-        
+
         交易员建议: {trader_recommendation}
-        
+
         市场研究报告: {market_report}
         情绪报告: {sentiment_report}
         新闻报告: {news_report}
         基本面报告: {fundamentals_report}
-        
+
         请从保守角度分析：
         1. 识别所有潜在风险因素
         2. 质疑乐观假设的合理性
@@ -107,10 +107,10 @@ def create_safe_debator(llm):
         4. 建议风险控制措施
         5. 评估最坏情况下的损失
         """
-        
+
         # 调用LLM生成风险分析
         response = llm.invoke(safe_prompt)
-        
+
         return {"conservative_risk_analysis": response.content}
 ```
 
@@ -232,7 +232,7 @@ def create_new_risk_analyst(llm):
     def new_risk_node(state):
         # 新的风险分析逻辑
         pass
-    
+
     return new_risk_node
 ```
 

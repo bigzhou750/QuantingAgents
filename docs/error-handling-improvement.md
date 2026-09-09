@@ -51,13 +51,13 @@ class ErrorCategory(str, Enum):
     LLM_NETWORK = "llm_network"          # 网络错误
     LLM_QUOTA = "llm_quota"              # 配额/限流错误
     LLM_OTHER = "llm_other"              # 其他错误
-    
+
     # 数据源相关
     DATA_SOURCE_API_KEY = "data_source_api_key"      # API Key 错误
     DATA_SOURCE_NETWORK = "data_source_network"      # 网络错误
     DATA_SOURCE_NOT_FOUND = "data_source_not_found"  # 数据未找到
     DATA_SOURCE_OTHER = "data_source_other"          # 其他错误
-    
+
     # 其他
     STOCK_CODE_INVALID = "stock_code_invalid"  # 股票代码无效
     NETWORK = "network"                        # 网络连接错误
@@ -118,16 +118,16 @@ except Exception as e:
 
     # 格式化错误信息为用户友好的提示
     from ..utils.error_formatter import ErrorFormatter
-    
+
     # 收集上下文信息
     error_context = {}
     if hasattr(request, 'parameters') and request.parameters:
         if hasattr(request.parameters, 'quick_model'):
             error_context['model'] = request.parameters.quick_model
-    
+
     # 格式化错误
     formatted_error = ErrorFormatter.format_error(str(e), error_context)
-    
+
     # 构建用户友好的错误消息
     user_friendly_error = (
         f"{formatted_error['title']}\n\n"
@@ -166,8 +166,8 @@ ElMessage({
 **进度区域显示**：
 
 ```vue
-<div 
-  class="task-description" 
+<div
+  class="task-description"
   style="white-space: pre-wrap; line-height: 1.6;"
 >
   {{ progressInfo.message }}
@@ -182,10 +182,10 @@ ElMessage({
 **添加"查看错误"按钮**：
 
 ```vue
-<el-button 
-  v-if="row.status==='failed'" 
-  type="text" 
-  size="small" 
+<el-button
+  v-if="row.status==='failed'"
+  type="text"
+  size="small"
   @click="showErrorDetail(row)"
 >
   查看错误
@@ -200,7 +200,7 @@ const showErrorDetail = async (row: any) => {
   const res = await analysisApi.getTaskStatus(taskId)
   const task = (res as any)?.data?.data || row
   const errorMessage = task.error_message || task.message || '未知错误'
-  
+
   await ElMessageBox.alert(
     errorMessage,
     '错误详情',
@@ -367,7 +367,7 @@ Tushare 的 Token 或 API Key 无效或未配置。
 3. **在新的服务中使用**：
    ```python
    from app.utils.error_formatter import ErrorFormatter
-   
+
    try:
        # 业务逻辑
        pass

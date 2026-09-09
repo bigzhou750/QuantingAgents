@@ -1,6 +1,6 @@
 version: '3.8'
 
-# TradingAgents-CN v1.0.1 Docker Compose配置（带 Nginx 反向代理）
+# zhitouagent v1.0.1 Docker Compose配置（带 Nginx 反向代理）
 # 使用Docker Hub镜像 + Nginx 反向代理
 #
 # 使用方法：
@@ -18,21 +18,21 @@ services:
   mongodb:
     image: mongo:4.4
     platform: linux/arm64  # 显式指定 ARM64 平台
-    container_name: tradingagents-mongodb
+    container_name: zhitouagent-mongodb
     restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
-      - tradingagents_mongodb_data:/data/db
+      - zhitouagent_mongodb_data:/data/db
       # 注意：不挂载初始化脚本，使用 MongoDB 自动创建的 root 用户
       # 应用会在首次运行时自动创建所需的集合和索引
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: tradingagents123
-      MONGO_INITDB_DATABASE: tradingagentscn
+      MONGO_INITDB_ROOT_PASSWORD: zhitouagent123
+      MONGO_INITDB_DATABASE: zhitouagent
       TZ: "Asia/Shanghai"
     networks:
-      - tradingagents-network
+      - zhitouagent-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
       interval: 10s
@@ -44,19 +44,19 @@ services:
   redis:
     image: redis:7-alpine
     platform: linux/arm64  # 显式指定 ARM64 平台
-    container_name: tradingagents-redis
+    container_name: zhitouagent-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
-      - tradingagents_redis_data:/data
+      - zhitouagent_redis_data:/data
     environment:
       TZ: "Asia/Shanghai"
-    command: redis-server --appendonly yes --requirepass tradingagents123
+    command: redis-server --appendonly yes --requirepass zhitouagent123
     networks:
-      - tradingagents-network
+      - zhitouagent-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "tradingagents123", "ping"]
+      test: ["CMD", "redis-cli", "-a", "zhitouagent123", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -64,9 +64,9 @@ services:
 
   # FastAPI后端服务
   backend:
-    image: hsliup/tradingagents-backend:v1.0.1
+    image: hsliup/zhitouagent-backend:v1.0.1
     platform: linux/arm64  # 显式指定 ARM64 平台
-    container_name: tradingagents-backend
+    container_name: zhitouagent-backend
     restart: unless-stopped
     expose:
       - "8000"
@@ -78,24 +78,24 @@ services:
       - .env
     environment:
       TZ: "Asia/Shanghai"
-      TRADINGAGENTS_LOG_LEVEL: "INFO"
-      TRADINGAGENTS_LOG_DIR: "/app/logs"
-      TRADINGAGENTS_LOG_FILE: "/app/logs/tradingagents.log"
+      ZHITOUAGENT_LOG_LEVEL: "INFO"
+      ZHITOUAGENT_LOG_DIR: "/app/logs"
+      ZHITOUAGENT_LOG_FILE: "/app/logs/zhitouagent.log"
       # MongoDB配置（使用 root 用户）
       MONGODB_HOST: "mongodb"
       MONGODB_PORT: "27017"
       MONGODB_USERNAME: "admin"
-      MONGODB_PASSWORD: "tradingagents123"
-      MONGODB_DATABASE: "tradingagentscn"
+      MONGODB_PASSWORD: "zhitouagent123"
+      MONGODB_DATABASE: "zhitouagent"
       MONGODB_AUTH_SOURCE: "admin"
       # 注意：authSource=admin 表示在 admin 数据库中验证用户
-      MONGODB_URL: "mongodb://admin:tradingagents123@mongodb:27017/tradingagentscn?authSource=admin"
-      MONGODB_CONNECTION_STRING: "mongodb://admin:tradingagents123@mongodb:27017/tradingagentscn?authSource=admin"
+      MONGODB_URL: "mongodb://admin:zhitouagent123@mongodb:27017/zhitouagent?authSource=admin"
+      MONGODB_CONNECTION_STRING: "mongodb://admin:zhitouagent123@mongodb:27017/zhitouagent?authSource=admin"
       # Redis配置
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
-      REDIS_PASSWORD: "tradingagents123"
-      REDIS_URL: "redis://:tradingagents123@redis:6379/0"
+      REDIS_PASSWORD: "zhitouagent123"
+      REDIS_URL: "redis://:zhitouagent123@redis:6379/0"
       DOCKER_CONTAINER: "true"
       # 安全配置
       JWT_SECRET: "docker-jwt-secret-key-change-in-production-2024"
@@ -132,7 +132,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - tradingagents-network
+      - zhitouagent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -142,9 +142,9 @@ services:
 
   # Vue 3前端服务
   frontend:
-    image: hsliup/tradingagents-frontend:v1.0.1
+    image: hsliup/zhitouagent-frontend:v1.0.1
     platform: linux/arm64  # 显式指定 ARM64 平台
-    container_name: tradingagents-frontend
+    container_name: zhitouagent-frontend
     restart: unless-stopped
     expose:
       - "80"
@@ -155,7 +155,7 @@ services:
     depends_on:
       - backend
     networks:
-      - tradingagents-network
+      - zhitouagent-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
@@ -167,7 +167,7 @@ services:
   nginx:
     image: nginx:alpine
     platform: linux/arm64  # 显式指定 ARM64 平台
-    container_name: tradingagents-nginx
+    container_name: zhitouagent-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -177,7 +177,7 @@ services:
       - frontend
       - backend
     networks:
-      - tradingagents-network
+      - zhitouagent-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
@@ -186,12 +186,12 @@ services:
       start_period: 10s
 
 volumes:
-  tradingagents_mongodb_data:
+  zhitouagent_mongodb_data:
     driver: local
-  tradingagents_redis_data:
+  zhitouagent_redis_data:
     driver: local
 
 networks:
-  tradingagents-network:
+  zhitouagent-network:
     driver: bridge
 

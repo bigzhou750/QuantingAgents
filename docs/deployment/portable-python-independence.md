@@ -80,13 +80,13 @@ python310.dll (系统 Python DLL)
    ```powershell
    # 下载 get-pip.py
    Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "$pythonDir\get-pip.py"
-   
+
    # 修改 python310._pth 文件，启用 site-packages
    $pthFile = "$pythonDir\python310._pth"
    $content = Get-Content $pthFile
    $content = $content -replace "#import site", "import site"
    Set-Content -Path $pthFile -Value $content
-   
+
    # 安装 pip
    & "$pythonDir\python.exe" "$pythonDir\get-pip.py"
    ```
@@ -203,7 +203,7 @@ pyinstaller --onefile --name tradingagents-worker app/worker.py
    if (-not (Test-Path $pythonExe)) {
        $pythonExe = 'python'
    }
-   
+
    # 修改后
    $pythonExe = Join-Path $root 'vendors\python\python.exe'
    if (-not (Test-Path $pythonExe)) {

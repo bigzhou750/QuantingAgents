@@ -220,11 +220,11 @@ chunk = {
 final_state = None
 for chunk in self.graph.stream(init_agent_state, **args):
     self._send_progress_update(chunk, progress_callback)
-    
+
     # 累积状态更新
     if final_state is None:
         final_state = init_agent_state.copy()  # ✅ 从初始状态开始
-    
+
     for node_name, node_update in chunk.items():
         if not node_name.startswith('__'):
             final_state.update(node_update)  # ✅ 逐步累积每个节点的更新

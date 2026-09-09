@@ -99,14 +99,14 @@ handleWizardComplete(data) {
     api_key: 'sk-xxx',
     ...
   })
-  
+
   // 2. 添加模型配置
   await configApi.updateLLMConfig({
     provider: 'deepseek',
     model_name: 'deepseek-chat',
     enabled: true
   })
-  
+
   // 3. 设置默认模型
   await configApi.setDefaultLLM('deepseek-chat')
 }
@@ -265,27 +265,27 @@ export const configApi = {
   updateLLMProvider(name: string, provider: LLMProvider): Promise<ApiResponse>
   deleteLLMProvider(name: string): Promise<ApiResponse>
   getLLMProviders(): Promise<ApiResponse<LLMProvider[]>>
-  
+
   // 大模型配置
   updateLLMConfig(config: LLMConfig): Promise<ApiResponse>
   getLLMConfigs(): Promise<ApiResponse<LLMConfig[]>>
   deleteLLMConfig(modelName: string): Promise<ApiResponse>
   setDefaultLLM(modelName: string): Promise<ApiResponse>
-  
+
   // 数据源配置
   addDataSourceConfig(config: DataSourceConfig): Promise<ApiResponse>
   updateDataSourceConfig(name: string, config: DataSourceConfig): Promise<ApiResponse>
   deleteDataSourceConfig(name: string): Promise<ApiResponse>
   getDataSourceConfigs(): Promise<ApiResponse<DataSourceConfig[]>>
   setDefaultDataSource(name: string): Promise<ApiResponse>
-  
+
   // 系统配置
   getSystemConfig(): Promise<ApiResponse<SystemConfig>>
   updateSystemSettings(settings: Record<string, any>): Promise<ApiResponse>
-  
+
   // 配置验证
   validateConfig(): Promise<ApiResponse>
-  
+
   // 导入导出
   exportConfig(): Promise<ApiResponse>
   importConfig(config: any): Promise<ApiResponse>

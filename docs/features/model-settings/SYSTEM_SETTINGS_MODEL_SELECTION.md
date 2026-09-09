@@ -18,8 +18,8 @@
 **实现**：
 ```vue
 <el-form-item label="数据供应商">
-  <el-select 
-    v-model="systemSettings.default_provider" 
+  <el-select
+    v-model="systemSettings.default_provider"
     placeholder="选择已启用的厂家"
     filterable
   >
@@ -51,8 +51,8 @@
 **实现**：
 ```vue
 <el-form-item label="快速分析模型">
-  <el-select 
-    v-model="systemSettings.quick_analysis_model" 
+  <el-select
+    v-model="systemSettings.quick_analysis_model"
     placeholder="选择快速分析模型"
     filterable
   >
@@ -100,7 +100,7 @@ const enabledProviders = computed(() => {
 ```typescript
 const availableModelsForProvider = (providerId: string) => {
   if (!providerId) return []
-  return llmConfigs.value.filter(config => 
+  return llmConfigs.value.filter(config =>
     config.provider === providerId && config.enabled
   )
 }
@@ -118,12 +118,12 @@ watch(
       const availableModels = availableModelsForProvider(newProvider)
       const quickModel = systemSettings.value.quick_analysis_model
       const deepModel = systemSettings.value.deep_analysis_model
-      
+
       // 如果当前选择的快速分析模型不属于新供应商，清空
       if (quickModel && !availableModels.find(m => m.model_name === quickModel)) {
         systemSettings.value.quick_analysis_model = ''
       }
-      
+
       // 如果当前选择的深度决策模型不属于新供应商，清空
       if (deepModel && !availableModels.find(m => m.model_name === deepModel)) {
         systemSettings.value.deep_analysis_model = ''

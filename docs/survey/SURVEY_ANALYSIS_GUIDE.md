@@ -313,7 +313,7 @@ API接口       ████ 20%
 ## 📞 联系方式
 
 如有问题或建议，请联系：
-- GitHub: https://github.com/hsliuping/TradingAgents-CN
+- GitHub: mailto:zh75067197@gmail.com
 - Email: [项目邮箱]
 - 微信群: [二维码]
 

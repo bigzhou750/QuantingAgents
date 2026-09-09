@@ -1,6 +1,6 @@
-# TradingAgents-CN 快速安装指南
+# zhitouagent 快速安装指南
 
-> 5分钟快速上手 TradingAgents-CN v1.0.0-preview
+> 5分钟快速上手 zhitouagent v1.0.0-preview
 
 ## 🚀 三种部署方式，一键选择
 
@@ -18,19 +18,19 @@ powershell -ExecutionPolicy Bypass -File start_all.ps1
 # 4. 打开浏览器访问 http://localhost
 ```
 
-**优点**: ✅ 开箱即用 ✅ 无需配置环境 ✅ 一键启动  
+**优点**: ✅ 开箱即用 ✅ 无需配置环境 ✅ 一键启动
 **缺点**: ⚠️ 仅支持 Windows
 
-📥 **下载地址**: 
+📥 **下载地址**:
 
-- 关注公众号 "TradingAgents-CN" 获取网盘链接
+- 关注公众号 "zhitouagent" 获取网盘链接
 
 操作手册：
 
 https://mp.weixin.qq.com/s/uAk4RevdJHMuMvlqpdGUEw
-TradingAgents-CN v1.0.0-preview绿色版（目前只支持windows）简单使用手册
+zhitouagent v1.0.0-preview绿色版（目前只支持windows）简单使用手册
 https://mp.weixin.qq.com/s/o5QdNuh2-iKkIHzJXCj7vQ
-TradingAgents-CN v1.0.0-preview绿色版绿色版端口配置说明
+zhitouagent v1.0.0-preview绿色版绿色版端口配置说明
 ---
 
 ### 方式二：Docker版（最稳定）⭐ 推荐生产环境
@@ -43,8 +43,8 @@ TradingAgents-CN v1.0.0-preview绿色版绿色版端口配置说明
 mkdir tradingagents-cn && cd tradingagents-cn
 
 # 3. 下载配置文件
-curl -O https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/main/docker-compose.yml
-curl -O https://raw.githubusercontent.com/hsliuping/TradingAgents-CN/main/.env.example
+curl -O https://raw.githubusercontent.com/hsliuping/zhitouagent/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/hsliuping/zhitouagent/main/.env.example
 mv .env.example .env
 
 # 4. 编辑 .env 文件，配置 API 密钥
@@ -59,7 +59,7 @@ docker-compose logs -f
 # 7. 打开浏览器访问 http://localhost:5173
 ```
 
-**优点**: ✅ 跨平台 ✅ 隔离性好 ✅ 易于维护 ✅ 生产就绪  
+**优点**: ✅ 跨平台 ✅ 隔离性好 ✅ 易于维护 ✅ 生产就绪
 **缺点**: ⚠️ 需要学习 Docker
 
 📚 **详细文档**: [Docker 部署指南](./docker-deployment-guide.md)
@@ -74,8 +74,8 @@ docker-compose logs -f
 # 1. 安装依赖: Python 3.10+, MongoDB 4.4+, Redis 6.2+
 
 # 2. 克隆代码
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 3. 创建虚拟环境
 python -m venv env
@@ -97,7 +97,7 @@ python -m app
 # 8. 打开浏览器访问 http://localhost:8000/docs
 ```
 
-**优点**: ✅ 完全控制 ✅ 可调试 ✅ 可定制  
+**优点**: ✅ 完全控制 ✅ 可调试 ✅ 可定制
 **缺点**: ⚠️ 配置复杂 ⚠️ 需要手动管理依赖
 
 📚 **详细文档**: [本地安装指南](./installation-guide.md)
@@ -152,7 +152,7 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 1. **登录系统**: 使用默认账号登录
 2. **进入股票分析**: 点击左侧菜单 "股票分析"
-3. **输入股票代码**: 
+3. **输入股票代码**:
    - A股: `600519` (贵州茅台)
    - 港股: `00700.HK` (腾讯控股)
    - 美股: `AAPL` (苹果)
@@ -181,7 +181,7 @@ FRONTEND_PORT=5174
 
 ### Q: MongoDB 连接失败？
 
-**A**: 
+**A**:
 1. 检查 MongoDB 是否正在运行
 2. 检查 `.env` 中的 `MONGODB_URL` 配置
 3. 绿色版用户：确保 MongoDB 服务已启动
@@ -213,15 +213,15 @@ FRONTEND_PORT=5174
 
 ### 视频教程
 
-关注微信公众号 **"TradingAgents-CN"** 获取：
+关注微信公众号 **"zhitouagent"** 获取：
 - 安装部署视频教程
 - 功能使用演示
 - 最佳实践分享
 
 ### 社区支持
 
-- **GitHub Issues**: [提交问题](https://github.com/hsliuping/TradingAgents-CN/issues)
-- **微信公众号**: TradingAgents-CN
+- **GitHub Issues**: [提交问题](mailto:zh75067197@gmail.com)
+- **微信公众号**: zhitouagent
 - **QQ 群**: 关注公众号获取群号
 
 ---

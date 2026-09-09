@@ -1,7 +1,7 @@
 # 多数据源隔离存储设计与实现
 
-**日期**: 2025-10-28  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-28
+**作者**: zhitouagent 开发团队
 **标签**: `数据源管理` `数据隔离` `索引优化` `数据迁移`
 
 ---
@@ -101,7 +101,7 @@ ops.append(
 ops.append(
     UpdateOne(
         {"code": code, "source": "tushare"},  # 🔥 联合查询条件
-        {"$set": doc}, 
+        {"$set": doc},
         upsert=True
     )
 )
@@ -122,7 +122,7 @@ doc = {
 ops.append(
     UpdateOne(
         {"code": code, "source": data_source},  # 🔥 联合查询条件
-        {"$set": doc}, 
+        {"$set": doc},
         upsert=True
     )
 )
@@ -149,8 +149,8 @@ await collection.update_one(
 
 ```python
 async def get_stock_basic_info(
-    self, 
-    symbol: str, 
+    self,
+    symbol: str,
     source: Optional[str] = None  # 🔥 新增参数
 ) -> Optional[StockBasicInfoExtended]:
     """
@@ -162,7 +162,7 @@ async def get_stock_basic_info(
     """
     db = get_mongo_db()
     symbol6 = str(symbol).zfill(6)
-    
+
     if source:
         # 指定数据源
         query = {"code": symbol6, "source": source}
@@ -171,21 +171,21 @@ async def get_stock_basic_info(
         # 🔥 未指定数据源，按优先级查询
         source_priority = ["tushare", "multi_source", "akshare", "baostock"]
         doc = None
-        
+
         for src in source_priority:
             query = {"code": symbol6, "source": src}
             doc = await db["stock_basic_info"].find_one(query, {"_id": 0})
             if doc:
                 logger.debug(f"✅ 使用数据源: {src}")
                 break
-        
+
         # 兼容旧数据（无 source 字段）
         if not doc:
             doc = await db["stock_basic_info"].find_one(
-                {"code": symbol6}, 
+                {"code": symbol6},
                 {"_id": 0}
             )
-    
+
     return StockBasicInfoExtended(**doc) if doc else None
 ```
 
@@ -194,44 +194,44 @@ async def get_stock_basic_info(
 ```python
 @router.get("/{code}/fundamentals", response_model=dict)
 async def get_fundamentals(
-    code: str, 
+    code: str,
     source: Optional[str] = Query(None, description="数据源"),  # 🔥 新增参数
     current_user: dict = Depends(get_current_user)
 ):
     """
     获取基础面快照
-    
+
     参数：
     - code: 股票代码
     - source: 数据源（可选），默认按优先级：tushare > multi_source > akshare > baostock
     """
     db = get_mongo_db()
     code6 = _zfill_code(code)
-    
+
     if source:
         # 指定数据源
         query = {"code": code6, "source": source}
         b = await db["stock_basic_info"].find_one(query, {"_id": 0})
         if not b:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail=f"未找到该股票在数据源 {source} 中的基础信息"
             )
     else:
         # 按优先级查询
         source_priority = ["tushare", "multi_source", "akshare", "baostock"]
         b = None
-        
+
         for src in source_priority:
             query = {"code": code6, "source": src}
             b = await db["stock_basic_info"].find_one(query, {"_id": 0})
             if b:
                 logger.info(f"✅ 使用数据源: {src}")
                 break
-        
+
         if not b:
             raise HTTPException(status_code=404, detail="未找到该股票的基础信息")
-    
+
     # ... 后续处理
 ```
 
@@ -432,12 +432,12 @@ tushare > multi_source > akshare > baostock
 ## 🤝 贡献者
 
 - **问题发现**: 用户反馈（多数据源相互覆盖）
-- **方案设计**: TradingAgents-CN 开发团队
-- **代码实现**: TradingAgents-CN 开发团队
-- **文档编写**: TradingAgents-CN 开发团队
+- **方案设计**: zhitouagent 开发团队
+- **代码实现**: zhitouagent 开发团队
+- **文档编写**: zhitouagent 开发团队
 
 ---
 
-**最后更新**: 2025-10-28  
+**最后更新**: 2025-10-28
 **版本**: v1.0.0-preview
 

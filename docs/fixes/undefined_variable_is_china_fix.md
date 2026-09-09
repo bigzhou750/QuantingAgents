@@ -8,12 +8,12 @@ NameError: name 'is_china' is not defined
 ```
 
 ### 错误位置
-**文件**: `tradingagents/agents/analysts/fundamentals_analyst.py`  
+**文件**: `tradingagents/agents/analysts/fundamentals_analyst.py`
 **行号**: 第135行
 
 ### 错误堆栈
 ```python
-File "D:\code\TradingAgents-CN\tradingagents\agents\analysts\fundamentals_analyst.py", line 135, in fundamentals_analyst_node
+File "D:\code\zhitouagent\tradingagents\agents\analysts\fundamentals_analyst.py", line 135, in fundamentals_analyst_node
     if is_china:
 NameError: name 'is_china' is not defined
 ```

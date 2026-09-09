@@ -25,7 +25,7 @@ graph TB
         API[REST API]
         DOCKER[Docker容器]
     end
-    
+
     subgraph "LLM集成层 (LLM Integration Layer)"
         OPENAI[OpenAI]
         GOOGLE[Google AI]
@@ -34,7 +34,7 @@ graph TB
         ANTHROPIC[Anthropic]
         ADAPTERS[LLM适配器]
     end
-    
+
     subgraph "核心框架层 (Core Framework Layer)"
         GRAPH[TradingAgentsGraph]
         SETUP[GraphSetup]
@@ -43,7 +43,7 @@ graph TB
         REFLECTOR[Reflector]
         SIGNAL[SignalProcessor]
     end
-    
+
     subgraph "智能体协作层 (Agent Collaboration Layer)"
         ANALYSTS[分析师团队]
         RESEARCHERS[研究员团队]
@@ -51,14 +51,14 @@ graph TB
         RISKMGMT[风险管理团队]
         MANAGERS[管理层]
     end
-    
+
     subgraph "工具集成层 (Tool Integration Layer)"
         TOOLKIT[Toolkit工具包]
         DATAFLOW[数据流接口]
         MEMORY[记忆管理]
         LOGGING[日志系统]
     end
-    
+
     subgraph "数据源层 (Data Source Layer)"
         AKSHARE[AKShare]
         TUSHARE[Tushare]
@@ -67,61 +67,61 @@ graph TB
         REDDIT[Reddit]
         NEWS[新闻源]
     end
-    
+
     subgraph "存储层 (Storage Layer)"
         CACHE[数据缓存]
         FILES[文件存储]
         MEMORY_DB[记忆数据库]
         CONFIG[配置管理]
     end
-    
+
     %% 连接关系
     CLI --> GRAPH
     WEB --> GRAPH
     API --> GRAPH
     DOCKER --> GRAPH
-    
+
     GRAPH --> ADAPTERS
     ADAPTERS --> OPENAI
     ADAPTERS --> GOOGLE
     ADAPTERS --> DASHSCOPE
     ADAPTERS --> DEEPSEEK
     ADAPTERS --> ANTHROPIC
-    
+
     GRAPH --> SETUP
     GRAPH --> CONDITIONAL
     GRAPH --> PROPAGATOR
     GRAPH --> REFLECTOR
     GRAPH --> SIGNAL
-    
+
     SETUP --> ANALYSTS
     SETUP --> RESEARCHERS
     SETUP --> TRADER
     SETUP --> RISKMGMT
     SETUP --> MANAGERS
-    
+
     ANALYSTS --> TOOLKIT
     RESEARCHERS --> TOOLKIT
     TRADER --> TOOLKIT
     RISKMGMT --> TOOLKIT
     MANAGERS --> TOOLKIT
-    
+
     TOOLKIT --> DATAFLOW
     TOOLKIT --> MEMORY
     TOOLKIT --> LOGGING
-    
+
     DATAFLOW --> AKSHARE
     DATAFLOW --> TUSHARE
     DATAFLOW --> YFINANCE
     DATAFLOW --> FINNHUB
     DATAFLOW --> REDDIT
     DATAFLOW --> NEWS
-    
+
     DATAFLOW --> CACHE
     MEMORY --> MEMORY_DB
     LOGGING --> FILES
     GRAPH --> CONFIG
-    
+
     %% 样式定义
     classDef uiLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     classDef llmLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
@@ -130,7 +130,7 @@ graph TB
     classDef toolLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     classDef dataLayer fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     classDef storageLayer fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
-    
+
     class CLI,WEB,API,DOCKER uiLayer
     class OPENAI,GOOGLE,DASHSCOPE,DEEPSEEK,ANTHROPIC,ADAPTERS llmLayer
     class GRAPH,SETUP,CONDITIONAL,PROPAGATOR,REFLECTOR,SIGNAL coreLayer
@@ -195,11 +195,11 @@ from tradingagents.llm_adapters import ChatDashScope, ChatDashScopeOpenAI, ChatG
 # LLM提供商配置
 if config["llm_provider"].lower() == "openai":
     deep_thinking_llm = ChatOpenAI(
-        model=config["deep_think_llm"], 
+        model=config["deep_think_llm"],
         base_url=config["backend_url"]
     )
     quick_thinking_llm = ChatOpenAI(
-        model=config["quick_think_llm"], 
+        model=config["quick_think_llm"],
         base_url=config["backend_url"]
     )
 elif config["llm_provider"] == "google":
@@ -227,7 +227,7 @@ elif config["llm_provider"] == "google":
 ```python
 class TradingAgentsGraph:
     """交易智能体图的主要编排类"""
-    
+
     def __init__(
         self,
         selected_analysts=["market", "social", "news", "fundamentals"],
@@ -235,7 +235,7 @@ class TradingAgentsGraph:
         config: Dict[str, Any] = None,
     ):
         """初始化交易智能体图和组件
-        
+
         Args:
             selected_analysts: 要包含的分析师类型列表
             debug: 是否运行在调试模式
@@ -243,19 +243,19 @@ class TradingAgentsGraph:
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
-        
+
         # 更新接口配置
         set_config(self.config)
-        
+
         # 创建必要的目录
         os.makedirs(
             os.path.join(self.config["project_dir"], "dataflows/data_cache"),
             exist_ok=True,
         )
-        
+
         # 初始化LLM
         self._initialize_llms()
-        
+
         # 初始化组件
         self.setup = GraphSetup()
         self.conditional_logic = ConditionalLogic()
@@ -270,31 +270,31 @@ class TradingAgentsGraph:
 ```python
 class GraphSetup:
     """负责构建和配置LangGraph工作流"""
-    
+
     def __init__(self):
         self.workflow = StateGraph(AgentState)
         self.toolkit = None
-        
+
     def build_graph(self, llm, toolkit, selected_analysts):
         """构建完整的智能体工作流图"""
         # 添加分析师节点
         self._add_analyst_nodes(llm, toolkit, selected_analysts)
-        
+
         # 添加研究员节点
         self._add_researcher_nodes(llm)
-        
+
         # 添加交易员节点
         self._add_trader_node(llm)
-        
+
         # 添加风险管理节点
         self._add_risk_management_nodes(llm)
-        
+
         # 添加管理层节点
         self._add_management_nodes(llm)
-        
+
         # 定义工作流边
         self._define_workflow_edges()
-        
+
         return self.workflow.compile()
 ```
 
@@ -304,13 +304,13 @@ class GraphSetup:
 ```python
 class ConditionalLogic:
     """处理工作流中的条件分支和路由逻辑"""
-    
+
     def should_continue_debate(self, state: AgentState) -> str:
         """判断是否继续研究员辩论"""
         if state["investment_debate_state"]["count"] >= self.max_debate_rounds:
             return "research_manager"
         return "continue_debate"
-    
+
     def should_continue_risk_discussion(self, state: AgentState) -> str:
         """判断是否继续风险讨论"""
         if state["risk_debate_state"]["count"] >= self.max_risk_rounds:
@@ -329,23 +329,23 @@ from langgraph.graph import MessagesState
 
 class AgentState(MessagesState):
     """智能体状态管理类 - 继承自 LangGraph MessagesState"""
-    
+
     # 基础信息
     company_of_interest: Annotated[str, "目标分析公司股票代码"]
     trade_date: Annotated[str, "交易日期"]
     sender: Annotated[str, "发送消息的智能体"]
-    
+
     # 分析师报告
     market_report: Annotated[str, "市场分析师报告"]
     sentiment_report: Annotated[str, "社交媒体分析师报告"]
     news_report: Annotated[str, "新闻分析师报告"]
     fundamentals_report: Annotated[str, "基本面分析师报告"]
-    
+
     # 研究和决策
     investment_debate_state: Annotated[InvestDebateState, "投资辩论状态"]
     investment_plan: Annotated[str, "投资计划"]
     trader_investment_plan: Annotated[str, "交易员投资计划"]
-    
+
     # 风险管理
     risk_debate_state: Annotated[RiskDebateState, "风险辩论状态"]
     final_trade_decision: Annotated[str, "最终交易决策"]
@@ -395,27 +395,27 @@ from tradingagents.agents.managers import (
 ```python
 class Toolkit:
     """统一工具包，为所有智能体提供数据访问接口"""
-    
+
     def __init__(self, config):
         self.config = config
         self.dataflow = DataFlowInterface(config)
-    
+
     def get_stock_fundamentals_unified(self, ticker: str):
         """统一基本面分析工具，自动识别股票类型"""
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(ticker)
-        
+
         if market_info['market_type'] == 'A股':
             return self.dataflow.get_a_stock_fundamentals(ticker)
         elif market_info['market_type'] == '港股':
             return self.dataflow.get_hk_stock_fundamentals(ticker)
         else:
             return self.dataflow.get_us_stock_fundamentals(ticker)
-    
+
     def get_market_data(self, ticker: str, period: str = "1y"):
         """获取市场数据"""
         return self.dataflow.get_market_data(ticker, period)
-    
+
     def get_news_data(self, ticker: str, days: int = 7):
         """获取新闻数据"""
         return self.dataflow.get_news_data(ticker, days)
@@ -435,26 +435,26 @@ def get_finnhub_news(
     look_back_days: Annotated[int, "回看天数"],
 ):
     """获取指定时间范围内的公司新闻
-    
+
     Args:
         ticker (str): 目标公司的股票代码
         curr_date (str): 当前日期，格式为 yyyy-mm-dd
         look_back_days (int): 回看天数
-    
+
     Returns:
         str: 包含公司新闻的数据框
     """
     start_date = datetime.strptime(curr_date, "%Y-%m-%d")
     before = start_date - relativedelta(days=look_back_days)
     before = before.strftime("%Y-%m-%d")
-    
+
     result = get_data_in_range(ticker, before, curr_date, "news_data", DATA_DIR)
-    
+
     if len(result) == 0:
         error_msg = f"⚠️ 无法获取{ticker}的新闻数据 ({before} 到 {curr_date})"
         logger.debug(f"📰 [DEBUG] {error_msg}")
         return error_msg
-    
+
     return result
 ```
 
@@ -464,27 +464,27 @@ def get_finnhub_news(
 ```python
 class FinancialSituationMemory:
     """金融情况记忆管理类"""
-    
+
     def __init__(self, config):
         self.config = config
         self.memory_store = {}
-    
+
     def get_memories(self, query: str, n_matches: int = 2):
         """检索相关历史记忆
-        
+
         Args:
             query (str): 查询字符串
             n_matches (int): 返回匹配数量
-        
+
         Returns:
             List[Dict]: 相关记忆列表
         """
         # 实现记忆检索逻辑
         pass
-    
+
     def add_memory(self, content: str, metadata: dict):
         """添加新记忆
-        
+
         Args:
             content (str): 记忆内容
             metadata (dict): 元数据
@@ -607,11 +607,11 @@ sequenceDiagram
     participant Trader as 交易员
     participant RiskMgmt as 风险管理
     participant Managers as 管理层
-    
+
     User->>Graph: propagate(ticker, date)
     Graph->>Setup: 初始化工作流
     Setup->>Analysts: 并行执行分析
-    
+
     par 并行分析
         Analysts->>Analysts: 市场分析
     and
@@ -621,7 +621,7 @@ sequenceDiagram
     and
         Analysts->>Analysts: 社交媒体分析
     end
-    
+
     Analysts->>Researchers: 传递分析报告
     Researchers->>Researchers: 看涨vs看跌辩论
     Researchers->>Managers: 研究经理协调
@@ -810,7 +810,7 @@ class CustomLLMAdapter:
     def __init__(self, api_key, model_name):
         self.api_key = api_key
         self.model_name = model_name
-    
+
     def invoke(self, prompt):
         # 自定义LLM调用逻辑
         pass

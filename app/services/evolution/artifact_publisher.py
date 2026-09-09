@@ -34,7 +34,7 @@ def evolution_artifact_runtime_root() -> Path:
 
 
 def legacy_user_skills_dir() -> Path:
-    return Path.home() / ".vibe-trading" / "skills" / "user"
+    return Path.home() / ".zhitouagent" / "skills" / "user"
 
 
 def _safe_component(value: str) -> str:

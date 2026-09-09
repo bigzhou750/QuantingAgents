@@ -2,7 +2,7 @@
 
 ## 🎉 系统概述
 
-TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包括社媒消息和内部消息的完整管理体系，为爬虫数据清洗和系统分析提供强大支持。
+zhitouagent系统已成功实现了统一的消息数据存储架构，包括社媒消息和内部消息的完整管理体系，为爬虫数据清洗和系统分析提供强大支持。
 
 ### ✅ 核心功能
 
@@ -39,7 +39,7 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
   "message_type": "post",      // 消息类型
   "content": "平安银行今天涨停了...",
   "hashtags": ["#平安银行", "#涨停"],
-  
+
   // 作者信息
   "author": {
     "user_id": "user_123",
@@ -48,7 +48,7 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
     "follower_count": 10000,
     "influence_score": 0.75
   },
-  
+
   // 互动数据
   "engagement": {
     "likes": 150,
@@ -57,7 +57,7 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
     "views": 5000,
     "engagement_rate": 0.041
   },
-  
+
   // 分析结果
   "sentiment": "positive",      // 情绪分析
   "sentiment_score": 0.8,       // 情绪得分
@@ -65,7 +65,7 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
   "credibility": "medium",      // 可信度
   "keywords": ["涨停", "基本面"],
   "topics": ["股价表现", "基本面分析"],
-  
+
   "publish_time": ISODate("2024-03-20T14:30:00Z"),
   "data_source": "crawler_weibo",
   "version": 1
@@ -83,7 +83,7 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
   "title": "平安银行Q1业绩预期分析",
   "content": "根据内部分析...",
   "summary": "Q1净利润预期增长5-8%",
-  
+
   // 来源信息
   "source": {
     "type": "internal_research",
@@ -91,24 +91,24 @@ TradingAgents-CN系统已成功实现了统一的消息数据存储架构，包�
     "author": "张分析师",
     "reliability": "high"
   },
-  
+
   // 分类信息
   "category": "fundamental_analysis",
   "importance": "high",
   "confidence_level": 0.85,
   "time_sensitivity": "short_term",
-  
+
   // 相关数据
   "related_data": {
     "financial_metrics": ["roe", "roa"],
     "price_targets": [15.5, 16.0, 16.8],
     "rating": "buy"
   },
-  
+
   // 访问控制
   "access_level": "internal",
   "permissions": ["research_team"],
-  
+
   "created_time": ISODate("2024-03-20T10:00:00Z"),
   "expiry_time": ISODate("2024-06-20T10:00:00Z"),
   "version": 1
@@ -639,23 +639,23 @@ result = await collection.bulk_write(operations, ordered=False)
 # 监控股票社媒情绪变化
 async def monitor_social_sentiment(symbol: str):
     service = await get_social_media_service()
-    
+
     # 获取最近24小时的社媒消息
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(hours=24)
-    
+
     params = SocialMediaQueryParams(
         symbol=symbol,
         start_time=start_time,
         end_time=end_time,
         limit=1000
     )
-    
+
     messages = await service.query_social_media_messages(params)
-    
+
     # 分析情绪趋势
     sentiment_trend = analyze_sentiment_trend(messages)
-    
+
     return sentiment_trend
 ```
 
@@ -665,16 +665,16 @@ async def monitor_social_sentiment(symbol: str):
 # 整合内部研究观点
 async def aggregate_internal_views(symbol: str):
     service = await get_internal_message_service()
-    
+
     # 获取最新研究报告
     reports = await service.get_research_reports(symbol, limit=10)
-    
+
     # 获取分析师笔记
     notes = await service.get_analyst_notes(symbol, limit=20)
-    
+
     # 综合分析
     consensus = analyze_internal_consensus(reports + notes)
-    
+
     return consensus
 ```
 
@@ -685,17 +685,17 @@ async def aggregate_internal_views(symbol: str):
 async def cross_platform_analysis(symbol: str):
     social_service = await get_social_media_service()
     internal_service = await get_internal_message_service()
-    
+
     # 获取社媒数据
     social_messages = await social_service.query_social_media_messages(
         SocialMediaQueryParams(symbol=symbol, limit=500)
     )
-    
+
     # 获取内部数据
     internal_messages = await internal_service.query_internal_messages(
         InternalMessageQueryParams(symbol=symbol, limit=100)
     )
-    
+
     # 综合分析
     analysis = {
         "social_sentiment": calculate_social_sentiment(social_messages),
@@ -703,7 +703,7 @@ async def cross_platform_analysis(symbol: str):
         "data_consistency": check_data_consistency(social_messages, internal_messages),
         "recommendation": generate_recommendation(social_messages, internal_messages)
     }
-    
+
     return analysis
 ```
 

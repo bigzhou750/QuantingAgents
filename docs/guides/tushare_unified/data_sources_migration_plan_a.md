@@ -5,7 +5,7 @@
 ### 最终目录结构
 
 ```
-TradingAgents-CN/
+zhitouagent/
 ├── tradingagents/                    # 核心工具库 (独立可用)
 │   └── dataflows/
 │       ├── providers/                # 统一数据源提供器
@@ -53,75 +53,75 @@ import logging
 
 class BaseStockDataProvider(ABC):
     """统一的股票数据提供器基类"""
-    
+
     def __init__(self, name: str = None):
         self.name = name or self.__class__.__name__
         self.logger = logging.getLogger(f"dataflows.{self.name}")
         self.connected = False
         self.config = self._load_config()
-    
+
     # 连接管理
     @abstractmethod
     async def connect(self) -> bool:
         """连接到数据源"""
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         """检查数据源是否可用"""
         pass
-    
+
     # 核心数据接口 (必须实现)
     @abstractmethod
     async def get_stock_list(self, market: str = None) -> Optional[List[Dict[str, Any]]]:
         """获取股票列表"""
         pass
-    
+
     @abstractmethod
     async def get_stock_basic_info(self, symbol: str = None) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
         """获取股票基础信息"""
         pass
-    
+
     @abstractmethod
     async def get_stock_quotes(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取实时行情"""
         pass
-    
+
     @abstractmethod
     async def get_historical_data(self, symbol: str, start_date: Union[str, date], end_date: Union[str, date] = None) -> Optional[pd.DataFrame]:
         """获取历史数据"""
         pass
-    
+
     # 扩展接口 (可选实现)
     async def get_daily_basic(self, trade_date: str) -> Optional[pd.DataFrame]:
         """获取每日基础财务数据"""
         return None
-    
+
     async def get_realtime_quotes(self) -> Optional[Dict[str, Dict[str, Optional[float]]]]:
         """获取全市场实时快照"""
         return None
-    
+
     async def find_latest_trade_date(self) -> Optional[str]:
         """查找最新交易日期"""
         return None
-    
+
     # 数据标准化 (统一实现)
     def standardize_basic_info(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """标准化股票基础信息"""
         # 统一的标准化逻辑
         pass
-    
+
     def standardize_quotes(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """标准化实时行情数据"""
         # 统一的标准化逻辑
         pass
-    
+
     # 配置管理
     def _load_config(self) -> Dict[str, Any]:
         """加载数据源配置"""
         from .config import get_provider_config
         return get_provider_config(self.name.lower())
-    
+
     @property
     def priority(self) -> int:
         """数据源优先级"""
@@ -138,18 +138,18 @@ from .providers.base_provider import BaseStockDataProvider
 
 class DataSourceManager:
     """统一数据源管理器"""
-    
+
     def __init__(self):
         self.providers: Dict[str, BaseStockDataProvider] = {}
         self._load_providers()
-    
+
     def _load_providers(self):
         """动态加载所有可用的数据源提供器"""
         from .providers import (
             TushareProvider, AKShareProvider, BaoStockProvider,
             YahooProvider, FinnhubProvider, TDXProvider
         )
-        
+
         provider_classes = {
             'tushare': TushareProvider,
             'akshare': AKShareProvider,
@@ -158,7 +158,7 @@ class DataSourceManager:
             'finnhub': FinnhubProvider,
             'tdx': TDXProvider,
         }
-        
+
         for name, provider_class in provider_classes.items():
             try:
                 provider = provider_class()
@@ -169,7 +169,7 @@ class DataSourceManager:
                     self.logger.warning(f"⚠️ 数据源不可用: {name}")
             except Exception as e:
                 self.logger.error(f"❌ 加载数据源失败 {name}: {e}")
-    
+
     async def get_data(self, method: str, source: str = None, **kwargs) -> Optional[Any]:
         """统一数据获取接口"""
         if source:
@@ -180,10 +180,10 @@ class DataSourceManager:
         else:
             # 按优先级尝试所有数据源
             sorted_providers = sorted(
-                self.providers.values(), 
+                self.providers.values(),
                 key=lambda p: p.priority
             )
-            
+
             for provider in sorted_providers:
                 try:
                     result = await getattr(provider, method)(**kwargs)
@@ -192,25 +192,25 @@ class DataSourceManager:
                 except Exception as e:
                     self.logger.warning(f"数据源 {provider.name} 获取失败: {e}")
                     continue
-        
+
         return None
-    
+
     async def get_stock_basic_info(self, symbol: str = None, source: str = None):
         """获取股票基础信息"""
         return await self.get_data('get_stock_basic_info', source, symbol=symbol)
-    
+
     async def get_stock_quotes(self, symbol: str, source: str = None):
         """获取实时行情"""
         return await self.get_data('get_stock_quotes', source, symbol=symbol)
-    
+
     async def get_historical_data(self, symbol: str, start_date: str, end_date: str = None, source: str = None):
         """获取历史数据"""
         return await self.get_data('get_historical_data', source, symbol=symbol, start_date=start_date, end_date=end_date)
-    
+
     def get_available_sources(self) -> List[str]:
         """获取可用数据源列表"""
         return list(self.providers.keys())
-    
+
     def get_source_info(self, source: str) -> Optional[Dict[str, Any]]:
         """获取数据源信息"""
         provider = self.providers.get(source)
@@ -233,12 +233,12 @@ from typing import Dict, Any
 
 class DataSourceConfig:
     """数据源配置管理"""
-    
+
     @staticmethod
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
         """获取指定数据源的配置"""
         provider_name = provider_name.upper()
-        
+
         base_config = {
             'enabled': get_setting(f"{provider_name}_ENABLED", "true").lower() == "true",
             'priority': int(get_setting(f"{provider_name}_PRIORITY", "999")),
@@ -246,7 +246,7 @@ class DataSourceConfig:
             'retry_times': int(get_setting(f"{provider_name}_RETRY_TIMES", "3")),
             'retry_delay': int(get_setting(f"{provider_name}_RETRY_DELAY", "1")),
         }
-        
+
         # 特定配置
         if provider_name == 'TUSHARE':
             base_config.update({
@@ -266,7 +266,7 @@ class DataSourceConfig:
                 'api_key': get_setting("FINNHUB_API_KEY"),
                 'base_url': get_setting("FINNHUB_BASE_URL", "https://finnhub.io/api/v1")
             })
-        
+
         return base_config
 
 # 便捷函数
@@ -290,12 +290,12 @@ from app.core.database import get_mongo_db
 
 class UnifiedStockDataSyncService:
     """统一股票数据同步服务"""
-    
+
     def __init__(self):
         self.data_manager = DataSourceManager()
         self.stock_service = get_stock_data_service()
         self.logger = logging.getLogger(__name__)
-        
+
         # 同步配置
         self.batch_size = 100
         self.sync_stats = {
@@ -303,101 +303,101 @@ class UnifiedStockDataSyncService:
             'quotes': {'total': 0, 'success': 0, 'failed': 0},
             'historical': {'total': 0, 'success': 0, 'failed': 0}
         }
-    
+
     async def sync_all_data(self, source: str = None):
         """全量数据同步"""
         self.logger.info(f"🚀 开始全量数据同步 (数据源: {source or '自动选择'})")
-        
+
         start_time = datetime.now()
-        
+
         try:
             # 同步股票基础信息
             await self.sync_basic_info(source)
-            
+
             # 同步实时行情
             await self.sync_realtime_quotes(source)
-            
+
             # 记录同步状态
             await self._record_sync_status("success", start_time)
-            
+
             self.logger.info("✅ 全量数据同步完成")
             self._log_sync_stats()
-            
+
             return True
-            
+
         except Exception as e:
             self.logger.error(f"❌ 全量数据同步失败: {e}")
             await self._record_sync_status("failed", start_time, str(e))
             return False
-    
+
     async def sync_basic_info(self, source: str = None):
         """同步股票基础信息"""
         self.logger.info("📊 开始同步股票基础信息...")
-        
+
         try:
             # 从数据源获取股票列表
             stock_list = await self.data_manager.get_stock_basic_info(source=source)
-            
+
             if not stock_list:
                 self.logger.warning("⚠️ 未获取到股票基础信息")
                 return
-            
+
             # 确保是列表格式
             if isinstance(stock_list, dict):
                 stock_list = [stock_list]
-            
+
             self.sync_stats['basic_info']['total'] = len(stock_list)
-            
+
             # 批量处理
             for i in range(0, len(stock_list), self.batch_size):
                 batch = stock_list[i:i + self.batch_size]
                 await self._process_basic_info_batch(batch)
-                
+
                 # 进度日志
                 processed = min(i + self.batch_size, len(stock_list))
                 self.logger.info(f"📈 基础信息同步进度: {processed}/{len(stock_list)}")
-                
+
                 # 避免API限制
                 await asyncio.sleep(0.1)
-            
+
             self.logger.info(f"✅ 股票基础信息同步完成: {self.sync_stats['basic_info']['success']}/{self.sync_stats['basic_info']['total']}")
-            
+
         except Exception as e:
             self.logger.error(f"❌ 股票基础信息同步失败: {e}")
-    
+
     async def sync_realtime_quotes(self, source: str = None):
         """同步实时行情"""
         self.logger.info("📈 开始同步实时行情...")
-        
+
         try:
             # 获取需要同步的股票代码列表
             db = get_mongo_db()
             cursor = db.stock_basic_info.find({}, {"code": 1})
             stock_codes = [doc["code"] async for doc in cursor]
-            
+
             if not stock_codes:
                 self.logger.warning("⚠️ 未找到需要同步行情的股票")
                 return
-            
+
             self.sync_stats['quotes']['total'] = len(stock_codes)
-            
+
             # 批量处理
             for i in range(0, len(stock_codes), self.batch_size):
                 batch = stock_codes[i:i + self.batch_size]
                 await self._process_quotes_batch(batch, source)
-                
+
                 # 进度日志
                 processed = min(i + self.batch_size, len(stock_codes))
                 self.logger.info(f"📈 实时行情同步进度: {processed}/{len(stock_codes)}")
-                
+
                 # 避免API限制
                 await asyncio.sleep(0.1)
-            
+
             self.logger.info(f"✅ 实时行情同步完成: {self.sync_stats['quotes']['success']}/{self.sync_stats['quotes']['total']}")
-            
+
         except Exception as e:
             self.logger.error(f"❌ 实时行情同步失败: {e}")
-    
+
     async def _process_basic_info_batch(self, batch: List[Dict[str, Any]]):
         """处理基础信息批次"""
         for stock_info in batch:
@@ -405,46 +405,46 @@ class UnifiedStockDataSyncService:
                 code = stock_info.get("code")
                 if not code:
                     continue
-                
+
                 # 更新到数据库
                 success = await self.stock_service.update_stock_basic_info(code, stock_info)
-                
+
                 if success:
                     self.sync_stats['basic_info']['success'] += 1
                 else:
                     self.sync_stats['basic_info']['failed'] += 1
-                    
+
             except Exception as e:
                 self.sync_stats['basic_info']['failed'] += 1
                 self.logger.error(f"❌ 处理{stock_info.get('code', 'N/A')}基础信息失败: {e}")
-    
+
     async def _process_quotes_batch(self, batch: List[str], source: str = None):
         """处理行情批次"""
         for code in batch:
             try:
                 # 获取实时行情
                 quotes = await self.data_manager.get_stock_quotes(code, source=source)
-                
+
                 if quotes:
                     # 更新到数据库
                     success = await self.stock_service.update_market_quotes(code, quotes)
-                    
+
                     if success:
                         self.sync_stats['quotes']['success'] += 1
                     else:
                         self.sync_stats['quotes']['failed'] += 1
                 else:
                     self.sync_stats['quotes']['failed'] += 1
-                    
+
             except Exception as e:
                 self.sync_stats['quotes']['failed'] += 1
                 self.logger.error(f"❌ 处理{code}行情失败: {e}")
-    
+
     async def _record_sync_status(self, status: str, start_time: datetime, error_msg: str = None):
         """记录同步状态"""
         try:
             db = get_mongo_db()
-            
+
             sync_record = {
                 "job": "unified_stock_data_sync",
                 "status": status,
@@ -456,16 +456,16 @@ class UnifiedStockDataSyncService:
                 "error_message": error_msg,
                 "created_at": datetime.now()
             }
-            
+
             await db.sync_status.update_one(
                 {"job": "unified_stock_data_sync"},
                 {"$set": sync_record},
                 upsert=True
             )
-            
+
         except Exception as e:
             self.logger.error(f"❌ 记录同步状态失败: {e}")
-    
+
     def _log_sync_stats(self):
         """记录同步统计信息"""
         self.logger.info("📊 统一数据同步统计:")
@@ -474,9 +474,9 @@ class UnifiedStockDataSyncService:
             success = stats["success"]
             failed = stats["failed"]
             success_rate = (success / total * 100) if total > 0 else 0
-            
+
             self.logger.info(f"   {data_type}: {success}/{total} ({success_rate:.1f}%) 成功, {failed} 失败")
-        
+
         self.logger.info(f"📡 可用数据源: {', '.join(self.data_manager.get_available_sources())}")
 
 

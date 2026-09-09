@@ -5,10 +5,10 @@
 在运行股票基础信息同步任务时，出现 MongoDB 唯一索引冲突错误：
 
 ```
-ERROR | Bulk write error on batch 2: batch op errors occurred, full error: 
-{'writeErrors': [{'index': 823, 'code': 11000, 'keyPattern': {'full_symbol': 1}, 
-'keyValue': {'full_symbol': None}, 
-'errmsg': 'E11000 duplicate key error collection: tradingagents.stock_basic_info 
+ERROR | Bulk write error on batch 2: batch op errors occurred, full error:
+{'writeErrors': [{'index': 823, 'code': 11000, 'keyPattern': {'full_symbol': 1},
+'keyValue': {'full_symbol': None},
+'errmsg': 'E11000 duplicate key error collection: tradingagents.stock_basic_info
 index: full_symbol_1 dup key: { full_symbol: null }', ...}]}
 ```
 
@@ -128,16 +128,16 @@ full_symbol 不存在的记录: 1
 def _generate_full_symbol(self, code: str) -> str:
     """
     根据股票代码生成完整标准化代码
-    
+
     Args:
         code: 6位股票代码
-        
+
     Returns:
         完整标准化代码（如 000001.SZ）
     """
     if not code or len(code) != 6:
         return None
-    
+
     # 根据代码判断交易所
     if code.startswith(('60', '68', '90')):
         return f"{code}.SS"  # 上海证券交易所

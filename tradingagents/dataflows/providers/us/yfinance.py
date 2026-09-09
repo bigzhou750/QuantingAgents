@@ -152,7 +152,7 @@ def get_stock_data_with_indicators(
     """
     获取股票数据（OHLCV）并返回 CSV 格式字符串
 
-    参考原版 TradingAgents 的 get_YFin_data_online 实现
+    参考原版 zhitouagent 的 get_YFin_data_online 实现
     """
     try:
         # 验证日期格式
@@ -203,7 +203,7 @@ def get_technical_indicator(
     """
     获取技术指标数据（使用 stockstats 库计算）
 
-    参考原版 TradingAgents 的 get_stock_stats_indicators_window 实现
+    参考原版 zhitouagent 的 get_stock_stats_indicators_window 实现
 
     支持的指标：
     - close_50_sma: 50日简单移动平均

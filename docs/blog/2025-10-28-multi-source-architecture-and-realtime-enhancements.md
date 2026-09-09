@@ -1,7 +1,7 @@
 # 多数据源架构完善与实时数据增强
 
-**日期**: 2025-10-28  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-28
+**作者**: zhitouagent 开发团队
 **标签**: `多数据源` `实时数据` `PE/PB计算` `K线图` `数据隔离`
 
 ---
@@ -45,7 +45,7 @@
 
 **示例错误**：
 ```
-E11000 duplicate key error collection: tradingagents.stock_basic_info 
+E11000 duplicate key error collection: tradingagents.stock_basic_info
 index: code_1 dup key: { code: "000001" }
 ```
 
@@ -58,7 +58,7 @@ index: code_1 dup key: { code: "000001" }
 ```javascript
 // 联合唯一索引
 db.stock_basic_info.createIndex(
-  { "code": 1, "source": 1 }, 
+  { "code": 1, "source": 1 },
   { unique: true }
 );
 
@@ -85,14 +85,14 @@ db.stock_basic_info.createIndex({ "source": 1 });  // 按数据源查询
 # scripts/migrations/migrate_stock_basic_info_add_source_index.py
 async def migrate_stock_basic_info_indexes():
     """迁移 stock_basic_info 集合的索引"""
-    
+
     # 1. 删除旧的 code 唯一索引
     try:
         await db.stock_basic_info.drop_index("code_1")
         logger.info("✅ 已删除旧索引: code_1")
     except Exception as e:
         logger.warning(f"⚠️ 删除旧索引失败（可能不存在）: {e}")
-    
+
     # 2. 创建新的联合唯一索引
     await db.stock_basic_info.create_index(
         [("code", 1), ("source", 1)],
@@ -100,7 +100,7 @@ async def migrate_stock_basic_info_indexes():
         name="code_source_unique"
     )
     logger.info("✅ 已创建联合唯一索引: (code, source)")
-    
+
     # 3. 创建辅助索引
     await db.stock_basic_info.create_index([("code", 1)])
     await db.stock_basic_info.create_index([("source", 1)])
@@ -112,8 +112,8 @@ async def migrate_stock_basic_info_indexes():
 ```python
 # app/services/stock_data_service.py
 async def get_stock_basic_info(
-    self, 
-    symbol: str, 
+    self,
+    symbol: str,
     source: Optional[str] = None
 ) -> Optional[StockBasicInfoExtended]:
     """
@@ -124,7 +124,7 @@ async def get_stock_basic_info(
                 默认优先级：tushare > multi_source > akshare > baostock
     """
     symbol6 = symbol.lstrip('shsz').zfill(6)
-    
+
     if source:
         # 指定数据源
         query = {"code": symbol6, "source": source}
@@ -139,11 +139,11 @@ async def get_stock_basic_info(
             if doc:
                 logger.debug(f"✅ 使用数据源: {src}")
                 break
-    
+
     if not doc:
         logger.warning(f"⚠️ 未找到股票信息: {symbol}")
         return None
-    
+
     return StockBasicInfoExtended(**doc)
 ```
 
@@ -153,10 +153,10 @@ async def get_stock_basic_info(
 # app/services/multi_source_basics_sync_service.py
 async def sync_from_source(self, source: str):
     """从指定数据源同步股票基础信息"""
-    
+
     # 获取数据
     stocks_data = await self._fetch_data_from_source(source)
-    
+
     # 批量更新（使用 upsert）
     operations = []
     for stock in stocks_data:
@@ -167,7 +167,7 @@ async def sync_from_source(self, source: str):
                 upsert=True
             )
         )
-    
+
     # 执行批量操作
     if operations:
         result = await db.stock_basic_info.bulk_write(operations)
@@ -223,7 +223,7 @@ async def get_realtime_pe_pb(
 ) -> Dict[str, Optional[float]]:
     """
     获取实时PE/PB（多层回退策略）
-    
+
     回退策略：
     1. 优先使用实时股价计算
     2. 降级使用数据库缓存值
@@ -235,13 +235,13 @@ async def get_realtime_pe_pb(
         "total_mv": None,
         "data_source": None
     }
-    
+
     # 🔥 策略1：使用实时股价计算
     try:
         realtime_quote = await self._get_realtime_quote(symbol)
         if realtime_quote and realtime_quote.get("close"):
             pe, pb, total_mv = await self._calculate_from_realtime(
-                symbol, 
+                symbol,
                 realtime_quote["close"],
                 source
             )
@@ -255,7 +255,7 @@ async def get_realtime_pe_pb(
                 return result
     except Exception as e:
         logger.warning(f"⚠️ 实时计算失败: {e}")
-    
+
     # 🔥 策略2：使用数据库缓存值
     try:
         cached_data = await self._get_cached_pe_pb(symbol, source)
@@ -269,7 +269,7 @@ async def get_realtime_pe_pb(
             return result
     except Exception as e:
         logger.warning(f"⚠️ 缓存查询失败: {e}")
-    
+
     # 🔥 策略3：使用历史数据
     try:
         historical_data = await self._get_historical_pe_pb(symbol, source)
@@ -283,7 +283,7 @@ async def get_realtime_pe_pb(
             return result
     except Exception as e:
         logger.warning(f"⚠️ 历史数据查询失败: {e}")
-    
+
     logger.warning(f"⚠️ {symbol}: 所有策略均失败，返回空值")
     return result
 ```
@@ -299,24 +299,24 @@ async def _calculate_from_realtime(
     source: str
 ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
     """使用实时股价计算PE/PB/市值"""
-    
+
     # 获取财务数据
     financial_data = await self._get_financial_data(symbol, source)
     if not financial_data:
         return None, None, None
-    
+
     # 获取总股本（单位：万股）
     total_share = financial_data.get("total_share")
     if not total_share or total_share <= 0:
         logger.warning(f"⚠️ {symbol}: 总股本数据缺失或无效")
         return None, None, None
-    
+
     # 🔥 计算实时市值（单位：亿元）
     # total_share 单位：万股
     # current_price 单位：元
     # 市值 = 总股本(万股) * 股价(元) / 10000 = 亿元
     total_mv = (total_share * current_price) / 10000
-    
+
     # 🔥 计算PE（市盈率）
     net_profit = financial_data.get("net_profit")  # 单位：元
     if net_profit and net_profit > 0:
@@ -325,7 +325,7 @@ async def _calculate_from_realtime(
         pe = total_mv / net_profit_billion
     else:
         pe = None
-    
+
     # 🔥 计算PB（市净率）
     net_assets = financial_data.get("net_assets")  # 单位：元
     if net_assets and net_assets > 0:
@@ -334,7 +334,7 @@ async def _calculate_from_realtime(
         pb = total_mv / net_assets_billion
     else:
         pb = None
-    
+
     return pe, pb, total_mv
 ```
 
@@ -369,7 +369,7 @@ async def get_kline(
     adj: str = "none"
 ):
     """获取K线数据（支持当天实时数据）"""
-    
+
     # 获取历史K线数据
     items = await historical_service.get_kline_data(
         symbol=code,
@@ -377,7 +377,7 @@ async def get_kline(
         limit=limit,
         adj=adj
     )
-    
+
     # 🔥 检查是否需要添加当天实时数据（仅针对日线）
     if period == "day" and items:
         # 获取当前时间（北京时间）
@@ -385,22 +385,22 @@ async def get_kline(
         now = datetime.now(tz)
         today_str = now.strftime("%Y%m%d")
         current_time = now.time()
-        
+
         # 检查历史数据中是否已有当天的数据
         has_today_data = any(
-            item.get("time") == today_str 
+            item.get("time") == today_str
             for item in items
         )
-        
+
         # 🔥 判断是否在交易时间内
         is_trading_time = (
             dtime(9, 30) <= current_time <= dtime(15, 0) and
             now.weekday() < 5  # 周一到周五
         )
-        
+
         # 🔥 如果在交易时间内，或者收盘后但历史数据没有当天数据，则从 market_quotes 获取
         should_fetch_realtime = is_trading_time or not has_today_data
-        
+
         if should_fetch_realtime:
             # 从 market_quotes 获取实时行情
             code_padded = code.zfill(6)
@@ -408,7 +408,7 @@ async def get_kline(
                 {"code": code_padded},
                 {"_id": 0}
             )
-            
+
             if realtime_quote:
                 # 🔥 构造当天的K线数据
                 today_kline = {
@@ -420,17 +420,17 @@ async def get_kline(
                     "volume": float(realtime_quote.get("volume", 0)),
                     "amount": float(realtime_quote.get("amount", 0)),
                 }
-                
+
                 # 添加到结果中
                 if has_today_data:
                     # 替换已有的当天数据
                     items = [item for item in items if item.get("time") != today_str]
-                
+
                 items.append(today_kline)
                 items.sort(key=lambda x: x["time"])
-                
+
                 logger.info(f"✅ {code}: 添加当天实时K线数据")
-    
+
     return {
         "code": code,
         "period": period,
@@ -470,50 +470,50 @@ async def get_kline(
 # app/services/quotes_ingestion_service.py
 class QuotesIngestionService:
     """实时行情同步服务"""
-    
+
     def __init__(self):
         self.last_sync_time: Optional[datetime] = None
         self.sync_status: str = "idle"  # idle, syncing, success, error
         self.sync_error: Optional[str] = None
-    
+
     async def sync_realtime_quotes(self):
         """同步实时行情"""
         try:
             self.sync_status = "syncing"
             self.sync_error = None
-            
+
             # 🔥 判断是否在交易时间内（含收盘后30分钟缓冲期）
             if not self._is_sync_time():
                 logger.info("⏸️ 非交易时间，跳过同步")
                 self.sync_status = "idle"
                 return
-            
+
             # 同步数据
             await self._fetch_and_save_quotes()
-            
+
             # 更新状态
             self.last_sync_time = datetime.now(ZoneInfo("Asia/Shanghai"))
             self.sync_status = "success"
             logger.info(f"✅ 实时行情同步成功: {self.last_sync_time}")
-            
+
         except Exception as e:
             self.sync_status = "error"
             self.sync_error = str(e)
             logger.error(f"❌ 实时行情同步失败: {e}")
-    
+
     def _is_sync_time(self) -> bool:
         """判断是否在同步时间内（交易时间 + 收盘后30分钟缓冲期）"""
         now = datetime.now(ZoneInfo("Asia/Shanghai"))
         current_time = now.time()
-        
+
         # 周末不同步
         if now.weekday() >= 5:
             return False
-        
+
         # 🔥 交易时间：9:30-15:00
         # 🔥 缓冲期：15:00-15:30（收盘后30分钟）
         return dtime(9, 30) <= current_time <= dtime(15, 30)
-    
+
     def get_sync_status(self) -> Dict:
         """获取同步状态"""
         return {
@@ -546,7 +546,7 @@ class QuotesIngestionService:
         </el-tag>
       </div>
     </template>
-    
+
     <!-- 行情数据 -->
     <div class="quote-data">
       ...
@@ -586,7 +586,7 @@ const syncStatusText = computed(() => {
   const lastSyncTime = syncStatus.value.last_sync_time
     ? new Date(syncStatus.value.last_sync_time).toLocaleTimeString('zh-CN')
     : '从未同步'
-  
+
   switch (syncStatus.value.status) {
     case 'success': return `已同步 (${lastSyncTime})`
     case 'syncing': return '同步中...'
@@ -773,7 +773,7 @@ source_priority = ["tushare", "multi_source", "akshare", "baostock"]
 
 ---
 
-**感谢使用 TradingAgents-CN！** 🚀
+**感谢使用 zhitouagent！** 🚀
 
-如有问题或建议，欢迎在 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues) 中反馈。
+如有问题或建议，欢迎在 [GitHub Issues](mailto:zh75067197@gmail.com) 中反馈。
 

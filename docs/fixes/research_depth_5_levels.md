@@ -97,7 +97,7 @@ export interface AnalysisParameters {
 ```python
 class AnalysisParameters(BaseModel):
     """分析参数模型
-    
+
     研究深度说明：
     - 快速: 1级 - 快速分析 (2-4分钟)
     - 基础: 2级 - 基础分析 (4-6分钟)
@@ -118,28 +118,28 @@ def create_analysis_config(...):
         config["max_risk_discuss_rounds"] = 1
         config["memory_enabled"] = False  # 禁用记忆以加速
         config["online_tools"] = False  # 使用缓存数据
-        
+
     elif research_depth == "基础":
         # 2级 - 基础分析
         config["max_debate_rounds"] = 1
         config["max_risk_discuss_rounds"] = 1
         config["memory_enabled"] = True
         config["online_tools"] = True
-        
+
     elif research_depth == "标准":
         # 3级 - 标准分析（推荐）
         config["max_debate_rounds"] = 1
         config["max_risk_discuss_rounds"] = 2
         config["memory_enabled"] = True
         config["online_tools"] = True
-        
+
     elif research_depth == "深度":
         # 4级 - 深度分析
         config["max_debate_rounds"] = 2
         config["max_risk_discuss_rounds"] = 2
         config["memory_enabled"] = True
         config["online_tools"] = True
-        
+
     elif research_depth == "全面":
         # 5级 - 全面分析
         config["max_debate_rounds"] = 3

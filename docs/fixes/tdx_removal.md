@@ -2,7 +2,7 @@
 
 ## 📋 移除原因
 
-TDX（通达信）数据源已从 TradingAgents-CN 项目中完全移除，原因如下：
+TDX（通达信）数据源已从 zhitouagent 项目中完全移除，原因如下：
 
 1. **稳定性问题**：TDX 数据源依赖第三方服务器，连接不稳定
 2. **维护成本高**：需要维护服务器列表和连接逻辑
@@ -92,7 +92,7 @@ class ChinaDataSource(Enum):
 def _check_available_sources(self):
     available = []
     # ... 其他数据源检测 ...
-    
+
     # 检查TDX (通达信)
     try:
         import pytdx
@@ -100,17 +100,17 @@ def _check_available_sources(self):
         logger.warning(f"⚠️ TDX数据源可用 (将被淘汰)")
     except ImportError:
         logger.info(f"ℹ️ TDX数据源不可用: 库未安装")
-    
+
     return available
 
 # 移除后
 def _check_available_sources(self):
     available = []
     # ... 其他数据源检测 ...
-    
+
     # TDX (通达信) 已移除
     # 不再检查和支持 TDX 数据源
-    
+
     return available
 ```
 

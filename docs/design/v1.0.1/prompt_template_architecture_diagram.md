@@ -262,7 +262,7 @@ prompts/
     ├── fundamentals_default_v1.0.yaml
     ├── fundamentals_default_v1.1.yaml
     └── fundamentals_default_v1.2.yaml
-    
+
 版本操作：
 ├─ get_versions() → 列出所有版本
 ├─ load_version(version="1.0") → 加载特定版本

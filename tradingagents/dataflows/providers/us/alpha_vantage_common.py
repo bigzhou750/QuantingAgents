@@ -7,7 +7,7 @@ Alpha Vantage API 公共模块
 - 速率限制处理
 - 响应解析
 
-参考原版 TradingAgents 实现
+参考原版 zhitouagent 实现
 """
 
 import os

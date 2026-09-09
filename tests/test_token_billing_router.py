@@ -397,6 +397,23 @@ def test_get_packages_with_rate():
     assert pkg["gift_amount"] == 10.0
 
 
+def test_get_public_packages_without_auth():
+    """公开套餐只读接口无需登录，且不暴露账户字段。"""
+    fake_db = _FakeDB()
+    _seed_package(fake_db, "pkg_public", 50.0)
+    client = _make_client(user=None, fake_db=fake_db)
+
+    mock_cs = _mock_config_service()
+    with patch("app.services.config_service.config_service", mock_cs):
+        resp = client.get("/api/token-billing/public-packages")
+
+    assert resp.status_code == 200
+    payload = resp.json()["data"]
+    assert payload["items"][0]["amount_cny"] == 50.0
+    assert payload["items"][0]["quota_to_credit"] == 55.0
+    assert "balance" not in payload["items"][0]
+
+
 # ===========================================================================
 # 订单接口：验证创建订单正常流程、无效套餐 400、待支付订单查询可达性（Bug B1）
 # ===========================================================================
