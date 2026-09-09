@@ -25,6 +25,9 @@ class _FakeCursor:
     def limit(self, limit):
         return self
 
+    async def to_list(self, length=None):
+        return list(self._items)
+
 
 class _FakeDb:
     def __init__(self, collections=None):

@@ -39,11 +39,14 @@ async def verify_decision_audit_enabled():
 )
 async def get_decision_audit_chain(
     identifier: str,
+    scope: str = "auto",
     user: dict = Depends(get_current_user),
 ):
-    """按 business_id/task_id/session_id/trial_id 查询统一审计链。"""
+    """按 session 或单轮 task 查询统一审计链。"""
     try:
-        audit = await decision_audit_service.build_audit(identifier, user)
+        if scope not in {"auto", "session", "task"}:
+            raise HTTPException(status_code=400, detail="scope 必须是 auto、session 或 task")
+        audit = await decision_audit_service.build_audit(identifier, user, scope=scope)
         return ApiResponse(data=audit, message="决策审计链已生成")
     except HTTPException:
         raise

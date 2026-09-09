@@ -68,34 +68,37 @@ class DecisionAuditService:
         self,
         identifier: str,
         user: Dict[str, Any],
+        scope: str = "auto",
     ) -> Dict[str, Any]:
         start = time.monotonic()
         db = get_mongo_db()
-        task = await self._resolve_task(identifier)
-        task_id = str(task.get("task_id") or identifier)
-        session_id = str(task.get("session_id") or identifier)
+        scope = scope if scope in {"session", "task"} else "auto"
+        task = await self._resolve_task(identifier) if scope != "session" else None
+        if scope == "auto":
+            scope = "task" if task and str(task.get("task_id")) == identifier else "session"
 
-        records = await self.store.list_decision_records(
-            business_id=identifier,
-            task_id=identifier,
-            session_id=identifier,
-            limit=200,
-        )
-        if not records and task_id:
+        if scope == "session":
+            task_id: Optional[str] = None
+            session_id = identifier
+            records = await self.store.list_decision_records(session_id=session_id, limit=500)
+            task_cursor = db["vibe_agent_tasks"].find(
+                {"session_id": session_id}, {"_id": 0}
+            ).sort("created_at", 1).limit(100)
+            task_docs = await task_cursor.to_list(length=100)
+        else:
+            task_id = str(task.get("task_id") or identifier) if task else identifier
+            session_id = str(task.get("session_id") or "") if task else ""
             records = await self.store.list_decision_records(task_id=task_id, limit=200)
-        if not records and session_id:
-            records = await self.store.list_decision_records(session_id=session_id, limit=200)
+            task_docs = [task] if task else []
         await self._assert_authorized(identifier, task, user, records)
 
         trace_query: Dict[str, Any] = {"$or": []}
-        if identifier:
-            trace_query["$or"].append({"trial_id": identifier})
-        if task_id:
-            trace_query["$or"].append({"task_id": task_id})
-        if session_id:
+        if scope == "session":
             trace_query["$or"].append({"session_id": session_id})
-        if identifier:
-            trace_query["$or"].append({"business_id": identifier})
+        else:
+            trace_query["$or"].extend(
+                [{"trial_id": identifier}, {"task_id": task_id}, {"business_id": identifier}]
+            )
         if not trace_query["$or"]:
             trace_query = {}
         trace_cursor = db["eval_trace_events"].find(trace_query).sort("sequence", 1).limit(1000)
@@ -104,19 +107,11 @@ class DecisionAuditService:
             doc["id"] = str(doc.pop("_id"))
             trace_events.append(doc)
 
-        event_query: Dict[str, Any] = {}
-        if task_id and task_id != identifier:
-            event_query["task_id"] = task_id
-        if session_id and session_id != identifier and not event_query:
-            event_query["session_id"] = session_id
-        if not event_query and identifier:
-            event_query = {
-                "$or": [
-                    {"task_id": identifier},
-                    {"session_id": identifier},
-                    {"business_id": identifier},
-                ]
-            }
+        event_query: Dict[str, Any]
+        if scope == "session":
+            event_query = {"session_id": session_id}
+        else:
+            event_query = {"task_id": task_id}
         vibe_events: List[Dict[str, Any]] = []
         if event_query:
             event_cursor = db["vibe_agent_events"].find(event_query).sort("sequence", 1).limit(1000)
@@ -125,7 +120,9 @@ class DecisionAuditService:
                 vibe_events.append(doc)
 
         op_query: Dict[str, Any] = {}
-        if task_id and task_id != identifier:
+        if scope == "session":
+            op_query = {"session_id": session_id}
+        elif task_id and task_id != identifier:
             op_query["details.task_id"] = task_id
         elif session_id and session_id != identifier:
             op_query["session_id"] = session_id
@@ -138,9 +135,14 @@ class DecisionAuditService:
             operation_logs.append(doc)
 
         final_output = ""
-        if task_id:
+        message_query: Dict[str, Any] = {"role": "assistant"}
+        if scope == "session":
+            message_query["session_id"] = session_id
+        elif task_id:
+            message_query["task_id"] = task_id
+        if message_query:
             message = await db["vibe_agent_messages"].find_one(
-                {"task_id": task_id, "role": "assistant"},
+                message_query,
                 {"_id": 0, "content": 1},
                 sort=[("created_at", -1)],
             )
@@ -155,9 +157,30 @@ class DecisionAuditService:
                 output = trial.get("output_data") or {}
                 final_output = str(output.get("content") or output.get("result") or "")
 
-        explanations = await self.store.list_explanations(task_id=task_id or identifier)
-        validations = await self.store.list_validations(task_id=task_id or identifier)
-        reviews = await self.store.list_reviews(task_id=task_id or identifier)
+        message_query: Dict[str, Any] = {"role": {"$in": ["user", "assistant"]}}
+        if scope == "session":
+            message_query["session_id"] = session_id
+        else:
+            message_query["task_id"] = task_id
+        message_cursor = db["vibe_agent_messages"].find(
+            message_query, {"_id": 0}
+        ).sort("created_at", 1).limit(500)
+        messages: List[Dict[str, Any]] = await message_cursor.to_list(length=500)
+
+        lookup_task_id = task_id or identifier
+        if scope == "session":
+            task_ids = [str(item.get("task_id") or "") for item in task_docs]
+            explanations: List[Dict[str, Any]] = []
+            validations: List[Dict[str, Any]] = []
+            reviews: List[Dict[str, Any]] = []
+            for item_task_id in filter(None, task_ids):
+                explanations.extend(await self.store.list_explanations(task_id=item_task_id))
+                validations.extend(await self.store.list_validations(task_id=item_task_id))
+                reviews.extend(await self.store.list_reviews(task_id=item_task_id))
+        else:
+            explanations = await self.store.list_explanations(task_id=lookup_task_id)
+            validations = await self.store.list_validations(task_id=lookup_task_id)
+            reviews = await self.store.list_reviews(task_id=lookup_task_id)
         latency_ms = int((time.monotonic() - start) * 1000)
 
         evidence_events = [
@@ -173,9 +196,12 @@ class DecisionAuditService:
 
         return {
             "business_id": identifier,
-            "task_id": task_id if task_id != identifier else identifier,
-            "session_id": session_id if session_id != identifier else identifier,
+            "scope": scope,
+            "task_id": task_id,
+            "session_id": session_id,
             "audit_status": audit_status,
+            "tasks": task_docs,
+            "messages": messages,
             "decision_chain": records,
             "trace_events": trace_events,
             "vibe_events": vibe_events,
