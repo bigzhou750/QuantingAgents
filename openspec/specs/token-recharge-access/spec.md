@@ -1,8 +1,10 @@
+# token-recharge-access Specification
+
 ## Purpose
 
-定义算力充值页在主要导航界面中的可达入口和顶部余额交互，确保认证用户可以稳定发现并进入充值流程。
+定义算力充值页在主要导航界面中的可达入口、顶部余额交互和菜单排布，确保认证用户可以稳定发现并进入充值流程。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Recharge page must be reachable from main navigation surfaces
 
