@@ -102,10 +102,6 @@
       <div class="particle particle--5"></div>
       <div class="particle particle--6"></div>
     </div>
-    <!-- CI/CD 部署版本标记 -->
-    <div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,0.4);z-index:9999;">
-      Build: {{ new Date().toISOString().slice(0, 16) }}
-    </div>
   </div>
 </template>
 
@@ -187,7 +183,7 @@ onMounted(async () => {
    ============================================ */
 
 // --- Google Fonts import via CSS ---
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+// @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
 
 .login-page {
   display: flex;
@@ -443,14 +439,12 @@ onMounted(async () => {
 .gradient-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    #0a0a0a 0%,
-    #1a1a2e 25%,
-    #16213e 50%,
-    #0f3460 75%,
-    #0a0a0a 100%
-  );
+  background: linear-gradient(135deg,
+      #0a0a0a 0%,
+      #1a1a2e 25%,
+      #16213e 50%,
+      #0f3460 75%,
+      #0a0a0a 100%);
   background-size: 400% 400%;
   animation: gradientShift 12s ease infinite;
 }
@@ -459,15 +453,19 @@ onMounted(async () => {
   0% {
     background-position: 0% 50%;
   }
+
   25% {
     background-position: 100% 0%;
   }
+
   50% {
     background-position: 100% 100%;
   }
+
   75% {
     background-position: 0% 100%;
   }
+
   100% {
     background-position: 0% 50%;
   }
@@ -477,38 +475,32 @@ onMounted(async () => {
 .gradient-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    ellipse at 30% 50%,
-    rgba(30, 64, 175, 0.15) 0%,
-    transparent 60%
-  );
+  background: radial-gradient(ellipse at 30% 50%,
+      rgba(30, 64, 175, 0.15) 0%,
+      transparent 60%);
   animation: overlayPulse 8s ease-in-out infinite alternate;
 }
 
 @keyframes overlayPulse {
   0% {
     opacity: 0.6;
-    background: radial-gradient(
-      ellipse at 30% 50%,
-      rgba(30, 64, 175, 0.15) 0%,
-      transparent 60%
-    );
+    background: radial-gradient(ellipse at 30% 50%,
+        rgba(30, 64, 175, 0.15) 0%,
+        transparent 60%);
   }
+
   50% {
     opacity: 1;
-    background: radial-gradient(
-      ellipse at 70% 40%,
-      rgba(245, 158, 11, 0.08) 0%,
-      transparent 60%
-    );
+    background: radial-gradient(ellipse at 70% 40%,
+        rgba(245, 158, 11, 0.08) 0%,
+        transparent 60%);
   }
+
   100% {
     opacity: 0.8;
-    background: radial-gradient(
-      ellipse at 50% 70%,
-      rgba(59, 130, 246, 0.12) 0%,
-      transparent 60%
-    );
+    background: radial-gradient(ellipse at 50% 70%,
+        rgba(59, 130, 246, 0.12) 0%,
+        transparent 60%);
   }
 }
 
@@ -516,10 +508,8 @@ onMounted(async () => {
 .dot-grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(
-    rgba(255, 255, 255, 0.06) 1px,
-    transparent 1px
-  );
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px);
   background-size: 24px 24px;
   animation: dotDrift 20s linear infinite;
 }
@@ -528,6 +518,7 @@ onMounted(async () => {
   0% {
     background-position: 0 0;
   }
+
   100% {
     background-position: 24px 24px;
   }
@@ -575,10 +566,12 @@ onMounted(async () => {
     opacity: 0;
     border-color: rgba(255, 255, 255, 0.1);
   }
+
   50% {
     opacity: 1;
     border-color: rgba(255, 255, 255, 0.06);
   }
+
   100% {
     transform: scale(1.4);
     opacity: 0;
@@ -599,9 +592,12 @@ onMounted(async () => {
 }
 
 @keyframes coreFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-8px);
   }
@@ -668,18 +664,23 @@ onMounted(async () => {
 }
 
 @keyframes particleFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate(0, 0) scale(1);
     opacity: 0.3;
   }
+
   25% {
     transform: translate(15px, -20px) scale(1.2);
     opacity: 0.8;
   }
+
   50% {
     transform: translate(-10px, -35px) scale(0.8);
     opacity: 0.4;
   }
+
   75% {
     transform: translate(20px, -15px) scale(1.1);
     opacity: 0.7;

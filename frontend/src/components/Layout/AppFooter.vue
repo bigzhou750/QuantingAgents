@@ -11,6 +11,7 @@
 </template>
 
 <script setup lang="ts">
+// Footer component - deployed 2026-09-10
 </script>
 
 <style lang="scss" scoped>
@@ -18,12 +19,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   padding: 0 16px;
+  flex-wrap: wrap;
 
   .disclaimer {
     color: var(--el-text-color-placeholder);
     font-size: 12px;
     text-align: center;
+  }
+
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+
+    a {
+      color: var(--el-text-color-secondary);
+      font-size: 12px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 0.2s;
+
+      &:hover {
+        color: var(--el-color-primary);
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .app-footer {
+    flex-direction: column;
+    gap: 8px;
   }
 }
 </style>
