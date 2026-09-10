@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.database import get_mongo_db
-from app.core.config import settings
 from app.routers.auth_db import get_current_user
 from app.services.eval.dataset_service import dataset_service
 from app.services.eval.runner_service import runner_service
@@ -111,12 +110,6 @@ async def verify_eval_access(current_user: dict = Depends(get_current_user)) -> 
     链式依赖 get_current_user 完成 JWT 验签和用户查询后，
     再校验 is_admin 角色。返回用户对象供端点使用。
     """
-    if not settings.EVAL_PLATFORM_ENABLED:
-        raise HTTPException(
-            status_code=403,
-            detail="Agent 评测平台未启用，请联系管理员开启 EVAL_PLATFORM_ENABLED 配置"
-        )
-
     if not current_user.get("is_admin", False):
         raise HTTPException(
             status_code=403,
@@ -133,7 +126,7 @@ async def eval_health():
     """评测平台健康检查"""
     return {
         "status": "ok",
-        "enabled": settings.EVAL_PLATFORM_ENABLED,
+        "enabled": True,
         "version": "1.0.0-mvp",
     }
 

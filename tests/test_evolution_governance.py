@@ -215,7 +215,7 @@ class TestScheduledTrigger:
         from app.services.evolution.governance_service import governance_service
 
         svc = TriggerService()
-        settings = MagicMock(EVOLUTION_ENABLED=True, EVOLUTION_SCHEDULE_CRON="* * * * *")
+        settings = MagicMock(EVOLUTION_SCHEDULE_CRON="* * * * *")
         eval_runs = MagicMock()
         eval_runs.find_one = AsyncMock(return_value={"run_id": "run-1", "dataset_id": "ds-1"})
         db = MagicMock()
@@ -236,7 +236,7 @@ class TestScheduledTrigger:
         from app.services.evolution.governance_service import governance_service
 
         svc = TriggerService()
-        settings = MagicMock(EVOLUTION_ENABLED=True, EVOLUTION_SCHEDULE_CRON="* * * * *")
+        settings = MagicMock(EVOLUTION_SCHEDULE_CRON="* * * * *")
         with patch("app.services.evolution.trigger_service.settings", settings):
             with patch.object(governance_service, "acquire_window_lock", new=AsyncMock(return_value=False)):
                 assert await svc.scheduled_check() is None

@@ -203,7 +203,6 @@ class Settings(BaseSettings):
     VIBE_AGENT_TASK_TIMEOUT_SECONDS: int = Field(default=900, ge=30, le=7200)
 
     # ==================== Agent 评测平台配置 ====================
-    EVAL_PLATFORM_ENABLED: bool = Field(default=False, description="是否启用 Agent 评测平台（默认关闭）")
     EVAL_RUNNER_CONCURRENCY: int = Field(default=2, ge=1, le=8, description="评测运行并发数")
     EVAL_TRIAL_TIMEOUT_SECONDS: int = Field(default=600, ge=60, le=3600, description="单个 trial 超时时间（秒）")
     EVAL_MAX_TRIALS_PER_CASE: int = Field(default=10, ge=1, le=50, description="每个 case 最大 trial 次数")
@@ -251,7 +250,6 @@ class Settings(BaseSettings):
     )
 
     # ==================== Agent 自进化配置 ====================
-    EVOLUTION_ENABLED: bool = Field(default=False, description="是否启用 Agent 自进化闭环（默认关闭）")
     EVOLUTION_AUTOMATION_MODE: str = Field(default="manual", description="自动化模式: manual/semi-auto/auto")
     EVOLUTION_TRIGGER_REGRESSION_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0, description="趋势回退触发阈值（成功率下降比例）")
     EVOLUTION_TRIGGER_BAD_CASE_COUNT: int = Field(default=10, ge=1, description="Bad Case 阈值触发数量")

@@ -32,6 +32,15 @@ export const selfEvolutionEntries: SidebarEntry[] = [
   { path: '/evolution/receipts', label: '进化回执' },
 ]
 
+export const primaryNavigationPaths = [
+  '/dashboard',
+  '/research-agent',
+  '/analysis',
+  '/screening',
+  '/favorites',
+  '/paper',
+]
+
 /**
  * 校验菜单属性值不含非 ASCII 引号等非法字符。
  * 用于防止 index="..." 之类的属性值被写入全角引号导致路由匹配失效。

@@ -206,12 +206,23 @@ class TestEvolutionConfig:
         """验证默认配置是生产安全的"""
         from app.core.config import settings
 
-        assert settings.EVOLUTION_ENABLED is False
         assert settings.EVOLUTION_AUTOMATION_MODE == "manual"
         assert settings.EVOLUTION_HUMAN_GATE is True
         assert settings.EVOLUTION_TRIGGER_REGRESSION_THRESHOLD == 0.05
         assert settings.EVOLUTION_TRIGGER_BAD_CASE_COUNT == 10
         assert settings.EVOLUTION_BUDGET_MAX_RUNS_PER_DAY == 5
+
+    @pytest.mark.asyncio
+    async def test_evolution_access_allows_admin_without_enable_flag(self):
+        """管理员在无 enable 配置时仍可通过自进化权限检查"""
+        from fastapi import HTTPException
+        from app.routers.evolution import verify_evolution_access
+
+        user = await verify_evolution_access(current_user={"is_admin": True})
+        assert user["is_admin"] is True
+        with pytest.raises(HTTPException) as exc:
+            await verify_evolution_access(current_user={"is_admin": False})
+        assert exc.value.status_code == 403
 
 
 class TestClusteringUtils:

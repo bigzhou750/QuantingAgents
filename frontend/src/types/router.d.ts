@@ -9,8 +9,6 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     // 是否需要管理员权限
     requiresAdmin?: boolean
-    // 是否需要启用 Agent 评测平台开关
-    requiresEvalPlatform?: boolean
     // 菜单图标名称（与 Element Plus 图标名称一致）
     icon?: string
     // 是否在菜单中隐藏

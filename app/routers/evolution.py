@@ -80,10 +80,6 @@ class EvolutionConfigUpdate(BaseModel):
 
 async def verify_evolution_access(current_user: dict = Depends(get_current_user)) -> dict:
     """验证自进化平台访问权限"""
-    if not settings.EVAL_PLATFORM_ENABLED:
-        raise HTTPException(status_code=403, detail="评测平台未启用")
-    if not settings.EVOLUTION_ENABLED:
-        raise HTTPException(status_code=403, detail="自进化功能未启用，请联系管理员开启 EVOLUTION_ENABLED")
     if not current_user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="仅管理员可访问自进化平台")
     return current_user
@@ -94,14 +90,14 @@ async def verify_evolution_access(current_user: dict = Depends(get_current_user)
 @router.get("/health", dependencies=[Depends(verify_evolution_access)])
 async def health_check():
     """健康检查"""
-    return ApiResponse(success=True, data={"status": "ok", "enabled": settings.EVOLUTION_ENABLED})
+    return ApiResponse(success=True, data={"status": "ok", "enabled": True})
 
 
 @router.get("/config", dependencies=[Depends(verify_evolution_access)])
 async def get_config():
     """获取自进化配置"""
     data = {
-        "enabled": settings.EVOLUTION_ENABLED,
+        "enabled": True,
         "automation_mode": settings.EVOLUTION_AUTOMATION_MODE,
         "trigger_regression_threshold": settings.EVOLUTION_TRIGGER_REGRESSION_THRESHOLD,
         "trigger_bad_case_count": settings.EVOLUTION_TRIGGER_BAD_CASE_COUNT,

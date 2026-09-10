@@ -359,7 +359,7 @@ PUT /api/eval/governance/config
 ## 验证命令
 
 ```bash
-EVAL_PLATFORM_ENABLED=false pytest -q tests/test_eval_platform.py tests/test_eval_phase2.py tests/test_eval_phase3.py
+pytest -q tests/test_eval_platform.py tests/test_eval_phase2.py tests/test_eval_phase3.py
 cd frontend && npm run test:unit && npm run type-check
 openspec validate complete-agent-evaluation-platform --strict
 ```

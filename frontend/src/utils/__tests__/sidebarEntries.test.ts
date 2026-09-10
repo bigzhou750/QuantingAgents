@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path'
 import {
   investmentAssistantEntries,
   evaluationPlatformEntries,
+  selfEvolutionEntries,
+  primaryNavigationPaths,
   hasInvalidQuoteChars,
 } from '../sidebarEntries'
 
@@ -34,6 +36,23 @@ describe('sidebarEntries', () => {
     evaluationPlatformEntries.forEach((entry) => {
       expect(sidebarSource).toContain(`index="${entry.path}"`)
     })
+  })
+
+  it('SidebarMenu.vue includes an entry for every self-evolution path', () => {
+    selfEvolutionEntries.forEach((entry) => {
+      expect(sidebarSource).toContain(`index="${entry.path}"`)
+    })
+  })
+
+  it('SidebarMenu.vue keeps AI research as the second primary menu item', () => {
+    const indices = primaryNavigationPaths.map((path) => sidebarSource.indexOf(`index="${path}"`))
+    expect(indices.every((index) => index >= 0)).toBe(true)
+    expect(indices).toEqual([...indices].sort((a, b) => a - b))
+  })
+
+  it('SidebarMenu.vue no longer depends on feature enable env vars', () => {
+    expect(sidebarSource).not.toContain('VITE_EVAL_PLATFORM_ENABLED')
+    expect(sidebarSource).not.toContain('VITE_EVOLUTION_ENABLED')
   })
 
   it('SidebarMenu.vue keeps the /paper entry clickable (regression for the quote bug)', () => {

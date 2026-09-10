@@ -42,9 +42,6 @@ class TriggerService:
         由 runner_service._execute_run 在 run 完成后调用。
         返回触发的提案信息或 None。
         """
-        if not settings.EVOLUTION_ENABLED:
-            return None
-
         mode = settings.EVOLUTION_AUTOMATION_MODE
         if mode == "manual":
             # manual 模式只记录事件，不自动创建提案
@@ -80,17 +77,10 @@ class TriggerService:
     async def on_bad_case_event(self, bad_case: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """处理线上 Bad Case 事件。
 
-        Bad Case 收集与自进化提案生成解耦：即使演化关闭或没有可用的
-        baseline run，样本仍会被保存，只记录触发被抑制的原因。
+        Bad Case 收集与自进化提案生成解耦：即使没有可用的 baseline run，
+        样本仍会被保存，只记录触发被抑制的原因。
         """
         bad_case_id = str(bad_case.get("bad_case_id") or "")
-        if not settings.EVOLUTION_ENABLED:
-            await self._log_event(
-                "bad_case_trigger_suppressed",
-                "",
-                {"bad_case_id": bad_case_id, "reason": "evolution_disabled"},
-            )
-            return None
 
         risk_level = str(bad_case.get("risk_level") or "medium")
         if risk_level in {"high", "critical"}:
@@ -274,8 +264,6 @@ class TriggerService:
 
     async def scheduled_check(self) -> Optional[Dict[str, Any]]:
         """定时触发检查（由外部调度器调用）"""
-        if not settings.EVOLUTION_ENABLED:
-            return None
         if not settings.EVOLUTION_SCHEDULE_CRON:
             return None
 

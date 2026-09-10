@@ -15,6 +15,7 @@ export const useTokenBillingStore = defineStore('tokenBilling', {
     packages: [] as PackageItem[],
     pendingOrder: null as any,
     balanceLoading: false,
+    balanceError: false,
     lastFetchedAt: null as string | null,
   }),
 
@@ -31,6 +32,7 @@ export const useTokenBillingStore = defineStore('tokenBilling', {
     /** 获取账户信息 */
     async fetchAccount() {
       this.balanceLoading = true
+      this.balanceError = false
       try {
         const res = await tokenBillingApi.getAccount()
         if (res.success && res.data) {
@@ -43,6 +45,7 @@ export const useTokenBillingStore = defineStore('tokenBilling', {
           this.lastFetchedAt = new Date().toISOString()
         }
       } catch (error: any) {
+        this.balanceError = true
         console.error('获取账户信息失败:', error)
       } finally {
         this.balanceLoading = false
@@ -64,6 +67,7 @@ export const useTokenBillingStore = defineStore('tokenBilling', {
     /** SSE推送的余额更新 */
     updateBalanceFromSSE(newBalance: number, newFrozen?: number) {
       this.balance = newBalance
+      this.balanceError = false
       if (newFrozen !== undefined) {
         this.frozen = newFrozen
       }

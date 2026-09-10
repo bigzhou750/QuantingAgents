@@ -11,6 +11,11 @@
       <template #title>工作台</template>
     </el-menu-item>
 
+    <el-menu-item index="/research-agent">
+      <el-icon><ChatDotRound /></el-icon>
+      <template #title>AI 研究</template>
+    </el-menu-item>
+
     <el-sub-menu index="/analysis">
       <template #title>
         <el-icon><TrendCharts /></el-icon>
@@ -89,11 +94,6 @@
       <template #title>分析任务</template>
     </el-menu-item>
 
-    <el-menu-item index="/research-agent">
-      <el-icon><ChatDotRound /></el-icon>
-      <template #title>AI 研究</template>
-    </el-menu-item>
-
     <el-sub-menu index="/settings">
       <template #title>
         <el-icon><Setting /></el-icon>
@@ -149,12 +149,8 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 
 const activeMenu = computed(() => route.path)
-const showEvaluationPlatform = computed(() => {
-  return import.meta.env.VITE_EVAL_PLATFORM_ENABLED === 'true' && authStore.isAdmin
-})
-const showSelfEvolution = computed(() => {
-  return showEvaluationPlatform.value && import.meta.env.VITE_EVOLUTION_ENABLED === 'true'
-})
+const showEvaluationPlatform = computed(() => authStore.isAdmin)
+const showSelfEvolution = computed(() => authStore.isAdmin)
 </script>
 
 <style lang="scss" scoped>

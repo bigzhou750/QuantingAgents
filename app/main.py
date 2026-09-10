@@ -326,48 +326,45 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
 
-    # 初始化 Agent 评测平台服务（评测平台或线上 Bad Case 采集启用时）
-    if settings.EVAL_PLATFORM_ENABLED or settings.ONLINE_BADCASE_ENABLED:
-        try:
-            from app.services.eval.dataset_service import dataset_service
-            from app.services.eval.runner_service import runner_service
-            from app.services.eval.trace_adapter import trace_adapter
-            from app.services.eval.scorer_hub import scorer_hub
-            from app.services.eval.bad_case_service import bad_case_service
+    # 初始化 Agent 评测平台服务
+    try:
+        from app.services.eval.dataset_service import dataset_service
+        from app.services.eval.runner_service import runner_service
+        from app.services.eval.trace_adapter import trace_adapter
+        from app.services.eval.scorer_hub import scorer_hub
+        from app.services.eval.bad_case_service import bad_case_service
 
-            if settings.EVAL_PLATFORM_ENABLED:
-                await dataset_service.initialize()
-                await runner_service.initialize()
-                await trace_adapter.initialize()
-                await scorer_hub.initialize()
-                from app.services.eval.skill_regression_service import skill_regression_service
-                await skill_regression_service.initialize()
-            await bad_case_service.initialize()
-            logger.info("✅ Agent 评测平台服务已初始化")
-        except Exception as e:
-            logger.warning(f"Agent 评测平台初始化失败: {e}")
+        await dataset_service.initialize()
+        await runner_service.initialize()
+        await trace_adapter.initialize()
+        await scorer_hub.initialize()
+        from app.services.eval.skill_regression_service import skill_regression_service
+        await skill_regression_service.initialize()
+        await bad_case_service.initialize()
+        logger.info("✅ Agent 评测平台服务已初始化")
+    except Exception as e:
+        logger.warning(f"Agent 评测平台初始化失败: {e}")
 
-    # 初始化 Agent 自进化服务（仅当启用时）
-    if settings.EVOLUTION_ENABLED:
-        try:
-            from app.services.evolution.artifact_registry import artifact_registry
-            from app.services.evolution.trigger_service import trigger_service
-            from app.services.evolution.proposal_service import proposal_service
-            from app.services.evolution.verification_service import verification_service
-            from app.services.evolution.approval_service import approval_service
-            from app.services.evolution.receipt_service import receipt_service
-            from app.services.evolution.governance_service import governance_service
+    # 初始化 Agent 自进化服务
+    try:
+        from app.services.evolution.artifact_registry import artifact_registry
+        from app.services.evolution.trigger_service import trigger_service
+        from app.services.evolution.proposal_service import proposal_service
+        from app.services.evolution.verification_service import verification_service
+        from app.services.evolution.approval_service import approval_service
+        from app.services.evolution.receipt_service import receipt_service
+        from app.services.evolution.governance_service import governance_service
 
-            await artifact_registry.initialize()
-            await trigger_service.initialize()
-            await proposal_service.initialize()
-            await verification_service.initialize()
-            await approval_service.initialize()
-            await receipt_service.initialize()
-            await governance_service.initialize()
-            logger.info("✅ Agent 自进化服务已初始化")
-        except Exception as e:
-            logger.warning(f"Agent 自进化服务初始化失败: {e}")
+        await artifact_registry.initialize()
+        await trigger_service.initialize()
+        await proposal_service.initialize()
+        await verification_service.initialize()
+        await approval_service.initialize()
+        await receipt_service.initialize()
+        await governance_service.initialize()
+        logger.info("✅ Agent 自进化服务已初始化")
+    except Exception as e:
+        logger.warning(f"Agent 自进化服务初始化失败: {e}")
 
     # Token 计费模块初始化（种子数据 + 默认配置）
     try:
@@ -799,8 +796,8 @@ async def lifespan(app: FastAPI):
         else:
             logger.info(f"📈 策略自动模拟已配置: {settings.SIMULATION_AUTO_RUN_CRON}")
 
-        # 自进化定时检查（默认关闭；必须显式配置 cron）
-        if settings.EVOLUTION_ENABLED and settings.EVOLUTION_SCHEDULE_CRON:
+        # 自进化定时检查（必须显式配置 cron）
+        if settings.EVOLUTION_SCHEDULE_CRON:
             async def run_evolution_scheduled_check():
                 try:
                     from app.services.evolution.trigger_service import trigger_service
@@ -1026,15 +1023,13 @@ app.include_router(news_data.router, tags=["news-data"])
 app.include_router(social_media.router, tags=["social-media"])
 app.include_router(internal_messages.router, tags=["internal-messages"])
 
-# Agent 评测平台（仅当 EVAL_PLATFORM_ENABLED=True 时启用）
-if settings.EVAL_PLATFORM_ENABLED:
-    from app.routers import eval as eval_router
-    app.include_router(eval_router.router, prefix="/api/eval", tags=["evaluation"])
+# Agent 评测平台
+from app.routers import eval as eval_router
+app.include_router(eval_router.router, prefix="/api/eval", tags=["evaluation"])
 
-# Agent 自进化闭环（仅当 EVOLUTION_ENABLED=True 时启用）
-if settings.EVOLUTION_ENABLED:
-    from app.routers import evolution as evolution_router
-    app.include_router(evolution_router.router, prefix="/api/evolution", tags=["evolution"])
+# Agent 自进化闭环
+from app.routers import evolution as evolution_router
+app.include_router(evolution_router.router, prefix="/api/evolution", tags=["evolution"])
 
 # 数据就绪状态 API
 from app.routers import data_readiness as data_readiness_router

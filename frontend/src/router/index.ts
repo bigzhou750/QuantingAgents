@@ -550,7 +550,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测概览',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -562,7 +561,6 @@ const routes: RouteRecordRaw[] = [
           title: '决策审计',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -574,7 +572,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测集管理',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -586,7 +583,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测运行',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -598,7 +594,6 @@ const routes: RouteRecordRaw[] = [
           title: '新建评测运行',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -611,7 +606,6 @@ const routes: RouteRecordRaw[] = [
           title: '运行对比',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -624,7 +618,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测运行详情',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -637,7 +630,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测报告',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -650,7 +642,6 @@ const routes: RouteRecordRaw[] = [
           title: '评测集详情',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -663,7 +654,6 @@ const routes: RouteRecordRaw[] = [
           title: '人工复核',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -675,7 +665,6 @@ const routes: RouteRecordRaw[] = [
           title: 'Bad Case 池',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -687,7 +676,6 @@ const routes: RouteRecordRaw[] = [
           title: '质量趋势',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -705,7 +693,6 @@ const routes: RouteRecordRaw[] = [
           title: '候选提案',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -717,7 +704,6 @@ const routes: RouteRecordRaw[] = [
           title: '提案详情',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           hideInMenu: true,
           transition: 'fade'
         }
@@ -730,7 +716,6 @@ const routes: RouteRecordRaw[] = [
           title: 'Artifact 管理',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -742,7 +727,6 @@ const routes: RouteRecordRaw[] = [
           title: '进化回执',
           requiresAuth: true,
           requiresAdmin: true,
-          requiresEvalPlatform: true,
           transition: 'fade'
         }
       },
@@ -828,18 +812,6 @@ router.beforeEach(async (to, _from, next) => {
     // 保存原始路径，登录后跳转
     authStore.setRedirectPath(to.fullPath)
     next('/login')
-    return
-  }
-
-  if (to.meta.requiresEvalPlatform && import.meta.env.VITE_EVAL_PLATFORM_ENABLED !== 'true') {
-    ElMessage.warning('Agent 评测平台未启用')
-    next('/dashboard')
-    return
-  }
-
-  if (to.path.startsWith('/evolution') && import.meta.env.VITE_EVOLUTION_ENABLED !== 'true') {
-    ElMessage.warning('自进化功能未启用')
-    next('/dashboard')
     return
   }
 

@@ -1,5 +1,14 @@
 <template>
   <div class="header-actions">
+    <!-- 算力余额 -->
+    <el-tooltip content="算力余额" placement="bottom">
+      <button class="balance-entry" type="button" @click="goRecharge" :aria-label="`算力余额 ${balanceText}`">
+        <el-icon><Wallet /></el-icon>
+        <span class="balance-label">算力余额</span>
+        <span class="balance-value">{{ balanceText }}</span>
+      </button>
+    </el-tooltip>
+
     <!-- 首页 -->
     <el-tooltip content="工作台" placement="bottom">
       <el-button type="text" @click="goHome" class="action-btn">
@@ -61,10 +70,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { useTokenBillingStore } from '@/stores/tokenBilling'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
@@ -72,11 +82,13 @@ import {
   Moon,
   FullScreen,
   Bell,
-  HomeFilled
+  HomeFilled,
+  Wallet
 } from '@element-plus/icons-vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const billingStore = useTokenBillingStore()
 const router = useRouter()
 const notifStore = useNotificationStore()
 const { unreadCount, items } = storeToRefs(notifStore)
@@ -85,12 +97,18 @@ const filter = ref<'all' | 'unread'>('all')
 let timerCount: any = null
 let timerList: any = null
 
+const balanceText = computed(() => {
+  if (billingStore.balanceLoading || billingStore.balanceError) return '--'
+  return billingStore.balanceDisplay
+})
+
 const toggleTheme = () => { appStore.toggleTheme() }
 const toggleFullscreen = () => {
   if (document.fullscreenElement) document.exitFullscreen()
   else document.documentElement.requestFullscreen()
 }
 const goHome = () => { router.push('/dashboard') }
+const goRecharge = () => { router.push('/token-recharge') }
 
 function openDrawer() {
   drawerVisible.value = true
@@ -125,6 +143,11 @@ onMounted(() => {
   watch(() => authStore.token, () => {
     notifStore.connect()
   })
+  watch(() => authStore.isAuthenticated, (authenticated) => {
+    if (authenticated) {
+      billingStore.fetchAccount()
+    }
+  }, { immediate: true })
 })
 
 onUnmounted(() => {
@@ -167,6 +190,40 @@ onUnmounted(() => {
       font-size: 10px;
     }
   }
+
+  .balance-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 18px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-primary);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+
+    &:hover {
+      background: var(--el-fill-color-light);
+      border-color: var(--el-color-primary-light-5);
+    }
+
+    .el-icon {
+      font-size: 16px;
+      color: var(--el-color-primary);
+    }
+
+    .balance-label {
+      color: var(--el-text-color-secondary);
+    }
+
+    .balance-value {
+      font-weight: 600;
+    }
+  }
 }
 
 /* 通知抽屉样式 */
@@ -179,4 +236,10 @@ onUnmounted(() => {
 .notif-item .title:hover { text-decoration: underline; }
 .notif-item .content { font-size: 12px; color: var(--el-text-color-regular); }
 .notif-item .ops { display: flex; gap: 8px; margin-top: 6px; }
+
+@media (max-width: 640px) {
+  .balance-entry .balance-label {
+    display: none;
+  }
+}
 </style>

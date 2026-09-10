@@ -175,19 +175,18 @@ class TestScorers:
 
 
 class TestConfigSwitch:
-    """测试配置开关"""
+    """测试评测平台默认配置"""
 
-    def test_eval_platform_disabled_by_default(self):
-        """验证评测平台默认关闭"""
+    def test_eval_platform_enable_switch_removed(self):
+        """验证评测平台不再依赖 enable 开关"""
         from app.core.config import settings
 
-        assert settings.EVAL_PLATFORM_ENABLED is False
+        assert not hasattr(settings, "EVAL_PLATFORM_ENABLED")
 
     def test_eval_config_fields_exist(self):
         """验证评测配置字段存在"""
         from app.core.config import settings
 
-        assert hasattr(settings, "EVAL_PLATFORM_ENABLED")
         assert hasattr(settings, "EVAL_RUNNER_CONCURRENCY")
         assert hasattr(settings, "EVAL_TRIAL_TIMEOUT_SECONDS")
         assert hasattr(settings, "EVAL_MAX_TRIALS_PER_CASE")
@@ -210,6 +209,18 @@ class TestRouterProtection:
         # 除了 health 端点，其他都应该有权限检查
         protected_routes = [r for r in eval.router.routes if r.path != "/health"]
         assert len(protected_routes) > 0
+
+    @pytest.mark.asyncio
+    async def test_eval_access_allows_admin_without_enable_flag(self):
+        """管理员在无 enable 配置时仍可通过评测权限检查"""
+        from fastapi import HTTPException
+        from app.routers.eval import verify_eval_access
+
+        user = await verify_eval_access(current_user={"is_admin": True})
+        assert user["is_admin"] is True
+        with pytest.raises(HTTPException) as exc:
+            await verify_eval_access(current_user={"is_admin": False})
+        assert exc.value.status_code == 403
 
 
 class TestGoldenCasesData:

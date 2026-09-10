@@ -20,6 +20,20 @@
       </nav>
       
       <div class="sidebar-footer">
+        <div class="sidebar-recharge-action">
+          <el-tooltip content="算力充值" placement="top" :show-after="300">
+            <el-button
+              class="recharge-button"
+              :class="{ collapsed: appStore.sidebarCollapsed }"
+              type="primary"
+              plain
+              @click="goRecharge"
+            >
+              <el-icon><Wallet /></el-icon>
+              <span v-if="!appStore.sidebarCollapsed">算力充值</span>
+            </el-button>
+          </el-tooltip>
+        </div>
         <UserProfile />
       </div>
     </aside>
@@ -90,10 +104,12 @@ import UserProfile from '@/components/Layout/UserProfile.vue'
 import Breadcrumb from '@/components/Layout/Breadcrumb.vue'
 import HeaderActions from '@/components/Layout/HeaderActions.vue'
 import AppFooter from '@/components/Layout/AppFooter.vue'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Expand, Fold, Wallet } from '@element-plus/icons-vue'
 
 const appStore = useAppStore()
 const route = useRoute()
+const router = useRouter()
 const { width } = useWindowSize()
 
 // CI/CD 构建时间戳 (YYYY-MM-DD hh:mm:ss)
@@ -119,6 +135,10 @@ const handleMainClick = () => {
   if (isMobile.value && !appStore.sidebarCollapsed) {
     appStore.setSidebarCollapsed(true)
   }
+}
+
+const goRecharge = () => {
+  router.push('/token-recharge')
 }
 
 // 监听窗口大小变化
@@ -210,6 +230,24 @@ watch(() => route.fullPath, () => {
   .sidebar-footer {
     border-top: 1px solid var(--el-border-color-lighter);
     padding: 10px;
+
+    .sidebar-recharge-action {
+      padding: 0 2px 8px;
+
+      .recharge-button {
+        width: 100%;
+        height: 38px;
+        border-radius: 8px;
+        justify-content: center;
+        white-space: nowrap;
+
+        &.collapsed {
+          width: 48px;
+          padding: 0;
+          margin: 0 auto;
+        }
+      }
+    }
   }
 }
 

@@ -6,12 +6,11 @@
 
 Skill 候选的验证与发布门禁细节见 [Skill 执行评测与配对回归](evaluation/skill-execution-evaluation-and-regression.md)。
 
-## 启用配置
+## 配置
 
 在环境变量或配置中设置：
 
 ```bash
-EVOLUTION_ENABLED=true                    # 主开关
 EVOLUTION_AUTOMATION_MODE=semi-auto       # manual / semi-auto / auto
 EVOLUTION_HUMAN_GATE=true                 # 生产环境必须开启
 EVOLUTION_TRIGGER_REGRESSION_THRESHOLD=0.05
