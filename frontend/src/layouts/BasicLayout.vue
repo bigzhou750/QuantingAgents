@@ -74,6 +74,11 @@
 
     <!-- 回到顶部 -->
     <el-backtop :right="40" :bottom="40" />
+
+    <!-- CI/CD 部署版本标记 -->
+    <div class="build-marker">
+      Build: {{ buildTimestamp }}
+    </div>
   </div>
 </template>
 
@@ -90,6 +95,13 @@ import { Expand, Fold } from '@element-plus/icons-vue'
 const appStore = useAppStore()
 const route = useRoute()
 const { width } = useWindowSize()
+
+// CI/CD 构建时间戳 (YYMMDD HHmmss)
+const buildTimestamp = (() => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear().toString().slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+})()
 
 // 需要缓存的组件
 const keepAliveComponents = computed(() => [
@@ -291,6 +303,17 @@ watch(() => route.fullPath, () => {
   .header {
     padding: 0 16px;
   }
+}
+
+.build-marker {
+  position: fixed;
+  bottom: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  z-index: 9999;
+  pointer-events: none;
+  user-select: none;
 }
 
 // 路由过渡动画
