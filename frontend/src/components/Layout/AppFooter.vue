@@ -11,6 +11,7 @@
 </template>
 
 <script setup lang="ts">
+// Footer component - deployed 2026-09-10
 </script>
 
 <style lang="scss" scoped>
