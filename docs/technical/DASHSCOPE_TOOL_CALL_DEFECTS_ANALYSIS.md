@@ -103,7 +103,7 @@ else:
 for tool_call in result.tool_calls:
     tool_name = tool_call.get('name')
     tool_args = tool_call.get('args', {})
-    
+
     # 找到对应的工具并执行
     for tool in tools:
         if current_tool_name == tool_name:
@@ -200,14 +200,14 @@ if hasattr(result, 'tool_calls') and result.tool_calls:
 
 ```python
 # 🔧 检测DashScope工具调用失败的特殊情况
-if ('DashScope' in llm.__class__.__name__ and 
-    tool_call_count > 0 and 
+if ('DashScope' in llm.__class__.__name__ and
+    tool_call_count > 0 and
     'get_realtime_stock_news' in used_tool_names):
-    
+
     # 强制调用进行验证和补救
     logger.info(f"[新闻分析师] 🔧 强制调用get_realtime_stock_news进行验证...")
     fallback_news = toolkit.get_realtime_stock_news.invoke({"ticker": ticker})
-    
+
     if fallback_news and len(fallback_news.strip()) > 100:
         # 重新生成分析报告
         enhanced_prompt = f"基于以下新闻数据分析: {fallback_news}"
@@ -228,7 +228,7 @@ class ChatDashScopeOpenAI(ChatOpenAI):
             try:
                 # 尝试标准转换
                 openai_tool = convert_to_openai_tool(tool)
-                
+
                 # 验证转换结果
                 if self._validate_tool_format(openai_tool):
                     formatted_tools.append(openai_tool)
@@ -236,23 +236,23 @@ class ChatDashScopeOpenAI(ChatOpenAI):
                     # 使用自定义转换
                     custom_tool = self._custom_tool_conversion(tool)
                     formatted_tools.append(custom_tool)
-                    
+
             except Exception as e:
                 logger.warning(f"工具转换失败，使用备用方案: {tool.name}")
                 # 备用转换方案
                 fallback_tool = self._fallback_tool_conversion(tool)
                 formatted_tools.append(fallback_tool)
-        
+
         return super().bind_tools(formatted_tools, **kwargs)
-    
+
     def _validate_tool_format(self, tool_dict):
         """验证工具格式是否正确"""
         required_fields = ['type', 'function']
         function_fields = ['name', 'description', 'parameters']
-        
+
         if not all(field in tool_dict for field in required_fields):
             return False
-            
+
         function_def = tool_dict.get('function', {})
         return all(field in function_def for field in function_fields)
 ```
@@ -262,21 +262,21 @@ class ChatDashScopeOpenAI(ChatOpenAI):
 ```python
 def enhanced_tool_call_handler(result, tools, toolkit, ticker):
     """增强的工具调用处理器"""
-    
+
     if not hasattr(result, 'tool_calls') or not result.tool_calls:
         logger.warning("未检测到工具调用")
         return None
-    
+
     executed_tools = []
     for tool_call in result.tool_calls:
         tool_name = tool_call.get('name')
         tool_args = tool_call.get('args', {})
-        
+
         # 验证工具调用格式
         if not tool_name or not isinstance(tool_args, dict):
             logger.error(f"工具调用格式错误: {tool_call}")
             continue
-        
+
         # 执行工具并验证结果
         try:
             tool_result = execute_tool_safely(tool_name, tool_args, toolkit)
@@ -288,10 +288,10 @@ def enhanced_tool_call_handler(result, tools, toolkit, ticker):
                 })
             else:
                 logger.warning(f"工具执行失败: {tool_name}")
-                
+
         except Exception as e:
             logger.error(f"工具执行异常: {tool_name} - {e}")
-    
+
     return executed_tools
 ```
 

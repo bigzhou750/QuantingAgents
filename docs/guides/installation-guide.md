@@ -5,10 +5,10 @@ code_compatibility: cn-0.1.14-preview
 status: updated
 ---
 
-# TradingAgents-CN 安装配置指导
+# zhitouagent 安装配置指导
 
-> **版本说明**: 本文档基于 `cn-0.1.14-preview` 版本编写  
-> **最后更新**: 2025-01-13  
+> **版本说明**: 本文档基于 `cn-0.1.14-preview` 版本编写
+> **最后更新**: 2025-01-13
 > **状态**: ✅ 已更新 - 包含最新的安装和配置步骤
 
 ## 📋 目录
@@ -105,8 +105,8 @@ uv --version
 ### 1. 克隆项目
 ```bash
 # 克隆项目到本地
-git clone https://github.com/your-repo/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone https://github.com/your-repo/zhitouagent.git
+cd zhitouagent
 
 # 查看当前版本
 cat VERSION
@@ -193,7 +193,7 @@ cp .env.example .env
 
 ```bash
 # ===========================================
-# TradingAgents-CN 环境配置
+# zhitouagent 环境配置
 # ===========================================
 
 # 基础配置
@@ -589,7 +589,7 @@ docker-compose logs -f
 
 如果遇到问题，可以通过以下方式获取帮助：
 
-- **GitHub Issues**: [提交问题](https://github.com/your-repo/TradingAgents-CN/issues)
+- **GitHub Issues**: [提交问题](https://github.com/your-repo/zhitouagent/issues)
 - **文档**: [查看完整文档](../README.md)
 - **社区**: [加入讨论群](https://your-community-link)
 

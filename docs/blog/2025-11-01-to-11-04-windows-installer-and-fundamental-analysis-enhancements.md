@@ -1,7 +1,7 @@
 # Windows 安装器与基本面分析增强
 
-**日期**: 2025-11-01 至 2025-11-04  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-11-01 至 2025-11-04
+**作者**: zhitouagent 开发团队
 **标签**: `Windows安装器` `便携版` `基本面分析` `总市值` `端口冲突` `LLM配置` `多平台打包`
 
 ---
@@ -80,44 +80,44 @@ class WindowsPortablePackager:
         self.project_root = Path(__file__).parent.parent
         self.output_dir = self.project_root / "dist" / "windows-portable"
         self.runtime_dir = self.output_dir / "runtime"
-        
+
     def package(self):
         """执行打包流程"""
         print("🚀 开始打包 Windows 绿色版...")
-        
+
         # 1. 创建目录结构
         self._create_directory_structure()
-        
+
         # 2. 打包 Python 运行时
         self._package_python_runtime()
-        
+
         # 3. 打包依赖库
         self._package_dependencies()
-        
+
         # 4. 打包 MongoDB
         self._package_mongodb()
-        
+
         # 5. 打包 Redis
         self._package_redis()
-        
+
         # 6. 打包应用代码
         self._package_application()
-        
+
         # 7. 打包前端
         self._package_frontend()
-        
+
         # 8. 创建启动脚本
         self._create_startup_scripts()
-        
+
         # 9. 生成配置文件
         self._generate_config_files()
-        
+
         # 10. 创建压缩包
         self._create_zip_archive()
-        
+
         print("✅ 打包完成！")
         print(f"📦 输出目录: {self.output_dir}")
-    
+
     def _create_directory_structure(self):
         """创建目录结构"""
         dirs = [
@@ -130,44 +130,44 @@ class WindowsPortablePackager:
             self.output_dir / "logs",
             self.output_dir / "config",
         ]
-        
+
         for dir_path in dirs:
             dir_path.mkdir(parents=True, exist_ok=True)
             print(f"✅ 创建目录: {dir_path}")
-    
+
     def _package_python_runtime(self):
         """打包 Python 嵌入式运行时"""
         print("📦 打包 Python 运行时...")
-        
+
         # 下载 Python 嵌入式版本
         python_version = "3.11.9"
         python_url = f"https://www.python.org/ftp/python/{python_version}/python-{python_version}-embed-amd64.zip"
-        
+
         # 解压到 runtime/python
         # ...
-        
+
     def _package_mongodb(self):
         """打包 MongoDB 便携版"""
         print("📦 打包 MongoDB...")
-        
+
         # 下载 MongoDB 便携版
         mongodb_version = "7.0.14"
         mongodb_url = f"https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-{mongodb_version}.zip"
-        
+
         # 解压到 runtime/mongodb
         # ...
-    
+
     def _create_startup_scripts(self):
         """创建启动脚本"""
         print("📝 创建启动脚本...")
-        
+
         # 创建 start.bat
         start_script = """@echo off
 chcp 65001 >nul
-title TradingAgents-CN 启动器
+title zhitouagent 启动器
 
 echo ========================================
-echo   TradingAgents-CN 绿色版启动器
+echo   zhitouagent 绿色版启动器
 echo ========================================
 echo.
 
@@ -218,16 +218,16 @@ pause >nul
 
 call scripts\\stop.bat
 """
-        
+
         (self.output_dir / "start.bat").write_text(start_script, encoding="utf-8")
-        
+
         # 创建 stop.bat
         stop_script = """@echo off
 chcp 65001 >nul
-title TradingAgents-CN 停止器
+title zhitouagent 停止器
 
 echo ========================================
-echo   TradingAgents-CN 绿色版停止器
+echo   zhitouagent 绿色版停止器
 echo ========================================
 echo.
 
@@ -246,7 +246,7 @@ echo ✅ 所有服务已停止！
 echo.
 pause
 """
-        
+
         (self.output_dir / "stop.bat").write_text(stop_script, encoding="utf-8")
 
 if __name__ == "__main__":
@@ -320,14 +320,14 @@ __pycache__/
 
 ```nsis
 ; scripts/windows_installer.nsi
-; TradingAgents-CN Windows 安装器脚本
+; zhitouagent Windows 安装器脚本
 
 !include "MUI2.nsh"
 
 ; 基本信息
-Name "TradingAgents-CN"
-OutFile "TradingAgents-CN-Setup.exe"
-InstallDir "$PROGRAMFILES64\TradingAgents-CN"
+Name "zhitouagent"
+OutFile "zhitouagent-Setup.exe"
+InstallDir "$PROGRAMFILES64\zhitouagent"
 RequestExecutionLevel admin
 
 ; 界面设置
@@ -352,20 +352,20 @@ RequestExecutionLevel admin
 ; 安装部分
 Section "主程序" SecMain
     SetOutPath "$INSTDIR"
-    
+
     ; 复制文件
     File /r "dist\windows-portable\*.*"
-    
+
     ; 创建快捷方式
-    CreateDirectory "$SMPROGRAMS\TradingAgents-CN"
-    CreateShortcut "$SMPROGRAMS\TradingAgents-CN\TradingAgents-CN.lnk" "$INSTDIR\start.bat"
-    CreateShortcut "$DESKTOP\TradingAgents-CN.lnk" "$INSTDIR\start.bat"
-    
+    CreateDirectory "$SMPROGRAMS\zhitouagent"
+    CreateShortcut "$SMPROGRAMS\zhitouagent\zhitouagent.lnk" "$INSTDIR\start.bat"
+    CreateShortcut "$DESKTOP\zhitouagent.lnk" "$INSTDIR\start.bat"
+
     ; 写入卸载信息
     WriteUninstaller "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingAgents-CN" \
-                     "DisplayName" "TradingAgents-CN"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingAgents-CN" \
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\zhitouagent" \
+                     "DisplayName" "zhitouagent"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\zhitouagent" \
                      "UninstallString" "$INSTDIR\Uninstall.exe"
 SectionEnd
 
@@ -373,16 +373,16 @@ SectionEnd
 Section "Uninstall"
     ; 停止服务
     ExecWait "$INSTDIR\stop.bat"
-    
+
     ; 删除文件
     RMDir /r "$INSTDIR"
-    
+
     ; 删除快捷方式
-    Delete "$DESKTOP\TradingAgents-CN.lnk"
-    RMDir /r "$SMPROGRAMS\TradingAgents-CN"
-    
+    Delete "$DESKTOP\zhitouagent.lnk"
+    RMDir /r "$SMPROGRAMS\zhitouagent"
+
     ; 删除注册表
-    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingAgents-CN"
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\zhitouagent"
 SectionEnd
 ```
 
@@ -405,20 +405,20 @@ from pathlib import Path
 def build_installer():
     """构建安装器"""
     print("🚀 开始构建 Windows 安装器...")
-    
+
     # 检查 NSIS 是否安装
     nsis_path = Path(r"C:\Program Files (x86)\NSIS\makensis.exe")
     if not nsis_path.exists():
         print("❌ 未找到 NSIS，请先安装 NSIS")
         print("   下载地址: https://nsis.sourceforge.io/Download")
         sys.exit(1)
-    
+
     # 检查便携版是否已打包
     portable_dir = Path("dist/windows-portable")
     if not portable_dir.exists():
         print("❌ 未找到便携版，请先运行 package_windows_portable.py")
         sys.exit(1)
-    
+
     # 构建安装器
     script_path = Path("scripts/windows_installer.nsi")
     result = subprocess.run(
@@ -426,10 +426,10 @@ def build_installer():
         capture_output=True,
         text=True
     )
-    
+
     if result.returncode == 0:
         print("✅ 安装器构建成功！")
-        print(f"📦 输出文件: TradingAgents-CN-Setup.exe")
+        print(f"📦 输出文件: zhitouagent-Setup.exe")
     else:
         print("❌ 安装器构建失败")
         print(result.stderr)
@@ -606,7 +606,7 @@ import sys
 def check_port(port: int) -> tuple[bool, str]:
     """
     检查端口是否被占用
-    
+
     Returns:
         (is_occupied, process_info)
     """
@@ -618,13 +618,13 @@ def check_port(port: int) -> tuple[bool, str]:
                 return True, process_info
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 return True, f"Unknown (PID: {conn.pid})"
-    
+
     return False, ""
 
 def kill_process_on_port(port: int) -> bool:
     """
     结束占用指定端口的进程
-    
+
     Returns:
         是否成功
     """
@@ -640,16 +640,16 @@ def kill_process_on_port(port: int) -> bool:
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired) as e:
                 print(f"❌ 无法结束进程 (PID: {conn.pid}): {e}")
                 return False
-    
+
     return False
 
 def main():
     """主函数"""
     print("=" * 60)
-    print("  TradingAgents-CN 端口冲突检测")
+    print("  zhitouagent 端口冲突检测")
     print("=" * 60)
     print()
-    
+
     # 需要检测的端口
     ports = {
         8000: "后端服务",
@@ -657,37 +657,37 @@ def main():
         27017: "MongoDB",
         6379: "Redis"
     }
-    
+
     occupied_ports = []
-    
+
     # 检测所有端口
     for port, service in ports.items():
         is_occupied, process_info = check_port(port)
-        
+
         if is_occupied:
             print(f"⚠️  端口 {port} ({service}) 被占用")
             print(f"    占用进程: {process_info}")
             occupied_ports.append(port)
         else:
             print(f"✅ 端口 {port} ({service}) 可用")
-    
+
     print()
-    
+
     # 如果有端口被占用，询问是否清理
     if occupied_ports:
         print(f"发现 {len(occupied_ports)} 个端口被占用")
         print()
-        
+
         response = input("是否自动清理这些端口？(y/n): ").strip().lower()
-        
+
         if response == 'y':
             print()
             print("正在清理端口...")
             print()
-            
+
             for port in occupied_ports:
                 kill_process_on_port(port)
-            
+
             print()
             print("✅ 端口清理完成！")
             sys.exit(0)
@@ -766,32 +766,32 @@ class LLMAdapter:
         self._api_key_cache = None
         self._cache_time = None
         self._cache_ttl = 60  # 缓存60秒
-    
+
     def get_api_key(self) -> str:
         """
         获取 API Key，支持热更新
-        
+
         策略：
         1. 检查缓存是否过期
         2. 如果过期，从数据库重新加载
         3. 返回最新的 API Key
         """
         now = time.time()
-        
+
         # 缓存未过期，直接返回
         if self._api_key_cache and self._cache_time:
             if now - self._cache_time < self._cache_ttl:
                 return self._api_key_cache
-        
+
         # 缓存过期，重新加载
         api_key = self._load_api_key_from_db()
-        
+
         # 更新缓存
         self._api_key_cache = api_key
         self._cache_time = now
-        
+
         logger.info(f"✅ API Key 已更新（缓存TTL: {self._cache_ttl}秒）")
-        
+
         return api_key
 ```
 
@@ -802,12 +802,12 @@ class LLMAdapter:
 
 class UserFriendlyException(Exception):
     """用户友好的异常类"""
-    
+
     def __init__(self, message: str, suggestion: str = None):
         self.message = message
         self.suggestion = suggestion
         super().__init__(message)
-    
+
     def to_dict(self) -> dict:
         """转换为字典格式"""
         result = {"error": self.message}
@@ -948,7 +948,7 @@ start.bat
 python scripts/build_installer.py
 
 # 2. 运行安装程序
-TradingAgents-CN-Setup.exe
+zhitouagent-Setup.exe
 
 # 3. 检查安装
 # - 桌面快捷方式

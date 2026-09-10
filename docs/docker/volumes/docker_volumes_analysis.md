@@ -210,7 +210,7 @@ Redis 数据卷: 1 个 (tradingagents-cn_tradingagents_redis_data_v1)
    # 删除旧版本数据卷
    docker volume rm tradingagents_mongodb_data tradingagents_redis_data
    docker volume rm tradingagents_mongodb_data_v1 tradingagents_redis_data_v1
-   
+
    # 删除匿名数据卷
    docker volume prune -f
    ```

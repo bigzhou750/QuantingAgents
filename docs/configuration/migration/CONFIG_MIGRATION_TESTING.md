@@ -215,7 +215,7 @@ CURRENCY_PREFERENCE
    ```powershell
    # 停止服务
    Ctrl+C
-   
+
    # 启动服务
    cd app
    uvicorn main:app --reload

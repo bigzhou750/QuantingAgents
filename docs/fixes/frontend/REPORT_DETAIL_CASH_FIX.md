@@ -81,28 +81,28 @@ export interface PaperAccountSummary {
 // 辅助函数：根据股票代码获取对应货币的现金金额
 const getCashByCurrency = (account: any, stockSymbol: string): number => {
   const cash = account.cash
-  
+
   // 兼容旧格式（单一数字）
   if (typeof cash === 'number') {
     return cash
   }
-  
+
   // 新格式（多货币对象）
   if (typeof cash === 'object' && cash !== null) {
     // 根据股票代码判断市场类型
     const marketType = getMarketByStockCode(stockSymbol)
-    
+
     // 映射市场类型到货币
     const currencyMap: Record<string, keyof CurrencyAmount> = {
       'A股': 'CNY',
       '港股': 'HKD',
       '美股': 'USD'
     }
-    
+
     const currency = currencyMap[marketType] || 'CNY'
     return cash[currency] || 0
   }
-  
+
   return 0
 }
 ```

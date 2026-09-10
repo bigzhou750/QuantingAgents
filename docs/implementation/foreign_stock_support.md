@@ -71,7 +71,7 @@ CACHE_TTL = {
 def _detect_market_and_code(code: str) -> Tuple[str, str]:
     """
     检测股票代码的市场类型并标准化代码
-    
+
     规则：
     - 带.HK后缀 → 港股
     - 纯字母 → 美股

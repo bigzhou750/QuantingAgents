@@ -68,7 +68,7 @@ def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict:
         financial_data = adapter.get_financial_data(symbol)
         if financial_data:
             return self._parse_mongodb_financial_data(financial_data, price_value)
-    
+
     # 第二优先级：从AKShare API获取
     # 第三优先级：从Tushare API获取
     # 失败：抛出 ValueError 异常（不再使用估算值）
@@ -97,7 +97,7 @@ class HistoricalDataService:
     def __init__(self):
         self.db = None
         self.collection = None
-    
+
     async def initialize(self):
         self.db = get_database()
         self.collection = self.db.stock_daily_quotes
@@ -120,7 +120,7 @@ class FinancialDataService:
     def __init__(self):
         self.collection_name = "stock_financial_data"
         self.db = None
-    
+
     async def initialize(self):
         self.db = get_mongo_db()
 ```
@@ -142,7 +142,7 @@ class StockDataService:
     def __init__(self):
         self.basic_info_collection = "stock_basic_info"
         self.market_quotes_collection = "market_quotes"
-    
+
     async def get_stock_basic_info(self, code: str):
         db = get_mongo_db()
         doc = await db[self.basic_info_collection].find_one({"code": code6})
@@ -382,7 +382,7 @@ else:
 
 ---
 
-**生成时间**: 2025-10-08  
-**分析人员**: AI Assistant  
+**生成时间**: 2025-10-08
+**分析人员**: AI Assistant
 **文档版本**: 1.0
 

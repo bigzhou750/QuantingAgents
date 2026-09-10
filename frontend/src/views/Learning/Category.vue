@@ -164,26 +164,6 @@ const articlesDatabase: Record<string, any[]> = {
       difficultyText: '入门'
     }
   ],
-  'resources': [
-    {
-      id: 'tradingagents-intro',
-      title: '多智能体分析框架介绍',
-      description: '了解本平台多智能体分析框架的架构和特性',
-      readTime: '15分钟',
-      views: 1432,
-      difficulty: 'warning',
-      difficultyText: '进阶'
-    },
-    {
-      id: 'paper-guide',
-      title: '多智能体股票分析论文解读',
-      description: '深度解读多智能体股票分析学术论文的核心内容和创新点',
-      readTime: '20分钟',
-      views: 987,
-      difficulty: 'danger',
-      difficultyText: '高级'
-    }
-  ],
   'tutorials': [
     {
       id: 'getting-started',
@@ -368,4 +348,3 @@ const openArticle = (articleId: string) => {
   }
 }
 </style>
-

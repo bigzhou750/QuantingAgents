@@ -54,24 +54,31 @@ async def get_account(current_user: dict = Depends(get_current_user)):
 
 # ==================== 套餐接口 ====================
 
-@router.get("/packages")
-async def get_packages(current_user: dict = Depends(get_current_user)):
-    """获取充值套餐列表（R1）"""
+async def _public_package_items():
     packages = await token_billing_service.get_packages()
     items = [pkg.model_dump() for pkg in packages]
-
-    # 计算每个套餐的到账额度和赠送
     from app.services.token_billing_service import _get_billing_config
     config = await _get_billing_config()
     exchange_rate = config.get("exchange_rate", 1.1)
-
     for item in items:
         amount_cny = item["amount_cny"]
         quota = round(amount_cny * exchange_rate, 3)
-        gift = round(quota - amount_cny, 3)
         item["quota_to_credit"] = quota
-        item["gift_amount"] = max(gift, 0)
+        item["gift_amount"] = max(round(quota - amount_cny, 3), 0)
+    return items, exchange_rate
 
+
+@router.get("/public-packages")
+async def get_public_packages():
+    """公开展示套餐，不返回账户或支付信息。"""
+    items, exchange_rate = await _public_package_items()
+    return ok({"items": items, "exchange_rate": exchange_rate})
+
+
+@router.get("/packages")
+async def get_packages(current_user: dict = Depends(get_current_user)):
+    """获取充值套餐列表（R1）"""
+    items, _ = await _public_package_items()
     return ok({"items": items})
 
 

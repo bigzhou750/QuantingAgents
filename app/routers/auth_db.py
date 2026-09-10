@@ -40,6 +40,15 @@ router = APIRouter()
 _login_guard = AuthAttemptGuard(settings.AUTH_LOGIN_RATE_LIMIT)
 _register_guard = AuthAttemptGuard(settings.AUTH_REGISTER_RATE_LIMIT)
 
+@router.get("/registration-status")
+async def registration_status():
+    """公开查询当前是否开放注册。"""
+    return ApiResponse(
+        success=True,
+        data={"enabled": settings.AUTH_REGISTRATION_ENABLED},
+        message="ok",
+    )
+
 class LoginRequest(BaseModel):
     username: str
     password: str

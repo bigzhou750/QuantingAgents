@@ -1,10 +1,10 @@
-# TradingAgents-CN 多架构 Docker 镜像构建指南
+# zhitouagent 多架构 Docker 镜像构建指南
 
-> 🏗️ 支持在 ARM 和 x86_64 架构上运行 TradingAgents-CN
+> 🏗️ 支持在 ARM 和 x86_64 架构上运行 zhitouagent
 
 ## 📋 概述
 
-TradingAgents-CN 支持构建多架构 Docker 镜像，可以在以下平台上运行：
+zhitouagent 支持构建多架构 Docker 镜像，可以在以下平台上运行：
 
 - **amd64 (x86_64)**: Intel/AMD 处理器（常见的服务器和 PC）
 - **arm64 (aarch64)**: ARM 处理器（Apple Silicon M1/M2/M3、树莓派 4/5、AWS Graviton 等）
@@ -311,19 +311,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Build and push
         uses: docker/build-push-action@v4
         with:

@@ -73,7 +73,7 @@
        job = self.scheduler.get_job(job_id)
        if not job:
            return False
-       
+
        # 使用 upsert 更新或插入
        db = self._get_db()
        await db.scheduler_metadata.update_one(
@@ -107,7 +107,7 @@ async def update_job_metadata(
     # 检查管理员权限
     if not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="仅管理员可以更新任务元数据")
-    
+
     success = await service.update_job_metadata(
         job_id,
         display_name=request.display_name,
@@ -321,7 +321,7 @@ db.scheduler_metadata.createIndex({ "job_id": 1 }, { unique: true })
 
 ## 📅 实施日期
 
-**实施日期**: 2025-10-08  
-**实施人员**: Augment Agent  
+**实施日期**: 2025-10-08
+**实施人员**: Augment Agent
 **状态**: ✅ 完成
 

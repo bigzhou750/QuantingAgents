@@ -81,30 +81,30 @@ tradingagents/dataflows/
 #### 1. **chinese_finance_utils.py** (12.6 KB)
 - **功能**: 中国财经数据聚合工具（微博、股吧、财经媒体）
 - **使用情况**: 仅在 `interface.py` 中使用 1 次
-- **问题**: 
+- **问题**:
   - 功能特殊，应该独立成模块
   - 与新闻功能重叠
-- **建议**: 
+- **建议**:
   - **选项 A**: 移到 `news/chinese_finance.py`（与新闻相关）
   - **选项 B**: 创建 `sentiment/` 目录，移到 `sentiment/chinese_finance.py`（情绪分析）
 
 #### 2. **config.py** (2.32 KB)
 - **功能**: dataflows 模块的配置管理
 - **使用情况**: 在 `optimized_china_data.py` 中使用
-- **问题**: 
+- **问题**:
   - 与 `tradingagents/config/` 目录功能重叠
   - 职责不清晰
-- **建议**: 
+- **建议**:
   - **选项 A**: 合并到 `tradingagents/config/config_manager.py`
   - **选项 B**: 保留，但重命名为 `dataflows_config.py` 更明确
 
 #### 3. **data_source_manager.py** (67.81 KB) ⭐ 核心文件
 - **功能**: 统一的数据源管理器，支持多数据源降级
 - **使用情况**: 广泛使用
-- **问题**: 
+- **问题**:
   - 文件过大（67 KB）
   - 职责过多（数据获取、缓存、降级、格式化）
-- **建议**: 
+- **建议**:
   - **选项 A**: 拆分成多个文件
     - `managers/data_source_manager.py` - 核心管理逻辑
     - `managers/china_data_manager.py` - 中国市场数据
@@ -115,19 +115,19 @@ tradingagents/dataflows/
 #### 4. **fundamentals_snapshot.py** (2.32 KB)
 - **功能**: 获取基本面快照（PE/PB/ROE/市值）
 - **使用情况**: 需要检查
-- **问题**: 
+- **问题**:
   - 功能单一，应该归类
-- **建议**: 
+- **建议**:
   - **选项 A**: 移到 `providers/china/fundamentals.py`
   - **选项 B**: 创建 `fundamentals/` 目录
 
 #### 5. **interface.py** (60.25 KB) ⭐ 核心文件
 - **功能**: 公共接口，导出所有数据获取函数
 - **使用情况**: 广泛使用
-- **问题**: 
+- **问题**:
   - 文件过大（60 KB）
   - 包含太多函数
-- **建议**: 
+- **建议**:
   - **选项 A**: 拆分成多个接口文件
     - `interfaces/china_interface.py` - 中国市场接口
     - `interfaces/us_interface.py` - 美国市场接口
@@ -161,48 +161,48 @@ tradingagents/dataflows/
 #### 7. **providers_config.py** (9.29 KB)
 - **功能**: 数据源提供器配置管理
 - **使用情况**: 需要检查
-- **问题**: 
+- **问题**:
   - 与 `config.py` 功能重叠
-- **建议**: 
+- **建议**:
   - **选项 A**: 合并到 `config.py`
   - **选项 B**: 移到 `providers/config.py`
 
 #### 8. **stock_api.py** (3.91 KB)
 - **功能**: 简单的股票API接口封装
 - **使用情况**: 仅在 `app/services/simple_analysis_service.py` 使用 1 次
-- **问题**: 
+- **问题**:
   - 功能与 `interface.py` 重叠
   - 使用率低
-- **建议**: 
+- **建议**:
   - **选项 A**: 删除，使用 `interface.py` 替代
   - **选项 B**: 移到 `interfaces/simple_api.py`
 
 #### 9. **stock_data_service.py** (12.14 KB)
 - **功能**: 统一的股票数据获取服务（MongoDB → TDX 降级）
 - **使用情况**: 在多个地方使用（5 次）
-- **问题**: 
+- **问题**:
   - 功能与 `data_source_manager.py` 重叠
   - 职责不清晰
-- **建议**: 
+- **建议**:
   - **选项 A**: 合并到 `data_source_manager.py`
   - **选项 B**: 移到 `services/stock_data_service.py`
 
 #### 10. **unified_dataframe.py** (5.77 KB)
 - **功能**: 统一DataFrame格式（多数据源降级）
 - **使用情况**: 仅在 `app/services/screening_service.py` 使用 1 次
-- **问题**: 
+- **问题**:
   - 功能与 `data_source_manager.py` 重叠
   - 使用率低
-- **建议**: 
+- **建议**:
   - **选项 A**: 合并到 `data_source_manager.py`
   - **选项 B**: 移到 `utils/dataframe_utils.py`
 
 #### 11. **utils.py** (1.17 KB)
 - **功能**: 通用工具函数
 - **使用情况**: 需要检查
-- **问题**: 
+- **问题**:
   - 功能太通用
-- **建议**: 
+- **建议**:
   - **选项 A**: 合并到 `tradingagents/utils/`
   - **选项 B**: 重命名为 `dataflows_utils.py` 更明确
 

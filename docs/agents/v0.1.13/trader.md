@@ -62,11 +62,11 @@ def create_trader(llm):
         # 获取基础信息
         company_name = state["company_of_interest"]
         investment_plan = state.get("investment_plan", "")
-        
+
         # 获取股票市场信息
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(company_name)
-        
+
         # 确定股票类型和货币信息
         if market_info.get("is_china"):
             stock_type = "A股"
@@ -80,28 +80,28 @@ def create_trader(llm):
         else:
             stock_type = "未知市场"
             currency_unit = "未知货币"
-        
+
         # 获取各类分析报告
         market_report = state.get("market_report", "")
         sentiment_report = state.get("sentiment_report", "")
         news_report = state.get("news_report", "")
         fundamentals_report = state.get("fundamentals_report", "")
-        
+
         # 构建交易决策提示
         trader_prompt = f"""
         作为专业交易员，请基于以下信息生成投资建议：
-        
+
         公司名称: {company_name}
         股票类型: {stock_type}
         货币单位: {currency_unit}
-        
+
         投资计划: {investment_plan}
-        
+
         市场研究报告: {market_report}
         情绪报告: {sentiment_report}
         新闻报告: {news_report}
         基本面报告: {fundamentals_report}
-        
+
         请提供：
         1. 明确的投资建议（买入/卖出/持有）
         2. 具体目标价位（以{currency_unit}计价）
@@ -109,10 +109,10 @@ def create_trader(llm):
         4. 风险评分（1-10分）
         5. 详细推理过程
         """
-        
+
         # 调用LLM生成交易决策
         response = llm.invoke(trader_prompt)
-        
+
         return {"trader_recommendation": response.content}
 ```
 
@@ -178,14 +178,14 @@ if market_info.get("is_china"):
     price_limit = "±10% (ST股票±5%)"
     settlement = "T+1"
     currency = "人民币(CNY)"
-    
+
 elif market_info.get("is_hk"):
     # 港股交易特点
     trading_hours = "09:30-16:00 (香港时间)"
     price_limit = "无涨跌停限制"
     settlement = "T+2"
     currency = "港币(HKD)"
-    
+
 elif market_info.get("is_us"):
     # 美股交易特点
     trading_hours = "09:30-16:00 (EST)"
@@ -367,11 +367,11 @@ class TradingPerformance:
         self.total_return = 0.0
         self.max_drawdown = 0.0
         self.sharpe_ratio = 0.0
-    
+
     def update_performance(self, trade_result):
         # 更新性能指标
         pass
-    
+
     def generate_report(self):
         # 生成性能报告
         pass
@@ -457,11 +457,11 @@ decision_log = {
 class CustomTradingStrategy:
     def __init__(self, config):
         self.config = config
-    
+
     def generate_recommendation(self, state):
         # 自定义交易逻辑
         pass
-    
+
     def calculate_position_size(self, confidence, risk_score):
         # 仓位计算逻辑
         pass
@@ -486,10 +486,10 @@ strategy = strategy_map.get(config.get("strategy", "balanced"))
 class RiskModel:
     def calculate_risk_score(self, market_data, fundamentals):
         pass
-    
+
     def estimate_var(self, position, confidence_level):
         pass
-    
+
     def suggest_position_size(self, risk_budget, expected_return):
         pass
 ```

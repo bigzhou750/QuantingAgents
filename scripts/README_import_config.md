@@ -27,7 +27,7 @@ python scripts/import_config_and_create_user.py /path/to/export.json
 **连接信息：**
 - MongoDB 地址：`mongodb:27017`（Docker 内部服务名）
 - 数据库：`tradingagents`
-- 认证：`admin/tradingagents123`
+- 认证：`admin/<受控初始密码>`
 
 ### 2. 在宿主机上运行
 
@@ -44,7 +44,7 @@ python scripts/import_config_and_create_user.py --host /path/to/export.json
 **连接信息：**
 - MongoDB 地址：`localhost:27017`（宿主机端口映射）
 - 数据库：`tradingagents`
-- 认证：`admin/tradingagents123`
+- 认证：`admin/<受控初始密码>`
 
 **前提条件：**
 - MongoDB 容器已启动
@@ -130,7 +130,7 @@ python scripts/import_config_and_create_user.py --skip-user
 
 - **用户名：** `admin`
 - **密码：** `admin123`
-- **邮箱：** `admin@tradingagents.cn`
+- **邮箱：** `zh75067197@gmail.com`
 - **角色：** 管理员
 - **状态：** 已激活、已验证
 
@@ -249,4 +249,3 @@ docker restart tradingagents-backend
 - `scripts/export_config.py` - 导出配置数据
 - `scripts/backup_database.py` - 备份数据库
 - `scripts/restore_database.py` - 恢复数据库
-

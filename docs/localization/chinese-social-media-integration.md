@@ -2,7 +2,7 @@
 
 ## 🎯 概述
 
-为了更好地服务中国用户，TradingAgents-CN 需要集成中国本土的社交媒体和财经平台，以获取更准确的市场情绪和投资者观点。
+为了更好地服务中国用户，zhitouagent 需要集成中国本土的社交媒体和财经平台，以获取更准确的市场情绪和投资者观点。
 
 ## 🌐 平台对应关系
 
@@ -35,13 +35,13 @@
 class WeiboSentimentAnalyzer:
     def __init__(self, api_key):
         self.api_key = api_key
-        
+
     def get_stock_sentiment(self, stock_symbol, days=7):
         """获取股票相关微博情绪"""
         # 搜索相关微博
         keywords = [stock_symbol, self.get_company_name(stock_symbol)]
         weibo_posts = self.search_weibo(keywords, days)
-        
+
         # 情绪分析
         sentiment_scores = []
         for post in weibo_posts:
@@ -51,7 +51,7 @@ class WeiboSentimentAnalyzer:
                 'sentiment': score,
                 'influence': post['repost_count'] + post['comment_count']
             })
-        
+
         return self.aggregate_sentiment(sentiment_scores)
 ```
 
@@ -63,18 +63,18 @@ class XueqiuAnalyzer:
         """获取雪球股票讨论"""
         # 雪球股票页面爬取
         discussions = self.crawl_xueqiu_discussions(stock_code)
-        
+
         # 分析投资者观点
         bullish_count = 0
         bearish_count = 0
-        
+
         for discussion in discussions:
             sentiment = self.classify_sentiment(discussion['content'])
             if sentiment > 0.6:
                 bullish_count += 1
             elif sentiment < 0.4:
                 bearish_count += 1
-        
+
         return {
             'bullish_ratio': bullish_count / len(discussions),
             'bearish_ratio': bearish_count / len(discussions),
@@ -93,15 +93,15 @@ class ChineseFinanceNews:
             'eastmoney',   # 东方财富
             'tencent_finance'  # 腾讯财经
         ]
-    
+
     def get_stock_news(self, stock_symbol, days=7):
         """获取股票相关新闻"""
         all_news = []
-        
+
         for source in self.sources:
             news = self.fetch_news_from_source(source, stock_symbol, days)
             all_news.extend(news)
-        
+
         # 去重和排序
         unique_news = self.deduplicate_news(all_news)
         return sorted(unique_news, key=lambda x: x['publish_time'], reverse=True)
@@ -242,7 +242,7 @@ SOCIAL_MEDIA_PLATFORMS=weibo,xueqiu,eastmoney_guba
 
 ## 🎯 总结
 
-通过集成中国本土的社交媒体和财经平台，TradingAgents-CN 将能够：
+通过集成中国本土的社交媒体和财经平台，zhitouagent 将能够：
 
 1. **提供更准确的市场情绪分析**
 2. **更好地理解中国投资者行为**

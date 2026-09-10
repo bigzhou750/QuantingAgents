@@ -199,7 +199,7 @@ state["messages"] = clean_old_tool_calls(state["messages"])
 if result.tool_calls and result.tool_calls[0]['name'] != 'get_stock_market_data_unified':
     logger.warning(f"⚠️ LLM 调用了错误的工具: {result.tool_calls[0]['name']}")
     logger.info(f"🔧 强制调用正确的工具: get_stock_market_data_unified")
-    
+
     # 强制调用统一工具
     unified_tool = toolkit.get_stock_market_data_unified
     market_data = unified_tool.invoke({
@@ -207,7 +207,7 @@ if result.tool_calls and result.tool_calls[0]['name'] != 'get_stock_market_data_
         'start_date': start_date,
         'end_date': current_date
     })
-    
+
     # 生成报告
     # ...
 ```
@@ -230,7 +230,7 @@ def _create_tool_nodes(self) -> Dict[str, ToolNode]:
             self.toolkit.get_YFin_data,
             self.toolkit.get_stockstats_indicators_report,
         ]
-    
+
     return {
         "market": ToolNode(market_tools),
         # ...
@@ -257,7 +257,7 @@ def should_continue_market(self, state: AgentState):
 
     # 检查是否已经有市场分析报告
     market_report = state.get("market_report", "")
-    
+
     # 如果已经有报告内容，说明分析已完成，不再循环
     if market_report and len(market_report) > 100:
         return "Msg Clear Market"
@@ -267,7 +267,7 @@ def should_continue_market(self, state: AgentState):
         # ⭐ 新增：验证工具调用
         tool_name = last_message.tool_calls[0]['name']
         expected_tool = 'get_stock_market_data_unified'
-        
+
         if tool_name != expected_tool:
             logger.warning(f"⚠️ [市场分析师] LLM 调用了错误的工具: {tool_name}")
             logger.warning(f"⚠️ [市场分析师] 预期工具: {expected_tool}")
@@ -275,7 +275,7 @@ def should_continue_market(self, state: AgentState):
             # 1. 继续执行（让 ToolNode 处理）
             # 2. 返回清理节点（跳过工具执行）
             # 3. 修改 tool_calls（强制使用正确的工具）
-        
+
         return "tools_market"
     return "Msg Clear Market"
 ```
@@ -359,7 +359,7 @@ for i, msg in enumerate(state['messages']):
 
 ---
 
-**分析日期**: 2025-10-11  
-**分析人员**: AI Assistant  
+**分析日期**: 2025-10-11
+**分析人员**: AI Assistant
 **状态**: ⏳ 待进一步诊断
 

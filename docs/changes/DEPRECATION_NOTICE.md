@@ -1,7 +1,7 @@
 # 废弃通知 (Deprecation Notice)
 
 > **更新日期**: 2025-10-05
-> 
+>
 > **相关文档**: `docs/configuration_optimization_plan.md`
 
 ---
@@ -200,9 +200,9 @@ await config_service.update_llm_config(
 
    这些文件将在 2026-03-31 后不再支持。
    请使用迁移脚本迁移到新的配置系统：
-   
+
    python scripts/migrate_config_to_db.py
-   
+
    详细信息: docs/DEPRECATION_NOTICE.md
 ```
 
@@ -212,13 +212,13 @@ await config_service.update_llm_config(
 
 ```
 💡 提示: 您正在使用旧的配置系统
-   
+
    为了获得更好的体验，建议迁移到新的配置系统。
    新系统支持：
    • 动态更新配置，无需重启
    • 配置历史和回滚
    • 更好的验证和错误提示
-   
+
    [立即迁移] [稍后提醒] [不再显示]
 ```
 

@@ -215,67 +215,67 @@ def _format_stock_data_response(self, data: pd.DataFrame, symbol: str, stock_nam
     try:
         # 🔧 计算技术指标需要足够的历史数据
         # 但只返回最后3-5天的数据给大模型
-        
+
         # 计算技术指标（使用完整数据）
         data['ma5'] = data['close'].rolling(window=5).mean()
         data['ma10'] = data['close'].rolling(window=10).mean()
         data['ma20'] = data['close'].rolling(window=20).mean()
         data['ma60'] = data['close'].rolling(window=60).mean()
-        
+
         # 计算RSI
         delta = data['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         data['rsi'] = 100 - (100 / (1 + rs))
-        
+
         # 计算MACD
         ema12 = data['close'].ewm(span=12, adjust=False).mean()
         ema26 = data['close'].ewm(span=26, adjust=False).mean()
         data['macd_dif'] = ema12 - ema26
         data['macd_dea'] = data['macd_dif'].ewm(span=9, adjust=False).mean()
         data['macd'] = (data['macd_dif'] - data['macd_dea']) * 2
-        
+
         # 计算布林带
         data['boll_mid'] = data['close'].rolling(window=20).mean()
         std = data['close'].rolling(window=20).std()
         data['boll_upper'] = data['boll_mid'] + 2 * std
         data['boll_lower'] = data['boll_mid'] - 2 * std
-        
+
         # 只保留最后3-5天的数据用于展示
         display_data = data.tail(3)
         latest_data = data.iloc[-1]
-        
+
         # 格式化输出
         result = f"📊 {stock_name}({symbol}) - 技术分析数据\n"
         result += f"数据期间: {start_date} 至 {end_date}\n\n"
-        
+
         result += f"💰 最新价格: ¥{latest_data['close']:.2f}\n"
         result += f"📈 涨跌幅: {((latest_data['close'] - data.iloc[-2]['close']) / data.iloc[-2]['close'] * 100):+.2f}%\n\n"
-        
+
         result += f"📊 移动平均线:\n"
         result += f"   MA5:  ¥{latest_data['ma5']:.2f}\n"
         result += f"   MA10: ¥{latest_data['ma10']:.2f}\n"
         result += f"   MA20: ¥{latest_data['ma20']:.2f}\n"
         result += f"   MA60: ¥{latest_data['ma60']:.2f}\n\n"
-        
+
         result += f"📈 MACD指标:\n"
         result += f"   DIF:  {latest_data['macd_dif']:.2f}\n"
         result += f"   DEA:  {latest_data['macd_dea']:.2f}\n"
         result += f"   MACD: {latest_data['macd']:.2f}\n\n"
-        
+
         result += f"📉 RSI指标: {latest_data['rsi']:.2f}\n\n"
-        
+
         result += f"📊 布林带:\n"
         result += f"   上轨: ¥{latest_data['boll_upper']:.2f}\n"
         result += f"   中轨: ¥{latest_data['boll_mid']:.2f}\n"
         result += f"   下轨: ¥{latest_data['boll_lower']:.2f}\n\n"
-        
+
         result += f"📋 最近{len(display_data)}日数据:\n"
         result += display_data[['date', 'open', 'high', 'low', 'close', 'volume']].to_string()
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"❌ 格式化数据响应失败: {e}")
         return f"❌ 格式化{symbol}数据失败: {e}"
@@ -289,7 +289,7 @@ def _format_stock_data_response(self, data: pd.DataFrame, symbol: str, stock_nam
 
 1. **基于真实技术指标进行分析**
    - 不再是"猜测"，而是基于计算出的MA、RSI、MACD等指标
-   
+
 2. **提供更准确的趋势判断**
    - 均线多头/空头排列
    - MACD金叉/死叉
@@ -310,7 +310,7 @@ def _format_stock_data_response(self, data: pd.DataFrame, symbol: str, stock_nam
 
 **优先级**: 🔴 高优先级 - 直接影响核心功能的准确性
 
-**预计工作量**: 
+**预计工作量**:
 - 快速修复：1-2小时
 - 完善优化：2-4小时
 - 港股支持：1-2小时

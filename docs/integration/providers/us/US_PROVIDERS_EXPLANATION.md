@@ -71,7 +71,7 @@ class YFinanceUtils:
 class OptimizedUSDataProvider:
     def __init__(self):
         self.cache = get_cache()
-        
+
     def get_stock_data(self, symbol, start_date, end_date):
         # 集成缓存策略
         # 调用 yfinance API
@@ -92,10 +92,10 @@ class OptimizedUSDataProvider:
 class AKShareProvider(BaseStockDataProvider):
     async def connect(self) -> bool:
         pass
-    
+
     async def get_stock_basic_info(self, symbol: str):
         pass
-    
+
     async def get_stock_data(self, symbol: str, start_date, end_date):
         pass
 ```
@@ -139,7 +139,7 @@ class OptimizedUSDataProvider:
    ```python
    # providers/us/base.py
    from ..base_provider import BaseStockDataProvider
-   
+
    class USStockDataProvider(BaseStockDataProvider):
        """美股数据提供器基类"""
        pass
@@ -151,7 +151,7 @@ class OptimizedUSDataProvider:
    class YFinanceProvider(USStockDataProvider):
        async def connect(self) -> bool:
            return True
-       
+
        async def get_stock_data(self, symbol, start_date, end_date):
            ticker = yf.Ticker(symbol)
            return ticker.history(start=start_date, end=end_date)
@@ -164,7 +164,7 @@ class OptimizedUSDataProvider:
        async def connect(self) -> bool:
            # 初始化 Finnhub API
            pass
-       
+
        async def get_stock_data(self, symbol, start_date, end_date):
            # 调用 Finnhub API
            pass
@@ -175,7 +175,7 @@ class OptimizedUSDataProvider:
    # providers/us/__init__.py
    from .yfinance import YFinanceProvider
    from .finnhub import FinnhubProvider
-   
+
    # 默认使用 YFinance
    DefaultUSProvider = YFinanceProvider
    ```
@@ -208,12 +208,12 @@ class OptimizedUSDataProvider:
        from .yfinance import YFinanceUtils
    except ImportError:
        YFinanceUtils = None
-   
+
    try:
        from .finnhub import get_data_in_range
    except ImportError:
        get_data_in_range = None
-   
+
    try:
        from .optimized import OptimizedUSDataProvider
    except ImportError:

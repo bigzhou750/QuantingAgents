@@ -75,7 +75,7 @@ if settings.QUOTES_INGEST_ENABLED:
 ```python
 async def run_once(self) -> None:
     """执行一次采集与入库"""
-    
+
     # 1️⃣ 判断是否为交易时段
     if not self._is_trading_time():
         if settings.QUOTES_BACKFILL_ON_OFFHOURS:
@@ -84,22 +84,22 @@ async def run_once(self) -> None:
         else:
             logger.info("⏭️ 非交易时段，跳过行情采集")
         return
-    
+
     # 2️⃣ 交易时段：获取实时行情
     try:
         manager = DataSourceManager()
         quotes_map, source = manager.get_realtime_quotes_with_fallback()
-        
+
         if not quotes_map:
             logger.warning("未获取到行情数据，跳过本次入库")
             return
-        
+
         # 3️⃣ 获取交易日
         trade_date = manager.find_latest_trade_date_with_fallback() or datetime.now(self.tz).strftime("%Y%m%d")
-        
+
         # 4️⃣ 批量写入 MongoDB
         await self._bulk_upsert(quotes_map, trade_date, source)
-        
+
     except Exception as e:
         logger.error(f"❌ 行情入库失败: {e}")
 ```
@@ -109,18 +109,18 @@ async def run_once(self) -> None:
 ```python
 def _is_trading_time(self, now: Optional[datetime] = None) -> bool:
     now = now or datetime.now(self.tz)
-    
+
     # 1️⃣ 判断是否为工作日（周一到周五）
     if now.weekday() > 4:  # 周六=5, 周日=6
         return False
-    
+
     # 2️⃣ 判断是否在交易时段
     t = now.time()
     morning = dtime(9, 30)        # 上午开盘
     noon = dtime(11, 30)          # 上午收盘
     afternoon_start = dtime(13, 0) # 下午开盘
     afternoon_end = dtime(15, 0)   # 下午收盘
-    
+
     return (morning <= t <= noon) or (afternoon_start <= t <= afternoon_end)
 ```
 
@@ -135,7 +135,7 @@ def _is_trading_time(self, now: Optional[datetime] = None) -> bool:
 def get_realtime_quotes_with_fallback(self) -> Tuple[Optional[Dict], Optional[str]]:
     """按优先级依次尝试获取实时行情"""
     available_adapters = self.get_available_adapters()  # 获取可用适配器
-    
+
     for adapter in available_adapters:
         try:
             logger.info(f"Trying to fetch realtime quotes from {adapter.name}")
@@ -145,7 +145,7 @@ def get_realtime_quotes_with_fallback(self) -> Tuple[Optional[Dict], Optional[st
         except Exception as e:
             logger.error(f"Failed to fetch realtime quotes from {adapter.name}: {e}")
             continue
-    
+
     return None, None
 ```
 
@@ -163,7 +163,7 @@ async def _bulk_upsert(self, quotes_map: Dict[str, Dict], trade_date: str, sourc
     coll = db[self.collection_name]
     ops = []
     updated_at = datetime.now(self.tz)
-    
+
     # 构建批量操作
     for code, q in quotes_map.items():
         if not code:
@@ -189,11 +189,11 @@ async def _bulk_upsert(self, quotes_map: Dict[str, Dict], trade_date: str, sourc
                 upsert=True  # 不存在则插入
             )
         )
-    
+
     if not ops:
         logger.info("无可写入的数据，跳过")
         return
-    
+
     # 执行批量写入
     result = await coll.bulk_write(ops, ordered=False)
     logger.info(
@@ -217,7 +217,7 @@ async def backfill_last_close_snapshot_if_needed(self) -> None:
     try:
         manager = DataSourceManager()
         latest_td = manager.find_latest_trade_date_with_fallback()
-        
+
         # 检查是否需要补数
         if await self._collection_empty() or await self._collection_stale(latest_td):
             logger.info("🔁 触发休市期/启动期 backfill 以填充最新收盘数据")
@@ -310,13 +310,13 @@ async def get_quote(code: str, current_user: dict = Depends(get_current_user)):
     """获取股票近实时快照"""
     db = get_mongo_db()
     code6 = _zfill_code(code)
-    
+
     # 从 market_quotes 集合读取行情
     q = await db["market_quotes"].find_one({"code": code6}, {"_id": 0})
-    
+
     # 从 stock_basic_info 集合读取基础信息
     b = await db["stock_basic_info"].find_one({"code": code6}, {"_id": 0})
-    
+
     # 拼装返回数据
     return {
         "code": code6,
@@ -353,7 +353,7 @@ if codes:
         cursor = coll.find({"code": {"$in": codes}}, {"code": 1, "close": 1, "pct_chg": 1, "amount": 1})
         docs = await cursor.to_list(length=None)
         quotes_map = {str(d.get("code")).zfill(6): d for d in (docs or [])}
-        
+
         for it in items:
             code = it.get("stock_code")
             q = quotes_map.get(code)
@@ -394,7 +394,7 @@ async def get_market_quotes(symbol: str, current_user: dict = Depends(get_curren
     """获取实时行情数据"""
     service = get_stock_data_service()
     quotes = await service.get_market_quotes(symbol)
-    
+
     return MarketQuotesResponse(
         success=True,
         data=quotes,
@@ -481,7 +481,7 @@ db.market_quotes.createIndex({ "updated_at": 1 })
 
 ### Q1: 为什么需要实时行情入库服务？
 
-**A**: 
+**A**:
 1. **性能优化**：避免每次请求都调用外部 API
 2. **降低延迟**：从 MongoDB 读取比调用外部 API 快 10 倍以上
 3. **减少限流**：外部 API 有调用频率限制
@@ -539,7 +539,7 @@ db.market_quotes.createIndex({ "updated_at": 1 })
 
 ## 总结
 
-**实时行情入库服务**是 TradingAgents-CN 的核心基础设施之一，负责：
+**实时行情入库服务**是 zhitouagent 的核心基础设施之一，负责：
 
 1. ✅ **定时采集**：每 30 秒从外部数据源获取全市场实时行情
 2. ✅ **数据存储**：批量写入 MongoDB，提供高性能查询

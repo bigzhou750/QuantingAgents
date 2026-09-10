@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-TradingAgents-CN采用本地构建Docker镜像的方式，而不是提供预构建镜像。本文档详细说明了Docker镜像的构建过程、优化方法和常见问题解决方案。
+zhitouagent采用本地构建Docker镜像的方式，而不是提供预构建镜像。本文档详细说明了Docker镜像的构建过程、优化方法和常见问题解决方案。
 
 ## 🎯 为什么需要本地构建？
 
@@ -292,7 +292,7 @@ COPY --from=builder /app /app
 # 开发环境
 docker-compose up --build  # 每次都重新构建
 
-# 测试环境  
+# 测试环境
 docker-compose build && docker-compose up -d  # 先构建再启动
 
 # 生产环境
@@ -345,6 +345,6 @@ docker scan tradingagents-cn:latest
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *贡献者: [@breeze303](https://github.com/breeze303)*

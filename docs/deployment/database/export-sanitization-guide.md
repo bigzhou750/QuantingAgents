@@ -209,7 +209,7 @@ def _sanitize_document(doc):
         "api_key", "api_secret", "secret", "token", "password",
         "client_secret", "webhook_secret", "private_key"
     ]
-    
+
     if isinstance(doc, dict):
         sanitized = {}
         for k, v in doc.items():

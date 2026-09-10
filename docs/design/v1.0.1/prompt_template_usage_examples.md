@@ -234,7 +234,7 @@ custom_template = {
     "description": "针对科技行业的基本面分析模版，强调研发投入和市场前景",
     "system_prompt": """
     你是一位专业的科技股基本面分析师。
-    
+
     科技股分析重点：
     1. 研发投入和创新能力
     2. 市场规模和增长潜力
@@ -273,8 +273,8 @@ print(f"可用版本: {versions}")  # ['1.0', '1.1', '1.2']
 
 # 加载特定版本
 old_template = template_manager.load_template_version(
-    "fundamentals", 
-    "default", 
+    "fundamentals",
+    "default",
     version="1.0"
 )
 

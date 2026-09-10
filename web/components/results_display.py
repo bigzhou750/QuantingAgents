@@ -70,7 +70,7 @@ def render_results(results):
 
     # 风险提示
     render_risk_warning()
-    
+
     # 导出报告功能
     render_export_buttons(results)
 
@@ -269,7 +269,7 @@ def render_decision_summary(decision, stock_symbol=None):
             value=price_display,
             help=help_text
         )
-    
+
     # 分析推理
     if 'reasoning' in decision and decision['reasoning']:
         with st.expander("🧠 AI分析推理", expanded=True):
@@ -360,7 +360,7 @@ def render_detailed_analysis(state):
             else:
                 st.write(f"- `{key}`: {type(value).__name__} - {str(value)[:100]}")
         st.markdown("---")
-    
+
     # 定义分析模块 - 包含完整的团队决策报告，与CLI端保持一致
     analysis_modules = [
         {
@@ -425,7 +425,7 @@ def render_detailed_analysis(state):
             'description': '综合所有团队分析后的最终投资决策'
         }
     ]
-    
+
     # 过滤出有数据的模块
     available_modules = []
     for module in analysis_modules:
@@ -575,12 +575,12 @@ def render_risk_warning():
 
 def create_price_chart(price_data):
     """创建价格走势图"""
-    
+
     if not price_data:
         return None
-    
+
     fig = go.Figure()
-    
+
     # 添加价格线
     fig.add_trace(go.Scatter(
         x=price_data['date'],
@@ -589,7 +589,7 @@ def create_price_chart(price_data):
         name='股价',
         line=dict(color='#1f77b4', width=2)
     ))
-    
+
     # 设置图表样式
     fig.update_layout(
         title="股价走势图",
@@ -598,15 +598,15 @@ def create_price_chart(price_data):
         hovermode='x unified',
         showlegend=True
     )
-    
+
     return fig
 
 def create_sentiment_gauge(sentiment_score):
     """创建情绪指标仪表盘"""
-    
+
     if sentiment_score is None:
         return None
-    
+
     fig = go.Figure(go.Indicator(
         mode = "gauge+number+delta",
         value = sentiment_score,
@@ -629,5 +629,5 @@ def create_sentiment_gauge(sentiment_score):
             }
         }
     ))
-    
+
     return fig

@@ -1,4 +1,4 @@
-# Backend Dockerfile for FastAPI service (TradingAgents-CN v1.0.0-preview)
+# Backend Dockerfile for FastAPI service (zhitouagent v1.0.0-preview)
 # 前后端分离架构 - 后端服务
 # 支持多架构: amd64, arm64
 #
@@ -18,6 +18,10 @@ WORKDIR /app
 # 复制pyproject.toml和README.md（pip安装需要）
 COPY pyproject.toml README.md ./
 
+# 安装前复制核心 Python 包和 CLI，确保 pip install 与运行时使用同一套代码
+COPY tradingagents ./tradingagents
+COPY cli ./cli
+
 # 安装Python依赖
 # 优化说明：
 # 1. 使用清华镜像加速下载
@@ -30,15 +34,16 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
 
 # 复制后端代码和必需模块
 COPY app ./app
-COPY tradingagents ./tradingagents
 COPY vibe_agent_runtime ./vibe_agent_runtime
 COPY config ./config
 COPY scripts ./scripts
 COPY docs ./docs
 COPY install ./install
 
-# 复制Docker环境配置文件
-COPY .env.docker ./.env
+# 运行期环境变量由 compose/部署平台显式注入，镜像内不烘焙 .env 文件
+
+# 构建自检：验证包路径、CLI 入口和核心图对象可导入
+RUN python scripts/validation/verify_backend_build.py
 
 # 暴露后端端口（与docker-compose.v1.0.0.yml一致）
 EXPOSE 8000

@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-为了提高发布效率，TradingAgents-CN 采用**分架构独立仓库**策略：
+为了提高发布效率，zhitouagent 采用**分架构独立仓库**策略：
 
 - **AMD64 版本**：独立仓库，频繁更新
 - **ARM64 版本**：独立仓库，按需更新
@@ -136,7 +136,7 @@ services:
   backend:
     image: hsliuping/tradingagents-backend-amd64:latest
     # ...
-  
+
   frontend:
     image: hsliuping/tradingagents-frontend-amd64:latest
     # ...
@@ -162,7 +162,7 @@ services:
   backend:
     image: hsliuping/tradingagents-backend-arm64:latest
     # ...
-  
+
   frontend:
     image: hsliuping/tradingagents-frontend-arm64:latest
     # ...
@@ -340,20 +340,20 @@ VERSION=v1.0.0 ./scripts/build-amd64.sh
 
 ### Q1: ARM64 用户如何知道有新版本？
 
-**A**: 
+**A**:
 - 查看 CHANGELOG.md
 - 关注 GitHub Releases
 - 订阅邮件通知
 
 ### Q2: 如果 ARM64 版本太旧怎么办？
 
-**A**: 
+**A**:
 - 提交 Issue 请求更新
 - 或自行构建最新版本
 
 ### Q3: 能否自动同步两个架构？
 
-**A**: 
+**A**:
 - 可以，但会失去独立更新的优势
 - 不推荐，除非是重大版本
 

@@ -258,7 +258,7 @@
 
 
         <!-- 配置管理 -->
-        <el-card v-show="activeTab === 'config'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'config' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>配置管理</h3>
           </template>
@@ -278,7 +278,7 @@
         </el-card>
 
         <!-- 使用统计 -->
-        <el-card v-show="activeTab === 'usage'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'usage' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>使用统计</h3>
           </template>
@@ -298,7 +298,7 @@
         </el-card>
 
         <!-- 缓存管理 -->
-        <el-card v-show="activeTab === 'cache'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'cache' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>缓存管理</h3>
           </template>
@@ -318,7 +318,7 @@
         </el-card>
 
         <!-- 数据库管理 -->
-        <el-card v-show="activeTab === 'database'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'database' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>数据库管理</h3>
           </template>
@@ -338,7 +338,7 @@
         </el-card>
 
         <!-- 操作日志 -->
-        <el-card v-show="activeTab === 'logs'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'logs' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>操作日志</h3>
           </template>
@@ -358,7 +358,7 @@
         </el-card>
 
         <!-- 多数据源同步 -->
-        <el-card v-show="activeTab === 'sync'" class="settings-content" shadow="never">
+        <el-card v-show="activeTab === 'sync' && authStore.isAdmin" class="settings-content" shadow="never">
           <template #header>
             <h3>多数据源同步</h3>
           </template>

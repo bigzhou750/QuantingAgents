@@ -1,7 +1,7 @@
 # 美股数据源与缓存系统全面升级
 
-**日期**: 2025-11-11  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-11-11
+**作者**: zhitouagent 开发团队
 **标签**: `美股数据源` `缓存系统` `数据库导入导出` `系统优化` `Bug修复`
 
 ---
@@ -42,7 +42,7 @@
    # tradingagents/dataflows/providers/us/data_source_manager.py
    class USDataSourceManager:
        """美股数据源管理器"""
-       
+
        def get_priority_order(self) -> List[DataSourceCode]:
            """从数据库读取数据源优先级"""
            # 查询 datasource_groupings 集合
@@ -162,10 +162,10 @@
 # tradingagents/dataflows/providers/us/optimized.py
 def get_stock_data(self, symbol: str, start_date: str, end_date: str):
     """获取美股数据，按数据库配置的优先级查找缓存"""
-    
+
     # 1. 从数据库读取数据源优先级
     priority_order = self.data_source_manager.get_priority_order()
-    
+
     # 2. 按优先级顺序查找缓存
     for source in priority_order:
         cache_key = self.cache.find_cached_stock_data(
@@ -174,13 +174,13 @@ def get_stock_data(self, symbol: str, start_date: str, end_date: str):
             end_date=end_date,
             data_source=source.value  # "alpha_vantage", "yfinance", "finnhub"
         )
-        
+
         if cache_key:
             cached_data = self.cache.load_stock_data(cache_key)
             if cached_data:
                 logger.info(f"⚡ [数据来源: 缓存-{source.value}] 从缓存加载美股数据: {symbol}")
                 return cached_data
-    
+
     # 3. 缓存未命中，按优先级调用 API
     for source in priority_order:
         try:
@@ -215,7 +215,7 @@ AttributeError: 'IntegratedCacheManager' object has no attribute 'find_cached_fu
 # tradingagents/dataflows/cache/integrated.py
 class IntegratedCacheManager:
     """集成缓存管理器"""
-    
+
     def find_cached_fundamentals_data(self, symbol: str, data_source: str = None):
         """查找缓存的基本面数据"""
         # 1. 尝试从 Redis 查找
@@ -223,16 +223,16 @@ class IntegratedCacheManager:
             cache_key = self.redis_cache.find_cached_fundamentals_data(symbol, data_source)
             if cache_key:
                 return cache_key
-        
+
         # 2. 尝试从 MongoDB 查找
         if self.mongodb_cache:
             cache_key = self.mongodb_cache.find_cached_fundamentals_data(symbol, data_source)
             if cache_key:
                 return cache_key
-        
+
         # 3. 降级到文件缓存
         return self.file_cache.find_cached_fundamentals_data(symbol, data_source)
-    
+
     def is_fundamentals_cache_valid(self, cache_key: str, max_age_days: int = 7):
         """检查基本面数据缓存是否有效"""
         # 基本面数据更新频率较低，默认7天有效期
@@ -309,20 +309,20 @@ const reportCollections = [
 def _convert_date_fields(doc: dict) -> dict:
     """
     转换文档中的日期字段（字符串 → datetime）
-    
+
     常见的日期字段：
     - created_at, updated_at, completed_at
     - started_at, finished_at
     - analysis_date (保持字符串格式，因为是日期而非时间戳)
     """
     from dateutil import parser
-    
+
     date_fields = [
         "created_at", "updated_at", "completed_at",
         "started_at", "finished_at", "deleted_at",
         "last_login", "last_modified", "timestamp"
     ]
-    
+
     for field in date_fields:
         if field in doc and isinstance(doc[field], str):
             try:
@@ -331,14 +331,14 @@ def _convert_date_fields(doc: dict) -> dict:
                 logger.debug(f"✅ 转换日期字段 {field}: {doc[field]}")
             except Exception as e:
                 logger.warning(f"⚠️ 无法解析日期字段 {field}: {doc[field]}, 错误: {e}")
-    
+
     return doc
 
 
 async def import_data(...):
     """导入数据到数据库"""
     # ...
-    
+
     # 处理 _id 字段和日期字段
     for doc in documents:
         # 转换 _id
@@ -347,7 +347,7 @@ async def import_data(...):
                 doc["_id"] = ObjectId(doc["_id"])
             except Exception:
                 del doc["_id"]
-        
+
         # 🔥 转换日期字段（字符串 → datetime）
         _convert_date_fields(doc)
 ```
@@ -385,17 +385,17 @@ async def import_data(...):
 async def import_data(...):
     """导入数据到数据库"""
     # ...
-    
+
     # 🔥 新格式：包含 export_info 和 data 的字典
     if isinstance(data, dict) and "export_info" in data and "data" in data:
         logger.info(f"📦 检测到新版多集合导出文件（包含 export_info）")
         export_info = data.get("export_info", {})
         logger.info(f"📋 导出信息: 创建时间={export_info.get('created_at')}, 集合数={len(export_info.get('collections', []))}")
-        
+
         # 提取实际数据
         data = data["data"]
         logger.info(f"📦 包含 {len(data)} 个集合: {list(data.keys())}")
-    
+
     # 🔥 旧格式：直接是集合名到文档列表的映射
     if isinstance(data, dict) and all(isinstance(k, str) and isinstance(v, list) for k, v in data.items()):
         # 多集合模式
@@ -441,7 +441,7 @@ async def import_data(...):
 ```
 第一次分析 TSLA：
   - 从 Alpha Vantage API 获取数据：~2秒
-  
+
 第二次分析 TSLA：
   - 缓存未命中（查找逻辑错误）
   - 重新从 API 获取数据：~2秒
@@ -452,7 +452,7 @@ async def import_data(...):
 第一次分析 TSLA：
   - 从 Alpha Vantage API 获取数据：~2秒
   - 保存到 Redis 缓存
-  
+
 第二次分析 TSLA：
   - 从 Redis 缓存加载：~10ms
   - 速度提升 200倍！
@@ -492,20 +492,20 @@ async def import_data(...):
 ```python
 class USDataSourceManager:
     """美股数据源管理器
-    
+
     职责：
     1. 从数据库读取数据源配置
     2. 管理数据源优先级
     3. 提供数据源实例
     4. 处理数据源降级
     """
-    
+
     def get_priority_order(self) -> List[DataSourceCode]:
         """获取数据源优先级顺序（从数据库读取）"""
         # 查询 datasource_groupings 集合
         # 按 priority 字段排序
         # 返回优先级列表
-    
+
     def get_data_source(self, source_code: DataSourceCode):
         """获取数据源实例"""
         # 根据数据源代码返回对应的实例
@@ -517,25 +517,25 @@ class USDataSourceManager:
 ```python
 class IntegratedCacheManager:
     """集成缓存管理器
-    
+
     三层缓存架构：
     1. Redis：内存缓存，速度最快
     2. MongoDB：持久化缓存，数据不丢失
     3. File：降级缓存，不依赖外部服务
     """
-    
+
     def save_stock_data(self, data, source: str):
         """保存数据到缓存（按优先级）"""
         # 1. 尝试保存到 Redis
         if self.redis_cache:
             self.redis_cache.save_stock_data(data, source)
             return
-        
+
         # 2. 降级到 MongoDB
         if self.mongodb_cache:
             self.mongodb_cache.save_stock_data(data, source)
             return
-        
+
         # 3. 降级到 File
         self.file_cache.save_stock_data(data, source)
 ```
@@ -545,7 +545,7 @@ class IntegratedCacheManager:
 ```python
 def _convert_date_fields(doc: dict) -> dict:
     """转换文档中的日期字段（字符串 → datetime）
-    
+
     优点：
     1. 自动识别常见日期字段
     2. 使用 dateutil.parser 智能解析
@@ -553,20 +553,20 @@ def _convert_date_fields(doc: dict) -> dict:
     4. 在导入时转换，一次性解决问题
     """
     from dateutil import parser
-    
+
     date_fields = [
         "created_at", "updated_at", "completed_at",
         "started_at", "finished_at", "deleted_at",
         "last_login", "last_modified", "timestamp"
     ]
-    
+
     for field in date_fields:
         if field in doc and isinstance(doc[field], str):
             try:
                 doc[field] = parser.parse(doc[field])
             except Exception as e:
                 logger.warning(f"⚠️ 无法解析日期字段 {field}: {doc[field]}")
-    
+
     return doc
 ```
 

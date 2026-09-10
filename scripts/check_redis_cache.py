@@ -4,6 +4,7 @@
 """
 
 import sys
+import os
 from pathlib import Path
 
 # 添加项目根目录到路径
@@ -24,7 +25,7 @@ def check_redis_cache():
         redis_client = redis.Redis(
             host='127.0.0.1',
             port=6379,
-            password='tradingagents123',
+            password=os.getenv("REDIS_PASSWORD", ""),
             db=0,
             decode_responses=False  # 不自动解码，因为数据是 pickle 序列化的
         )
@@ -150,4 +151,3 @@ def check_redis_cache():
 
 if __name__ == "__main__":
     check_redis_cache()
-

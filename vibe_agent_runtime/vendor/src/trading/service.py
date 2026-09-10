@@ -1298,7 +1298,7 @@ def _call_remote(
             "transport": profile.transport,
             "error": (
                 f"connector profile '{profile.id}' is not authorized. "
-                f"Run `vibe-trading connector authorize {profile.id}` from a desktop session."
+                f"Run `zhitouagent connector authorize {profile.id}` from a desktop session."
             ),
         }
 

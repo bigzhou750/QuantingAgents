@@ -42,16 +42,16 @@ try:
     from app.core.unified_config import UnifiedConfigManager
     config = UnifiedConfigManager()
     data_source_configs = await config.get_data_source_configs_async()
-    
+
     # 提取启用的数据源，按优先级排序
     enabled_sources = [
         ds.type.lower() for ds in data_source_configs
         if ds.enabled and ds.type.lower() in ['tushare', 'akshare', 'baostock']
     ]
-    
+
     if not enabled_sources:
         enabled_sources = ['tushare', 'akshare', 'baostock']
-    
+
     # 按数据源优先级查询财务数据
     for data_source in enabled_sources:
         financial_data = await db["stock_financial_data"].find_one(

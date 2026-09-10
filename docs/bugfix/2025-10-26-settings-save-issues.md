@@ -1,7 +1,7 @@
 # 个人设置保存问题修复文档
 
-**日期**: 2025-10-26  
-**问题类型**: 前端保存未持久化到后端  
+**日期**: 2025-10-26
+**问题类型**: 前端保存未持久化到后端
 **严重程度**: 中（影响用户体验）
 
 ---
@@ -146,14 +146,14 @@ class UserPreferences(BaseModel):
     default_analysts: List[str] = Field(default_factory=lambda: ["基本面分析师", "技术分析师"])
     auto_refresh: bool = True
     refresh_interval: int = 30  # 秒
-    
+
     # 外观设置
     ui_theme: str = "light"
     sidebar_width: int = 240
-    
+
     # 语言和地区
     language: str = "zh-CN"
-    
+
     # 通知设置
     notifications_enabled: bool = True
     email_notifications: bool = False
@@ -178,31 +178,31 @@ async def update_me(payload: dict, user: dict = Depends(get_current_user)):
     """更新当前用户信息"""
     try:
         from app.models.user import UserUpdate, UserPreferences
-        
+
         update_data = {}
-        
+
         # 更新邮箱
         if "email" in payload:
             update_data["email"] = payload["email"]
-        
+
         # 更新偏好设置（支持部分更新）
         if "preferences" in payload:
             # 获取当前偏好
             current_prefs = user.get("preferences", {})
-            
+
             # ✅ 合并新的偏好设置（不覆盖未提供的字段）
             merged_prefs = {**current_prefs, **payload["preferences"]}
-            
+
             # 创建 UserPreferences 对象
             update_data["preferences"] = UserPreferences(**merged_prefs)
-        
+
         # 调用服务更新用户
         user_update = UserUpdate(**update_data)
         updated_user = await user_service.update_user(user["username"], user_update)
-        
+
         if not updated_user:
             raise HTTPException(status_code=400, detail="更新失败，邮箱可能已被使用")
-        
+
         return {
             "success": True,
             "data": updated_user.model_dump(by_alias=True),
@@ -262,7 +262,7 @@ const saveAppearanceSettings = async () => {
     // 更新本地 store（立即生效）
     appStore.setSidebarWidth(appearanceSettings.value.sidebarWidth)
     appStore.setTheme(appearanceSettings.value.theme as any)
-    
+
     // 保存到后端（持久化）
     const success = await authStore.updateUserInfo({
       preferences: {
@@ -270,7 +270,7 @@ const saveAppearanceSettings = async () => {
         sidebar_width: appearanceSettings.value.sidebarWidth
       }
     })
-    
+
     if (success) {
       ElMessage.success('外观设置已保存')
     }
@@ -285,7 +285,7 @@ const saveAnalysisSettings = async () => {
   try {
     // 更新本地 store（立即生效）
     appStore.updatePreferences({ ... })
-    
+
     // 保存到后端（持久化）
     const success = await authStore.updateUserInfo({
       preferences: {
@@ -296,7 +296,7 @@ const saveAnalysisSettings = async () => {
         refresh_interval: analysisSettings.value.refreshInterval
       }
     })
-    
+
     if (success) {
       ElMessage.success('分析偏好已保存')
     }
@@ -314,12 +314,12 @@ const saveNotificationSettings = async () => {
         desktop_notifications: notificationSettings.value.desktop,
         analysis_complete_notification: notificationSettings.value.analysisComplete,
         system_maintenance_notification: notificationSettings.value.systemMaintenance,
-        notifications_enabled: notificationSettings.value.desktop || 
-                               notificationSettings.value.analysisComplete || 
+        notifications_enabled: notificationSettings.value.desktop ||
+                               notificationSettings.value.analysisComplete ||
                                notificationSettings.value.systemMaintenance
       }
     })
-    
+
     if (success) {
       ElMessage.success('通知设置已保存')
     }
@@ -376,10 +376,10 @@ const saveSettings = async () => {
   try {
     // 立即生效
     store.updateSettings(settings.value)
-    
+
     // 持久化
     const success = await api.updateSettings(settings.value)
-    
+
     if (success) {
       ElMessage.success('设置已保存')
     }
@@ -462,8 +462,8 @@ if "preferences" in payload:
 
 ---
 
-**修复完成日期**: 2025-10-26  
-**Git 提交**: 
+**修复完成日期**: 2025-10-26
+**Git 提交**:
 - `e2fef6b` - fix: 修复通用设置（邮箱地址）保存后刷新恢复原值的问题
 - `6283a5c` - fix: 修复所有个人设置保存问题（外观、分析偏好、通知设置）
 

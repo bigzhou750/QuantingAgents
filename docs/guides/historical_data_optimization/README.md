@@ -117,7 +117,7 @@ async def _save_historical_data(self, symbol: str, df) -> int:
     """保存历史数据到统一集合"""
     if self.historical_service is None:
         self.historical_service = await get_historical_data_service()
-    
+
     return await self.historical_service.save_historical_data(
         symbol=symbol,
         data=df,
@@ -191,7 +191,7 @@ GET /api/historical-data/health
 🎯 历史数据存储优化简单测试
 ============================================================
 ✅ MongoDB连接: 通过
-✅ 数据插入: 通过  
+✅ 数据插入: 通过
 ✅ 数据查询: 通过
 ✅ 数据对比: 通过
 ✅ 聚合查询: 通过
@@ -208,7 +208,7 @@ GET /api/historical-data/health
 ```
 📊 数据对比结果:
   - tushare: 收盘价=12.75, 成交量=130000000, 涨跌幅=1.59%
-  - akshare: 收盘价=12.73, 成交量=128000000, 涨跌幅=1.43%  
+  - akshare: 收盘价=12.73, 成交量=128000000, 涨跌幅=1.43%
   - baostock: 收盘价=12.77, 成交量=132000000, 涨跌幅=1.75%
 📈 收盘价差异: 0.0400
 ```
@@ -245,7 +245,7 @@ curl http://localhost:8000/api/historical-data/statistics
 - 各股票记录数
 - 最新数据日期
 
-### 性能监控  
+### 性能监控
 - 查询响应时间
 - 批量写入速度
 - 索引使用率

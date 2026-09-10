@@ -294,11 +294,11 @@ class ConfigManager:
         if not self.settings_file.exists():
             # 导入默认数据目录配置
             import os
-            default_data_dir = os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "data")
+            default_data_dir = os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data")
             
             default_settings = {
-                "default_provider": "dashscope",
-                "default_model": "qwen-turbo",
+                "default_provider": "deepseek",
+                "default_model": "deepseek-chat",
                 "enable_cost_tracking": True,
                 "cost_alert_threshold": 100.0,  # 成本警告阈值
                 "currency_preference": "CNY",
@@ -306,7 +306,7 @@ class ConfigManager:
                 "max_usage_records": 10000,
                 "data_dir": default_data_dir,  # 数据目录配置
                 "cache_dir": os.path.join(default_data_dir, "cache"),  # 缓存目录
-                "results_dir": os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "results"),  # 结果目录
+                "results_dir": os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "results"),  # 结果目录
                 "auto_create_dirs": True,  # 自动创建目录
                 "openai_enabled": False,  # OpenAI模型是否启用
             }
@@ -484,16 +484,16 @@ class ConfigManager:
             else:
                 # 如果设置文件不存在，创建默认设置
                 settings = {
-                    "default_provider": "dashscope",
-                    "default_model": "qwen-turbo",
+                    "default_provider": "deepseek",
+                    "default_model": "deepseek-chat",
                     "enable_cost_tracking": True,
                     "cost_alert_threshold": 100.0,
                     "currency_preference": "CNY",
                     "auto_save_usage": True,
                     "max_usage_records": 10000,
-                    "data_dir": os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "data"),
-                    "cache_dir": os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "data", "cache"),
-                    "results_dir": os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "results"),
+                    "data_dir": os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data"),
+                    "cache_dir": os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data", "cache"),
+                    "results_dir": os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "results"),
                     "auto_create_dirs": True,
                     "openai_enabled": False,
                 }
@@ -508,10 +508,10 @@ class ConfigManager:
             "reddit_client_id": os.getenv("REDDIT_CLIENT_ID", ""),
             "reddit_client_secret": os.getenv("REDDIT_CLIENT_SECRET", ""),
             "reddit_user_agent": os.getenv("REDDIT_USER_AGENT", ""),
-            "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", ""),
-            "log_level": os.getenv("TRADINGAGENTS_LOG_LEVEL", "INFO"),
-            "data_dir": os.getenv("TRADINGAGENTS_DATA_DIR", ""),  # 数据目录环境变量
-            "cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", ""),  # 缓存目录环境变量
+            "results_dir": os.getenv("ZHITOUAGENT_RESULTS_DIR", ""),
+            "log_level": os.getenv("ZHITOUAGENT_LOG_LEVEL", "INFO"),
+            "data_dir": os.getenv("ZHITOUAGENT_DATA_DIR", ""),  # 数据目录环境变量
+            "cache_dir": os.getenv("ZHITOUAGENT_CACHE_DIR", ""),  # 缓存目录环境变量
         }
 
         # 添加OpenAI相关配置
@@ -543,8 +543,8 @@ class ConfigManager:
             },
             "other_configs": {
                 "reddit_configured": bool(os.getenv("REDDIT_CLIENT_ID") and os.getenv("REDDIT_CLIENT_SECRET")),
-                "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", "./results"),
-                "log_level": os.getenv("TRADINGAGENTS_LOG_LEVEL", "INFO"),
+                "results_dir": os.getenv("ZHITOUAGENT_RESULTS_DIR", "./results"),
+                "log_level": os.getenv("ZHITOUAGENT_LOG_LEVEL", "INFO"),
             }
         }
 
@@ -639,7 +639,7 @@ class ConfigManager:
         data_dir = settings.get("data_dir")
         if not data_dir:
             # 如果没有配置，使用默认路径
-            data_dir = os.path.join(os.path.expanduser("~"), "Documents", "TradingAgents", "data")
+            data_dir = os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data")
         return data_dir
 
     def set_data_dir(self, data_dir: str):

@@ -356,8 +356,8 @@
             </template>
 
             <div class="config-content">
-              <!-- AI模型配置 -->
-              <div class="config-section">
+              <!-- AI模型配置，仅管理员可编辑 -->
+              <div v-if="authStore.isAdmin" class="config-section">
                 <h4 class="config-title">🤖 AI模型配置</h4>
                 <div class="model-config">
                   <div class="model-item">
@@ -783,8 +783,8 @@ const generateStepsFromBackend = (backendSteps: any[]) => {
 
 // 模型设置
 const modelSettings = ref({
-  quickAnalysisModel: 'qwen-turbo',
-  deepAnalysisModel: 'qwen-max'
+  quickAnalysisModel: 'deepseek-chat',
+  deepAnalysisModel: 'deepseek-reasoner'
 })
 
 // 可用的模型列表（从配置中获取）
@@ -1916,20 +1916,9 @@ const initializeModelSettings = async () => {
       llmConfigs.filter((config: any) => config.enabled)
     )
 
-    console.log('✅ 加载模型配置成功:', {
-      quick: modelSettings.value.quickAnalysisModel,
-      deep: modelSettings.value.deepAnalysisModel,
-      available: availableModels.value.length
-    })
-    console.log('🔍 可用模型详细信息:', availableModels.value.map(m => ({
-      model_name: m.model_name,
-      model_display_name: m.model_display_name,
-      provider: m.provider
-    })))
   } catch (error) {
-    console.error('加载默认模型配置失败:', error)
-    modelSettings.value.quickAnalysisModel = 'qwen-turbo'
-    modelSettings.value.deepAnalysisModel = 'qwen-max'
+    modelSettings.value.quickAnalysisModel = 'deepseek-chat'
+    modelSettings.value.deepAnalysisModel = 'deepseek-reasoner'
   }
 }
 

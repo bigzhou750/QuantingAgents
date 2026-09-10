@@ -75,7 +75,7 @@ const enabledProviders = computed(() => {
 // 根据厂家获取可用的模型
 const availableModelsForProvider = (providerId: string) => {
   if (!providerId) return []
-  return llmConfigs.value.filter(config => 
+  return llmConfigs.value.filter(config =>
     config.provider === providerId && config.enabled
   )
 }

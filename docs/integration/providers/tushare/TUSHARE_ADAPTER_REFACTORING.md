@@ -117,14 +117,14 @@ def _get_tushare_data(self, symbol, start_date, end_date):
     cached_data = self._get_cached_data(symbol, start_date, end_date)
     if cached_data is not None:
         return self._format_stock_data_response(cached_data, ...)
-    
+
     # 2. 缓存未命中，从provider获取
     provider = self._get_tushare_adapter()  # 返回 TushareProvider
     data = provider.get_daily_data(symbol, start_date, end_date)
-    
+
     # 3. 保存到缓存
     self._save_to_cache(symbol, data, start_date, end_date)
-    
+
     # 4. 格式化返回
     return self._format_stock_data_response(data, ...)
 ```

@@ -25,10 +25,10 @@ Write-Host "导出 MongoDB 配置数据（用于演示系统部署）" -Foregrou
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 # 配置
-$containerName = "tradingagents-mongodb"
-$dbName = "tradingagents"
+$containerName = "zhitouagent-mongodb"
+$dbName = "zhitouagent"
 $username = "admin"
-$password = "tradingagents123"
+$password = $env:MONGODB_PASSWORD
 $authDb = "admin"
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $exportDir = "mongodb_config_export_$timestamp"
@@ -126,10 +126,10 @@ Write-Host "导入 MongoDB 配置数据" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 # 配置（根据新服务器环境修改）
-`$containerName = "tradingagents-mongodb"
-`$dbName = "tradingagents"
+`$containerName = "zhitouagent-mongodb"
+`$dbName = "zhitouagent"
 `$username = "admin"
-`$password = "tradingagents123"
+`$password = $env:MONGODB_PASSWORD
 `$authDb = "admin"
 
 Write-Host "`n[1] 检查 MongoDB 容器..." -ForegroundColor Yellow
@@ -216,10 +216,10 @@ echo "导入 MongoDB 配置数据"
 echo "================================================================================"
 
 # 配置（根据新服务器环境修改）
-CONTAINER_NAME="tradingagents-mongodb"
-DB_NAME="tradingagents"
+CONTAINER_NAME="zhitouagent-mongodb"
+DB_NAME="zhitouagent"
 USERNAME="admin"
-PASSWORD="tradingagents123"
+PASSWORD="${MONGODB_PASSWORD}"
 AUTH_DB="admin"
 
 echo ""
@@ -351,22 +351,22 @@ $(foreach ($col in $collectionsToExport) { "- $col`n" })
 
 1. 检查系统配置：
    ``````bash
-   docker exec tradingagents-mongodb mongo tradingagents \
-     -u admin -p tradingagents123 --authenticationDatabase admin \
+   docker exec zhitouagent-mongodb mongo zhitouagent \
+     -u admin -p "${MONGODB_PASSWORD}" --authenticationDatabase admin \
      --eval "db.system_configs.find({is_active: true}).pretty()"
    ``````
 
 2. 检查 LLM 配置数量：
    ``````bash
-   docker exec tradingagents-mongodb mongo tradingagents \
-     -u admin -p tradingagents123 --authenticationDatabase admin \
+   docker exec zhitouagent-mongodb mongo zhitouagent \
+     -u admin -p "${MONGODB_PASSWORD}" --authenticationDatabase admin \
      --eval "var config = db.system_configs.findOne({is_active: true}); print('LLM 数量: ' + config.llm_configs.filter(c => c.enabled).length);"
    ``````
 
 3. 检查用户数量：
    ``````bash
-   docker exec tradingagents-mongodb mongo tradingagents \
-     -u admin -p tradingagents123 --authenticationDatabase admin \
+   docker exec zhitouagent-mongodb mongo zhitouagent \
+     -u admin -p "${MONGODB_PASSWORD}" --authenticationDatabase admin \
      --eval "db.users.countDocuments()"
    ``````
 

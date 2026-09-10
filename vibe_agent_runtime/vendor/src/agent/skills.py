@@ -95,7 +95,7 @@ def _load_skill_dir(dir_path: Path) -> Optional[Skill]:
     )
 
 
-USER_SKILLS_DIR = Path.home() / ".vibe-trading" / "skills" / "user"
+USER_SKILLS_DIR = Path.home() / ".zhitouagent" / "skills" / "user"
 
 
 def _configured_user_skills_dir() -> Path:
@@ -120,7 +120,7 @@ class SkillsLoader:
 
         Args:
             skills_dir: Bundled skills directory path; defaults to agent/skills/.
-            user_skills_dir: User-created skills directory; defaults to ~/.vibe-trading/skills/user/.
+            user_skills_dir: User-created skills directory; defaults to ~/.zhitouagent/skills/user/.
             exclude_skills: Optional skill names to exclude from this loader.
             include_skills: Optional allowlist; when non-empty only these skills load.
         """

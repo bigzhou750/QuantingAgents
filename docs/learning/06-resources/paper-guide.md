@@ -13,14 +13,14 @@
 
 **作者**: Yijia Xiao¹'³, Edward Sun¹'³, Di Luo¹'², Wei Wang¹'³
 
-¹ 加州大学洛杉矶分校 (UCLA)  
-² 麻省理工学院 (MIT)  
+¹ 加州大学洛杉矶分校 (UCLA)
+² 麻省理工学院 (MIT)
 ³ Tauric Research
 
 **资源**:
 - 📄 [英文原版 PDF](../../paper/TradingAgents_paper.pdf)
 - 📄 [中文翻译版](../../paper/TradingAgents_论文中文版.md)
-- 💻 [项目地址](https://github.com/TauricResearch/TradingAgents)
+- 💻 [项目地址](mailto:zh75067197@gmail.com)
 
 ---
 
@@ -48,7 +48,7 @@
 
 ### 智能体架构
 
-TradingAgents-CN 采用专业化的多智能体架构，每个智能体都有明确的职责和专业领域：
+zhitouagent 采用专业化的多智能体架构，每个智能体都有明确的职责和专业领域：
 
 - **分析师团队 (Analysts)**：
   - **基本面分析师**：分析公司财务和基本面数据
@@ -76,7 +76,7 @@ TradingAgents-CN 采用专业化的多智能体架构，每个智能体都有明
 
 ### 数据流架构
 
-TradingAgents-CN 的数据流架构设计用于高效地获取、处理和分发金融数据：
+zhitouagent 的数据流架构设计用于高效地获取、处理和分发金融数据：
 
 - **外部数据源**：
   - **FinnHub API**：实时金融数据

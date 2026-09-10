@@ -70,7 +70,7 @@ def migrate_auth_to_db():
             # 创建管理员用户
             admin_user = {
                 "username": "admin",
-                "email": "admin@tradingagents.cn",
+                "email": "zh75067197@gmail.com",
                 "hashed_password": hash_password(admin_password),
                 "is_active": True,
                 "is_verified": True,

@@ -94,7 +94,7 @@ export const configApi = {
 // 修复前 ❌
 GET /api/api/config/llm → 404 Not Found
 
-// 修复后 ✅  
+// 修复后 ✅
 GET /api/config/llm → 200 OK
 ```
 

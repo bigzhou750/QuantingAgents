@@ -19,7 +19,7 @@ except (ImportError, ModuleNotFoundError):
 class RememberTool(BaseTool):
     """Save, recall, or forget cross-session memories.
 
-    Memories persist to ~/.vibe-trading/memory/ and survive across sessions.
+    Memories persist to ~/.zhitouagent/memory/ and survive across sessions.
     """
 
     name = "remember"

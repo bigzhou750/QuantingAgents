@@ -2,7 +2,7 @@
 
 ## 🎯 概述
 
-本文档提供了TradingAgents-CN导出功能常见问题的详细解决方案，包括Word、PDF、Markdown导出的各种故障排除方法。
+本文档提供了zhitouagent导出功能常见问题的详细解决方案，包括Word、PDF、Markdown导出的各种故障排除方法。
 
 ## 📄 Word导出问题
 
@@ -11,7 +11,7 @@
 **错误信息**:
 
 ```
-Pandoc died with exitcode "64" during conversion: 
+Pandoc died with exitcode "64" during conversion:
 YAML parse exception at line 1, column 1,
 while scanning an alias:
 did not find expected alphabetic or numeric character

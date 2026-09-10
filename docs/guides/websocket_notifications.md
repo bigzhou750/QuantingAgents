@@ -144,7 +144,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         if (reconnectAttempts.value < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), 30000)
           console.log(`[WS] ${delay}ms 后重连 (尝试 ${reconnectAttempts.value + 1}/${maxReconnectAttempts})`)
-          
+
           reconnectTimer.value = window.setTimeout(() => {
             reconnectAttempts.value++
             connect()

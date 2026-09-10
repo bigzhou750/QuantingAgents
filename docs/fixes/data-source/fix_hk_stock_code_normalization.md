@@ -93,7 +93,7 @@ Yahoo Finance 对港股代码的格式要求：
 def _normalize_hk_symbol(self, symbol: str) -> str:
     """
     标准化港股代码格式
-    
+
     Yahoo Finance 期望的格式：0700.HK（4位数字）
     输入可能的格式：00700, 700, 0700, 0700.HK, 00700.HK
 

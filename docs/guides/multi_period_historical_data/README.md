@@ -2,7 +2,7 @@
 
 ## 📊 概述
 
-本文档详细介绍了TradingAgents-CN系统中多周期历史数据同步功能的完整实现，包括日线、周线、月线数据的统一管理。
+本文档详细介绍了zhitouagent系统中多周期历史数据同步功能的完整实现，包括日线、周线、月线数据的统一管理。
 
 ## 🎯 实现目标
 
@@ -10,7 +10,7 @@
 
 1. **三数据源多周期支持**
    - ✅ Tushare: 支持日线、周线、月线数据获取
-   - ✅ AKShare: 支持日线、周线、月线数据获取  
+   - ✅ AKShare: 支持日线、周线、月线数据获取
    - ✅ BaoStock: 支持日线、周线、月线数据获取（已修复字段兼容性问题）
 
 2. **统一历史数据服务**
@@ -40,7 +40,7 @@
 ```
 数据源层 (Providers)
 ├── TushareProvider (daily/weekly/monthly)
-├── AKShareProvider (daily/weekly/monthly)  
+├── AKShareProvider (daily/weekly/monthly)
 └── BaoStockProvider (daily/weekly/monthly)
            ↓
 历史数据服务层 (HistoricalDataService)
@@ -111,7 +111,7 @@ API服务层 (RESTful APIs)
 // 1. 唯一索引 (防重复)
 {
   "symbol": 1,
-  "trade_date": 1, 
+  "trade_date": 1,
   "data_source": 1,
   "period": 1
 }
@@ -143,7 +143,7 @@ API服务层 (RESTful APIs)
 # 查询日线数据
 GET /api/historical-data/query/000001?period=daily&limit=100
 
-# 查询周线数据  
+# 查询周线数据
 GET /api/historical-data/query/000001?period=weekly&start_date=2024-01-01
 
 # 查询月线数据
@@ -212,7 +212,7 @@ daily_data = await service.get_historical_data(
 
 # 查询周线数据
 weekly_data = await service.get_historical_data(
-    symbol="000001", 
+    symbol="000001",
     period="weekly",
     data_source="tushare"
 )
@@ -238,7 +238,7 @@ db.stock_daily_quotes.find({
 
 // 查询周线数据
 db.stock_daily_quotes.find({
-  "symbol": "000001", 
+  "symbol": "000001",
   "period": "weekly",
   "data_source": "tushare"
 })
@@ -292,7 +292,7 @@ db.stock_daily_quotes.aggregate([
 ==================================================
 📊 测试结果汇总:
   - 数据源多周期: ✅ 通过
-  - 历史数据服务: ✅ 通过  
+  - 历史数据服务: ✅ 通过
   - 数据库结构: ✅ 通过
 
 🎉 测试完成: 3/3 项测试通过
@@ -432,7 +432,7 @@ GET /api/multi-period-sync/health
 4. **高效存储**: 优化的数据库结构和索引设计
 5. **便捷操作**: 一键启动全历史数据同步
 
-该功能为TradingAgents-CN系统提供了强大的多周期历史数据支持，特别适合：
+该功能为zhitouagent系统提供了强大的多周期历史数据支持，特别适合：
 - 📊 **量化策略回测**: 长期历史数据支持复杂策略验证
 - 📈 **技术分析**: 多周期数据支持各种技术指标计算
 - 🔍 **市场研究**: 完整历史数据支持深度市场分析

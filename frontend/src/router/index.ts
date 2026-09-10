@@ -37,6 +37,24 @@ const routes: RouteRecordRaw[] = [
       transition: 'fade'
     }
   },
+  {
+    path: '/pricing',
+    name: 'Pricing',
+    component: () => import('@/views/Public/Pricing.vue'),
+    meta: { title: '定价说明', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
+  {
+    path: '/privacy',
+    name: 'Privacy',
+    component: () => import('@/views/Public/Privacy.vue'),
+    meta: { title: '隐私政策', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
+  {
+    path: '/terms',
+    name: 'Terms',
+    component: () => import('@/views/Public/Terms.vue'),
+    meta: { title: '服务条款', hideInMenu: true, requiresAuth: false, transition: 'fade' }
+  },
   // 兼容文档链接
   {
     path: '/paper/:name.md',
@@ -391,6 +409,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '配置管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -401,6 +420,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '数据库管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -411,6 +431,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '操作日志',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -421,6 +442,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统日志',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -431,6 +453,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '多数据源同步',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -441,6 +464,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缓存管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -451,6 +475,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '使用统计',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -472,6 +497,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '定时任务',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -769,7 +795,7 @@ router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - 智投`
+    document.title = `${title} - 智能投研助手`
   }
 
   console.log(' 路由守卫检查:', {

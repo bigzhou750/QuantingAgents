@@ -2,8 +2,8 @@
   <div class="login-page">
     <div class="login-container">
       <div class="login-header">
-        <img src="/logo.svg" alt="智投" class="logo" />
-        <h1 class="title">智投</h1>
+        <img src="/logo.svg" alt="智能投研助手" class="logo" />
+        <h1 class="title">智能投研助手</h1>
         <p class="subtitle">AI智能股票分析平台</p>
       </div>
 
@@ -54,21 +54,14 @@
             </el-button>
           </el-form-item>
 
-          <el-form-item>
-            <div class="login-tip">
-              <el-text type="info" size="small">
-                开源版使用默认账号：admin / admin123
-              </el-text>
-            </div>
-          </el-form-item>
-          <el-form-item>
+          <el-form-item v-if="registrationEnabled">
             <el-button link style="width: 100%" @click="router.push('/register')">创建新账号</el-button>
           </el-form-item>
         </el-form>
       </el-card>
 
       <div class="login-footer">
-        <p>&copy; 2025 智投. All rights reserved.</p>
+        <p>&copy; 2026 智能投研助手 · zhitouagent</p>
         <p class=”disclaimer”>
           本平台AI分析结果仅供学习研究参考，不构成投资建议。市场有风险，投资需谨慎。
         </p>
@@ -78,16 +71,18 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loginFormRef = ref()
 const loginLoading = ref(false)
+const registrationEnabled = ref(true)
 
 const loginForm = reactive({
   username: '',
@@ -147,6 +142,15 @@ const handleLogin = async () => {
     loginLoading.value = false
   }
 }
+
+onMounted(async () => {
+  try {
+    const response = await authApi.registrationStatus()
+    registrationEnabled.value = response.data?.enabled ?? true
+  } catch {
+    registrationEnabled.value = true
+  }
+})
 
 
 </script>

@@ -1,4 +1,4 @@
-# TradingAgents-CN 腾讯云部署指南
+# zhitouagent 腾讯云部署指南
 
 ## 架构概览
 
@@ -32,25 +32,25 @@ ssh root@your-server-ip
 
 ```bash
 # 方式A: 本地 scp 上传（最简单，无需认证）
-scp -r ./quanting-agent root@your-server-ip:/opt/tradingagents/worktree/
+scp -r ./quanting-agent root@your-server-ip:/opt/zhitouagent/worktree/
 
 # 方式B: 服务器上通过 SSH Key 克隆（推荐长期使用）
-git clone git@gitee.com:bigzhou750/quanting-agent.git /opt/tradingagents/worktree
+git clone <private-repository-url> /opt/zhitouagent/worktree
 
 # 方式C: 服务器上通过私人令牌克隆
-GITEE_TOKEN=你的令牌 sudo -E bash -c 'git clone https://oauth2:$GITEE_TOKEN@gitee.com/bigzhou750/quanting-agent.git /opt/tradingagents/worktree'
+GIT_TOKEN=你的令牌 sudo -E bash -c 'git clone <private-repository-url> /opt/zhitouagent/worktree'
 ```
 
 ### 3. 运行初始化脚本
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 
 # 如果使用 SSH Key（默认推荐）
-sudo bash deploy/setup.sh https://gitee.com/bigzhou750/quanting-agent.git feat/assistant
+sudo bash deploy/setup.sh <private-repository-url> feat/assistant
 
 # 如果使用私人令牌（通过环境变量传入，不会写入文件）
-GITEE_TOKEN=你的令牌 sudo -E bash deploy/setup.sh https://gitee.com/bigzhou750/quanting-agent.git feat/assistant
+GIT_TOKEN=你的令牌 sudo -E bash deploy/setup.sh <private-repository-url> feat/assistant
 ```
 
 > ⚠️ **安全提示**：永远不要将私人令牌硬编码在脚本或代码中。使用环境变量 `GITEE_TOKEN` 传入，或使用 SSH Key 方式认证。
@@ -65,21 +65,18 @@ GITEE_TOKEN=你的令牌 sudo -E bash deploy/setup.sh https://gitee.com/bigzhou7
 ### 4. 配置 AI 模型密钥
 
 ```bash
-vim /opt/tradingagents/worktree/.env
+vim /opt/zhitouagent/worktree/.env
 
-# 至少填写以下一项:
 DEEPSEEK_API_KEY=sk-xxxxx
 DEEPSEEK_ENABLED=true
-
-# 或
-DASHSCOPE_API_KEY=sk-xxxxx
-DASHSCOPE_ENABLED=true
 ```
+
+生产环境只允许使用 DeepSeek 作为默认运行模型。`setup.sh` 未提供 `DEEPSEEK_API_KEY` 时会直接中止部署。
 
 修改后重启后端：
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 docker compose -f docker-compose.hub.nginx.yml restart backend
 ```
 
@@ -93,6 +90,13 @@ docker compose -f docker-compose.hub.nginx.yml restart backend
 | 9000 | TCP | Gitee IP 段 | Webhook（可选） |
 
 > ⚠️ **不要开放** 27017、6379、8000 端口到公网
+
+### 生产安全清单
+
+- 将 `ALLOWED_ORIGINS` 和 `ALLOWED_HOSTS` 配置为正式域名，禁止通配符。
+- 禁止把 `.env`、真实 API Key、数据库密码、JWT/CSRF 密钥提交到 Git 或发布包。
+- 本地 `.env` 或历史构建中出现过的 DeepSeek Key 必须在上线前轮换。
+- 管理员初始化必须通过 `INITIAL_ADMIN_PASSWORD` 或 `scripts/create_default_admin.py` 显式设置强密码，禁止使用公开默认账号。
 
 ### 6. 验证部署
 
@@ -117,27 +121,27 @@ docker compose -f docker-compose.hub.nginx.yml logs -f backend
 ### 1. 确认 Webhook 服务已启动
 
 ```bash
-systemctl status tradingagents-webhook
+systemctl status zhitouagent-webhook
 # 应显示 active (running)
 ```
 
 如果未启动：
 
 ```bash
-systemctl start tradingagents-webhook
-systemctl enable tradingagents-webhook
+systemctl start zhitouagent-webhook
+systemctl enable zhitouagent-webhook
 ```
 
 ### 2. 获取 Webhook Secret
 
 ```bash
-grep WEBHOOK_SECRET /opt/tradingagents/worktree/.env
+grep WEBHOOK_SECRET /opt/zhitouagent/worktree/.env
 # 输出: WEBHOOK_SECRET=xxxxxxxxxx
 ```
 
 ### 3. 在 Gitee 配置 Webhook
 
-1. 打开 https://gitee.com/bigzhou750/quanting-agent/settings#hooks
+1. 打开 mailto:zh75067197@gmail.com/settings#hooks
 2. 点击「添加 WebHook」
 3. 填写：
    - **URL**: `http://your-server-ip:9000/webhook`
@@ -156,14 +160,14 @@ git push origin feat/assistant
 观察服务器日志：
 
 ```bash
-tail -f /opt/tradingagents/logs/webhook.log
+tail -f /opt/zhitouagent/logs/webhook.log
 ```
 
 应看到类似输出：
 
 ```
 📥 收到 Push: username → refs/heads/feat/assistant
-🚀 触发部署: /opt/tradingagents/worktree/deploy/deploy.sh feat/assistant
+🚀 触发部署: /opt/zhitouagent/worktree/deploy/deploy.sh feat/assistant
 ✅ 部署成功 (abc1234 by username)
 ```
 
@@ -174,13 +178,13 @@ tail -f /opt/tradingagents/logs/webhook.log
 ### 手动部署
 
 ```bash
-bash /opt/tradingagents/worktree/deploy/deploy.sh
+bash /opt/zhitouagent/worktree/deploy/deploy.sh
 ```
 
 ### 查看服务状态
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 docker compose -f docker-compose.hub.nginx.yml ps
 ```
 
@@ -191,16 +195,16 @@ docker compose -f docker-compose.hub.nginx.yml ps
 docker compose -f docker-compose.hub.nginx.yml logs -f backend
 
 # Webhook 日志
-tail -f /opt/tradingagents/logs/webhook.log
+tail -f /opt/zhitouagent/logs/webhook.log
 
 # 部署日志
-tail -f /opt/tradingagents/logs/deploy.log
+tail -f /opt/zhitouagent/logs/deploy.log
 ```
 
 ### 重启单个服务
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 docker compose -f docker-compose.hub.nginx.yml restart backend   # 重启后端
 docker compose -f docker-compose.hub.nginx.yml restart frontend  # 重启前端
 ```
@@ -208,7 +212,7 @@ docker compose -f docker-compose.hub.nginx.yml restart frontend  # 重启前端
 ### 更新代码但不自动部署
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 git pull origin feat/assistant
 # 然后手动执行部署
 bash deploy/deploy.sh
@@ -217,7 +221,7 @@ bash deploy/deploy.sh
 ### 停止所有服务
 
 ```bash
-cd /opt/tradingagents/worktree
+cd /opt/zhitouagent/worktree
 docker compose -f docker-compose.hub.nginx.yml down
 ```
 
@@ -225,12 +229,12 @@ docker compose -f docker-compose.hub.nginx.yml down
 
 ```bash
 # 备份 MongoDB
-docker exec tradingagents-mongodb mongodump --out /tmp/mongodump \
-  -u admin -p "$(grep MONGODB_PASSWORD /opt/tradingagents/worktree/.env | cut -d= -f2)" \
+docker exec zhitouagent-mongodb mongodump --out /tmp/mongodump \
+  -u admin -p "$(grep MONGODB_PASSWORD /opt/zhitouagent/worktree/.env | cut -d= -f2)" \
   --authenticationDatabase admin
 
 # 备份 .env
-cp /opt/tradingagents/worktree/.env /opt/tradingagents/.env.backup.$(date +%Y%m%d)
+cp /opt/zhitouagent/worktree/.env /opt/zhitouagent/.env.backup.$(date +%Y%m%d)
 ```
 
 ---
@@ -242,7 +246,7 @@ cp /opt/tradingagents/worktree/.env /opt/tradingagents/.env.backup.$(date +%Y%m%
 | 前端无法访问 | `docker compose ps` 检查 nginx/frontend 状态 |
 | API 返回 502 | `docker compose logs backend` 查看后端错误 |
 | 数据库连接失败 | 检查 `.env` 中 MongoDB 密码是否与容器环境变量一致 |
-| Webhook 不触发 | `systemctl status tradingagents-webhook` + 检查安全组 9000 端口 |
+| Webhook 不触发 | `systemctl status zhitouagent-webhook` + 检查安全组 9000 端口 |
 | 镜像拉取慢 | 配置 Docker 国内镜像加速器 |
 | 内存不足 | `docker stats` 查看各容器内存使用 |
 
@@ -274,9 +278,9 @@ apt install -y certbot
 certbot certonly --standalone -d your-domain.com
 
 # 复制证书
-mkdir -p /opt/tradingagents/worktree/nginx/certs
-cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /opt/tradingagents/worktree/nginx/certs/
-cp /etc/letsencrypt/live/your-domain.com/privkey.pem /opt/tradingagents/worktree/nginx/certs/
+mkdir -p /opt/zhitouagent/worktree/nginx/certs
+cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /opt/zhitouagent/worktree/nginx/certs/
+cp /etc/letsencrypt/live/your-domain.com/privkey.pem /opt/zhitouagent/worktree/nginx/certs/
 ```
 
 修改 `deploy/docker-compose.prod.override.yml` 取消 443 端口注释，并更新 Nginx 配置添加 SSL。

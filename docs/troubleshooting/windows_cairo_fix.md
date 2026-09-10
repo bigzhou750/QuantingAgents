@@ -210,13 +210,13 @@ print(f"Pandoc 可用: {exporter.pandoc_available}")
 是 → 安装 GTK3 + 使用 WeasyPrint（推荐）
     ↓
     ✅ 最佳效果
-    
+
 否 → 是否愿意安装 wkhtmltopdf？
     ↓
     是 → 安装 wkhtmltopdf + 使用 pdfkit
         ↓
         ✅ 良好效果
-    
+
     否 → 使用 Pandoc（回退方案）
         ↓
         ⚠️ 可能有中文竖排问题

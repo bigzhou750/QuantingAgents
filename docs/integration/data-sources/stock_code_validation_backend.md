@@ -28,15 +28,15 @@ async def execute_analysis_background(
 ):
     """在后台执行分析任务"""
     # ... 日志记录 ...
-    
+
     progress_tracker = None
     try:
         logger.info(f"🚀 开始后台执行分析任务: {task_id}")
-        
+
         # 🔍 验证股票代码是否存在
         logger.info(f"🔍 开始验证股票代码: {request.stock_code}")
         from tradingagents.utils.stock_validator import prepare_stock_data
-        
+
         # 获取市场类型
         market_type = request.parameters.market_type if request.parameters else "A股"
 
@@ -62,12 +62,12 @@ async def execute_analysis_background(
             period_days=30,
             analysis_date=analysis_date
         )
-        
+
         if not validation_result.is_valid:
             error_msg = f"❌ 股票代码验证失败: {validation_result.error_message}"
             logger.error(error_msg)
             logger.error(f"💡 建议: {validation_result.suggestion}")
-            
+
             # 更新任务状态为失败
             await self.memory_manager.update_task_status(
                 task_id=task_id,
@@ -75,7 +75,7 @@ async def execute_analysis_background(
                 progress=0,
                 error_message=validation_result.error_message
             )
-            
+
             # 更新MongoDB状态
             await self._update_task_status(
                 task_id,
@@ -83,14 +83,14 @@ async def execute_analysis_background(
                 0,
                 error_message=validation_result.error_message
             )
-            
+
             return
-        
+
         logger.info(f"✅ 股票代码验证通过: {request.stock_code} - {validation_result.stock_name}")
         logger.info(f"📊 市场类型: {validation_result.market_type}")
         logger.info(f"📈 历史数据: {'有' if validation_result.has_historical_data else '无'}")
         logger.info(f"📋 基本信息: {'有' if validation_result.has_basic_info else '无'}")
-        
+
         # ... 继续执行分析 ...
 ```
 
@@ -149,11 +149,11 @@ graph TD
     H -->|失败| I[返回股票不存在]
     H -->|成功| J[验证通过]
     J --> K[继续执行分析]
-    
+
     F --> L[更新任务状态为FAILED]
     I --> L
     L --> M[返回错误信息给用户]
-    
+
     K --> N[分析完成]
 ```
 
@@ -261,7 +261,7 @@ if not validation_result.is_valid:
     # 1. 记录错误日志
     logger.error(f"❌ 股票代码验证失败: {validation_result.error_message}")
     logger.error(f"💡 建议: {validation_result.suggestion}")
-    
+
     # 2. 更新内存中的任务状态
     await self.memory_manager.update_task_status(
         task_id=task_id,
@@ -269,7 +269,7 @@ if not validation_result.is_valid:
         progress=0,
         error_message=validation_result.error_message
     )
-    
+
     # 3. 更新MongoDB中的任务状态
     await self._update_task_status(
         task_id,
@@ -277,7 +277,7 @@ if not validation_result.is_valid:
         0,
         error_message=validation_result.error_message
     )
-    
+
     # 4. 立即返回，不执行分析
     return
 ```

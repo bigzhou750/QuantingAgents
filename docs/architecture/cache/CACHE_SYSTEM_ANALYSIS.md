@@ -49,7 +49,7 @@ class DatabaseCacheManager:
         self.redis_client = redis.Redis.from_url(redis_url)
 ```
 
-**问题**: 
+**问题**:
 - ❌ 需要安装和运行 MongoDB + Redis
 - ❌ 增加了系统复杂度
 - ❌ 如果数据库不可用，缓存就失效
@@ -272,10 +272,10 @@ __all__ = ['DefaultCache', 'DatabaseCacheManager']
    缓存管理模块 - 简化版
    """
    from .file_cache import StockDataCache
-   
+
    # 默认缓存
    DefaultCache = StockDataCache
-   
+
    __all__ = ['StockDataCache', 'DefaultCache']
    ```
 

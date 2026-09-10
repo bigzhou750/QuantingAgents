@@ -1,8 +1,8 @@
-# TradingAgents-CN 大模型接入指导手册
+# zhitouagent 大模型接入指导手册
 
 ## 📋 概述
 
-本手册旨在帮助开发者为 TradingAgents-CN 项目添加新的大模型支持。通过遵循本指南，您可以快速集成新的大模型提供商，并提交高质量的 Pull Request。
+本手册旨在帮助开发者为 zhitouagent 项目添加新的大模型支持。通过遵循本指南，您可以快速集成新的大模型提供商，并提交高质量的 Pull Request。
 
 ## 🎯 适用场景
 
@@ -21,7 +21,7 @@ tradingagents/
 │   ├── __init__.py           # 导出所有适配器
 │   ├── openai_compatible_base.py  # OpenAI 兼容基类 (核心)
 │   ├── dashscope_adapter.py       # 阿里百炼适配器
-│   ├── dashscope_openai_adapter.py # 阿里百炼 OpenAI 兼容适配器  
+│   ├── dashscope_openai_adapter.py # 阿里百炼 OpenAI 兼容适配器
 │   ├── deepseek_adapter.py        # DeepSeek 原生适配器
 │   ├── deepseek_direct_adapter.py # DeepSeek 直接适配器
 │   └── google_openai_adapter.py   # Google AI 适配器
@@ -108,7 +108,7 @@ logger = logging.getLogger(__name__)
 
 class ChatYourProvider(OpenAICompatibleBase):
     """你的提供商 OpenAI 兼容适配器"""
-  
+
     def __init__(
         self,
         model: str = "your-default-model",
@@ -135,7 +135,7 @@ class ChatYourProvider(OpenAICompatibleBase):
 # 在 OPENAI_COMPATIBLE_PROVIDERS 字典中添加配置
 OPENAI_COMPATIBLE_PROVIDERS = {
     # ... 现有配置 ...
-  
+
     "your_provider": {
         "adapter_class": ChatYourProvider,
         "base_url": "https://api.yourprovider.com/v1",
@@ -175,11 +175,11 @@ format_mapping={
 # 添加模型选择逻辑
 elif llm_provider == "your_provider":
     your_provider_options = ["your-model-1", "your-model-2"]
-  
+
     current_index = 0
     if st.session_state.llm_model in your_provider_options:
         current_index = your_provider_options.index(st.session_state.llm_model)
-  
+
     llm_model = st.selectbox(
         "选择模型",
         options=your_provider_options,
@@ -250,7 +250,7 @@ def test_basic_connection():
     """测试基础连接"""
     # 设置测试环境变量
     os.environ["YOUR_PROVIDER_API_KEY"] = "your_test_key"
-  
+
     try:
         llm = ChatYourProvider(model="your-model-1")
         response = llm.invoke("Hello, world!")
@@ -278,7 +278,7 @@ def test_function_calling():
     """测试工具调用"""
     llm = ChatYourProvider(model="your-model-1")
     llm_with_tools = llm.bind_tools([get_weather])
-  
+
     response = llm_with_tools.invoke("北京天气如何？")
     print(f"工具调用测试: {response}")
 ```
@@ -362,7 +362,7 @@ OPENAI_COMPATIBLE_PROVIDERS["qianfan"] = {
 # 在 openai_compatible_base.py 中添加
 OPENAI_COMPATIBLE_PROVIDERS = {
     # ... 现有配置 ...
-  
+
     "qianfan": {
         "base_url": "https://qianfan.baidubce.com/v2",
         "api_key_env": "QIANFAN_API_KEY",

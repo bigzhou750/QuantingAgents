@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TradingAgents-CN Gitee Webhook 接收器
+zhitouagent Gitee Webhook 接收器
 接收 Gitee Push 事件，触发自动部署
 
 用法:
@@ -154,7 +154,7 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TradingAgents-CN Gitee Webhook Server")
+    parser = argparse.ArgumentParser(description="zhitouagent Gitee Webhook Server")
     parser.add_argument("--port", type=int, default=9000, help="监听端口 (默认 9000)")
     parser.add_argument("--secret", required=True, help="Webhook 验证密钥")
     parser.add_argument("--deploy-script", required=True, help="部署脚本路径")

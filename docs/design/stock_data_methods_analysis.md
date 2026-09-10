@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-本文档整理了 `D:\code\TradingAgents-CN\tradingagents` 目录下所有股票数据获取相关的函数和方法，按照架构层次和数据类型进行分类。
+本文档整理了 `D:\code\zhitouagent\tradingagents` 目录下所有股票数据获取相关的函数和方法，按照架构层次和数据类型进行分类。
 
 ## 🏗️ 架构层次
 
@@ -77,16 +77,16 @@ class DataSourceManager:
 class OptimizedChinaDataProvider:
     # 历史数据
     def get_stock_data(self, symbol: str, start_date: str, end_date: str, force_refresh: bool = False) -> str
-    
+
     # 基本面数据
     def get_fundamentals_data(self, symbol: str, force_refresh: bool = False) -> str
-    
+
     # 内部方法
     def _get_stock_basic_info_only(self, symbol: str) -> Dict
     def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict
     def _parse_akshare_financial_data(self, financial_data: dict, stock_info: dict, price_value: float) -> dict
     def _parse_financial_data(self, financial_data: dict, stock_info: dict, price_value: float) -> dict
-    
+
     # 缓存方法
     def _get_cached_raw_financial_data(self, symbol: str) -> dict
     def _get_cached_stock_info(self, symbol: str) -> dict
@@ -129,13 +129,13 @@ class TushareProvider:
     def get_stock_list(self) -> pd.DataFrame
     def get_stock_info(self, symbol: str) -> Dict
     def get_stock_daily(self, symbol: str, start_date: str = None, end_date: str = None) -> pd.DataFrame
-    
+
     # 财务数据
     def get_financial_data(self, symbol: str, period: str = "20231231") -> Dict
     def get_balance_sheet(self, symbol: str, period: str = "20231231") -> pd.DataFrame
     def get_income_statement(self, symbol: str, period: str = "20231231") -> pd.DataFrame
     def get_cashflow_statement(self, symbol: str, period: str = "20231231") -> pd.DataFrame
-    
+
     # 实用方法
     def _normalize_symbol(self, symbol: str) -> str
     def _format_stock_data(self, data: pd.DataFrame, symbol: str) -> str
@@ -154,14 +154,14 @@ class AKShareProvider:
     def get_stock_data(self, symbol: str, start_date: str = None, end_date: str = None) -> Optional[pd.DataFrame]
     def get_stock_info(self, symbol: str) -> Dict[str, Any]
     def get_stock_list(self) -> Optional[pd.DataFrame]
-    
+
     # 港股数据
     def get_hk_stock_data(self, symbol: str, start_date: str = None, end_date: str = None) -> Optional[pd.DataFrame]
     def get_hk_stock_info(self, symbol: str) -> Dict[str, Any]
-    
+
     # 财务数据
     def get_financial_data(self, symbol: str) -> Dict[str, Any]
-    
+
     # 实时数据
     def get_realtime_data(self, symbol: str) -> Dict[str, Any]
 
@@ -252,7 +252,7 @@ class RealtimeNewsAggregator:
 # 中国A股 - 推荐
 from tradingagents.dataflows import get_china_stock_data_unified, get_china_stock_info_unified
 
-# 美股 - 推荐  
+# 美股 - 推荐
 from tradingagents.dataflows.optimized_us_data import get_us_stock_data_cached
 
 # 港股 - 推荐

@@ -1,8 +1,8 @@
 # 多市场数据架构开发指南
 
-> **文档版本**: v1.0  
-> **创建日期**: 2025-10-21  
-> **适用版本**: v1.0.0-preview 及后续版本  
+> **文档版本**: v1.0
+> **创建日期**: 2025-10-21
+> **适用版本**: v1.0.0-preview 及后续版本
 > **状态**: 📋 规划中
 
 ---
@@ -167,14 +167,14 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
   "market": "CN",                  // 市场类型（CN/HK/US）
   "exchange_mic": "XSHE",          // ISO 10383交易所代码
   "exchange": "SZSE",              // 交易所简称（兼容字段，保留）
-  
+
   // ============ 基础信息 ============
   "name": "平安银行",
   "name_en": "Ping An Bank",
   "list_date": "1991-04-03",
   "delist_date": null,
   "status": "L",                   // L-上市 D-退市 P-暂停
-  
+
   // ============ 行业分类（统一标准）============
   "industry": {
     "source_name": "银行",         // 原始行业名称
@@ -186,18 +186,18 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
     "gics_code": "401010",         // GICS代码（新增）
     "map_confidence": 0.95         // 映射置信度（新增）
   },
-  
+
   // ============ 市场信息 ============
   "currency": "CNY",               // 交易货币（ISO 4217）
   "timezone": "Asia/Shanghai",     // 时区（IANA标准）
-  
+
   // ============ 供应商映射（保留原始标识）============
   "vendor_symbols": {
     "tushare": "000001.SZ",
     "akshare": "000001",
     "yfinance": "000001.SZ"
   },
-  
+
   // ============ 元数据 ============
   "data_source": "tushare",
   "created_at": ISODate("2025-10-21T00:00:00Z"),
@@ -216,7 +216,7 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
   "market": "CN",
   "trade_date": "20241015",        // YYYYMMDD格式
   "period": "daily",               // daily/weekly/monthly/5min/15min/30min/60min
-  
+
   // ============ OHLCV数据 ============
   "open": 12.50,
   "high": 12.80,
@@ -225,24 +225,24 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
   "pre_close": 12.45,
   "volume": 125000000,             // 成交量
   "amount": 1580000000,            // 成交额
-  
+
   // ============ 涨跌数据 ============
   "change": 0.20,                  // 涨跌额
   "pct_chg": 1.61,                 // 涨跌幅(%)
-  
+
   // ============ 其他指标（可选）============
   "turnover_rate": 0.64,           // 换手率(%)
   "volume_ratio": 1.05,            // 量比
-  
+
   // ============ 单位信息（新增）============
   "currency": "CNY",               // 价格货币
   "amount_unit": "CNY",            // 成交额单位
   "volume_unit": "shares",         // 成交量单位
-  
+
   // ============ 时间信息（新增）============
   "timestamp_utc": ISODate("2024-10-15T07:00:00Z"), // UTC时间（新增）
   "timezone": "Asia/Shanghai",     // 来源时区
-  
+
   // ============ 元数据 ============
   "data_source": "tushare",
   "created_at": ISODate("2025-10-21T00:00:00Z"),
@@ -309,7 +309,7 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
 - [ ] **创建数据标准字典**
   - 文件：`docs/config/data_standards.yaml`
   - 内容：市场元数据、交易所映射、货币时区
-  
+
 - [ ] **创建标准化工具函数**
   - 文件：`tradingagents/dataflows/normalization.py`
   - 函数：
@@ -333,7 +333,7 @@ db.symbol_registry          // 股票标识符注册表（统一查询入口）
   - 文件：`app/services/hk_stock_data_service.py`
   - 集合：`stock_basic_info_hk`、`stock_daily_quotes_hk`
   - 数据源：Yahoo Finance / Futu API
-  
+
 - [ ] **创建美股数据服务**
   - 文件：`app/services/us_stock_data_service.py`
   - 集合：`stock_basic_info_us`、`stock_daily_quotes_us`
@@ -433,7 +433,7 @@ markets:
         trading_hours:
           morning: "09:30-11:30"
           afternoon: "13:00-15:00"
-      
+
       - mic: "XSHE"
         name: "深圳证券交易所"
         name_en: "Shenzhen Stock Exchange"
@@ -444,7 +444,7 @@ markets:
         trading_hours:
           morning: "09:30-11:30"
           afternoon: "13:00-15:00"
-      
+
       - mic: "XBEJ"
         name: "北京证券交易所"
         name_en: "Beijing Stock Exchange"
@@ -455,7 +455,7 @@ markets:
         trading_hours:
           morning: "09:30-11:30"
           afternoon: "13:00-15:00"
-  
+
   HK:
     name: "香港股市"
     name_en: "Hong Kong Stock Market"
@@ -470,7 +470,7 @@ markets:
         trading_hours:
           morning: "09:30-12:00"
           afternoon: "13:00-16:00"
-  
+
   US:
     name: "美国股市"
     name_en: "US Stock Market"
@@ -486,7 +486,7 @@ markets:
           regular: "09:30-16:00"
           pre_market: "04:00-09:30"
           after_market: "16:00-20:00"
-      
+
       - mic: "XNYS"
         name: "纽约证券交易所"
         name_en: "New York Stock Exchange"
@@ -505,12 +505,12 @@ symbol_formats:
     pattern: "^\\d{6}$"
     description: "6位数字代码"
     examples: ["000001", "600519", "688001"]
-  
+
   HK:
     pattern: "^\\d{4,5}$"
     description: "4-5位数字代码"
     examples: ["0700", "00700", "09988"]
-  
+
   US:
     pattern: "^[A-Z]{1,5}$"
     description: "1-5位字母代码"
@@ -555,12 +555,12 @@ def _load_standards() -> Dict:
 def normalize_symbol(source: str, code: str, market: str = None) -> Dict[str, str]:
     """
     标准化股票代码
-    
+
     Args:
         source: 数据源（tushare/akshare/yfinance等）
         code: 原始代码
         market: 市场类型（CN/HK/US），可选
-    
+
     Returns:
         {
             "symbol": "000001",
@@ -574,20 +574,20 @@ def normalize_symbol(source: str, code: str, market: str = None) -> Dict[str, st
     # 推断市场（如果未提供）
     if market is None:
         market = infer_market(code)
-    
+
     # 标准化代码
     symbol = _normalize_code(code, market)
-    
+
     # 推断交易所
     exchange_mic = _infer_exchange_mic(symbol, market)
     exchange_info = get_exchange_info(exchange_mic)
-    
+
     # 生成完整标识符
     full_symbol = f"{exchange_mic}:{symbol}"
-    
+
     # 生成供应商映射
     vendor_symbols = _generate_vendor_symbols(symbol, market, source, code)
-    
+
     return {
         "symbol": symbol,
         "full_symbol": full_symbol,
@@ -603,10 +603,10 @@ def normalize_symbol(source: str, code: str, market: str = None) -> Dict[str, st
 def parse_full_symbol(full_symbol: str) -> Dict[str, str]:
     """
     解析完整标识符
-    
+
     Args:
         full_symbol: 完整标识符（如 "XSHE:000001"）
-    
+
     Returns:
         {
             "exchange_mic": "XSHE",
@@ -622,7 +622,7 @@ def parse_full_symbol(full_symbol: str) -> Dict[str, str]:
         symbol = full_symbol
         market = infer_market(symbol)
         exchange_mic = _infer_exchange_mic(symbol, market)
-    
+
     return {
         "exchange_mic": exchange_mic,
         "symbol": symbol,
@@ -633,15 +633,15 @@ def parse_full_symbol(full_symbol: str) -> Dict[str, str]:
 def get_exchange_info(exchange_mic: str) -> Dict:
     """
     获取交易所信息
-    
+
     Args:
         exchange_mic: 交易所MIC代码（如 "XSHE"）
-    
+
     Returns:
         交易所详细信息
     """
     standards = _load_standards()
-    
+
     for market_code, market_info in standards["markets"].items():
         for exchange in market_info["exchanges"]:
             if exchange["mic"] == exchange_mic:
@@ -655,32 +655,32 @@ def get_exchange_info(exchange_mic: str) -> Dict:
                     "currency": exchange["currency"],
                     "trading_hours": exchange.get("trading_hours", {})
                 }
-    
+
     raise ValueError(f"未知的交易所MIC代码: {exchange_mic}")
 
 
 def infer_market(code: str) -> str:
     """
     推断市场类型
-    
+
     Args:
         code: 股票代码
-    
+
     Returns:
         市场类型（CN/HK/US）
     """
     # A股：6位数字
     if re.match(r'^\d{6}$', code):
         return "CN"
-    
+
     # 港股：4-5位数字
     if re.match(r'^\d{4,5}$', code):
         return "HK"
-    
+
     # 美股：字母代码
     if re.match(r'^[A-Z]{1,5}$', code.upper()):
         return "US"
-    
+
     # 带后缀的格式
     if '.' in code:
         suffix = code.split('.')[-1].upper()
@@ -690,7 +690,7 @@ def infer_market(code: str) -> str:
             return "HK"
         elif suffix in ['US']:
             return "US"
-    
+
     raise ValueError(f"无法推断市场类型: {code}")
 
 
@@ -699,7 +699,7 @@ def _normalize_code(code: str, market: str) -> str:
     # 移除后缀
     if '.' in code:
         code = code.split('.')[0]
-    
+
     if market == "CN":
         # A股：确保6位数字
         return code.zfill(6)
@@ -709,7 +709,7 @@ def _normalize_code(code: str, market: str) -> str:
     elif market == "US":
         # 美股：转大写
         return code.upper()
-    
+
     return code
 
 
@@ -730,7 +730,7 @@ def _infer_exchange_mic(symbol: str, market: str) -> str:
     elif market == "US":
         # 美股：默认纳斯达克（实际应查询数据库）
         return "XNAS"
-    
+
     raise ValueError(f"无法推断交易所: {symbol} ({market})")
 
 
@@ -747,7 +747,7 @@ def _exchange_mic_to_market(exchange_mic: str) -> str:
 def _generate_vendor_symbols(symbol: str, market: str, source: str, original_code: str) -> Dict[str, str]:
     """生成供应商符号映射"""
     vendor_symbols = {}
-    
+
     if market == "CN":
         # 判断交易所后缀
         if symbol.startswith(('60', '68', '90')):
@@ -758,36 +758,36 @@ def _generate_vendor_symbols(symbol: str, market: str, source: str, original_cod
             suffix = "BJ"
         else:
             suffix = "SH"
-        
+
         vendor_symbols["tushare"] = f"{symbol}.{suffix}"
         vendor_symbols["akshare"] = symbol
         vendor_symbols["baostock"] = f"{suffix.lower()}.{symbol}"
         vendor_symbols["yfinance"] = f"{symbol}.{'SS' if suffix == 'SH' else suffix}"
-    
+
     elif market == "HK":
         # 港股：补齐5位
         padded = symbol.zfill(5)
         vendor_symbols["yfinance"] = f"{padded}.HK"
         vendor_symbols["futu"] = f"HK.{padded}"
-    
+
     elif market == "US":
         vendor_symbols["yfinance"] = symbol
         vendor_symbols["alphavantage"] = symbol
-    
+
     # 记录原始代码
     vendor_symbols[source] = original_code
-    
+
     return vendor_symbols
 
 
 def convert_to_utc(local_time: datetime, timezone_str: str) -> datetime:
     """
     将本地时间转换为UTC
-    
+
     Args:
         local_time: 本地时间
         timezone_str: 时区字符串（如 "Asia/Shanghai"）
-    
+
     Returns:
         UTC时间
     """
@@ -800,11 +800,11 @@ def convert_to_utc(local_time: datetime, timezone_str: str) -> datetime:
 def map_industry_to_gics(source_industry: str, source_taxonomy: str = "CN-Industry") -> Dict:
     """
     将本地行业分类映射到GICS
-    
+
     Args:
         source_industry: 原始行业名称
         source_taxonomy: 来源分类体系
-    
+
     Returns:
         {
             "source_name": "银行",

@@ -202,8 +202,8 @@ python start_web.py
    pip install -e .
    ```
 
-4. **提交Issue**: 
-   - 访问 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues)
+4. **提交Issue**:
+   - 访问 [GitHub Issues](mailto:zh75067197@gmail.com)
    - 提供错误日志和系统信息
 
 ## 💡 最佳实践

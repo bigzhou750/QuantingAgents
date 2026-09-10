@@ -46,7 +46,7 @@
 ### 目录结构说明
 
 ```
-TradingAgents-CN/
+zhitouagent/
 ├── app/                          # 后端服务 (FastAPI)
 │   ├── services/                 # 业务服务层
 │   │   └── stock_data_service.py # 数据访问服务
@@ -203,22 +203,22 @@ import pandas as pd
 
 class BaseStockDataProvider(ABC):
     """股票数据提供器基类"""
-    
+
     @abstractmethod
     async def connect(self) -> bool:
         """连接到数据源"""
         pass
-    
+
     @abstractmethod
     async def get_stock_basic_info(self, symbol: str = None) -> Optional[Dict[str, Any]]:
         """获取股票基础信息"""
         pass
-    
+
     @abstractmethod
     async def get_stock_quotes(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取实时行情"""
         pass
-    
+
     @abstractmethod
     async def get_historical_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """获取历史数据"""
@@ -234,18 +234,18 @@ from typing import Optional
 class NewSDKProvider(BaseStockDataProvider):
     def __init__(self):
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-    
+
     async def get_stock_quotes(self, symbol: str) -> Optional[Dict[str, Any]]:
         try:
             # API调用
             response = await self._make_api_call(f"/quotes/{symbol}")
-            
+
             if response.status_code == 200:
                 return response.json()
             else:
                 self.logger.warning(f"API返回错误状态: {response.status_code}")
                 return None
-                
+
         except Exception as e:
             self.logger.error(f"获取{symbol}行情失败: {e}")
             return None
@@ -277,7 +277,7 @@ def standardize_basic_info(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         "name": raw_data.get("name", ""),
         "symbol": self._normalize_stock_code(raw_data.get("symbol")),
         "full_symbol": self._generate_full_symbol(raw_data.get("symbol")),
-        
+
         # 市场信息
         "market_info": {
             "market": self._determine_market(raw_data.get("symbol")),
@@ -286,13 +286,13 @@ def standardize_basic_info(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
             "currency": self._determine_currency(raw_data.get("symbol")),
             "timezone": self._determine_timezone(raw_data.get("symbol"))
         },
-        
+
         # 可选字段
         "industry": raw_data.get("industry"),
         "area": raw_data.get("region"),
         "list_date": self._format_date(raw_data.get("list_date")),
         "total_mv": self._convert_market_cap(raw_data.get("market_cap")),
-        
+
         # 元数据
         "data_source": "new_sdk",
         "data_version": 1,
@@ -311,7 +311,7 @@ def standardize_quotes(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         "symbol": self._normalize_stock_code(raw_data.get("symbol")),
         "full_symbol": self._generate_full_symbol(raw_data.get("symbol")),
         "market": self._determine_market(raw_data.get("symbol")),
-        
+
         # 价格数据
         "close": float(raw_data.get("price", 0)),
         "current_price": float(raw_data.get("price", 0)),
@@ -319,19 +319,19 @@ def standardize_quotes(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         "high": float(raw_data.get("high", 0)),
         "low": float(raw_data.get("low", 0)),
         "pre_close": float(raw_data.get("prev_close", 0)),
-        
+
         # 变动数据
         "change": self._calculate_change(raw_data),
         "pct_chg": float(raw_data.get("change_percent", 0)),
-        
+
         # 成交数据
         "volume": float(raw_data.get("volume", 0)),
         "amount": float(raw_data.get("turnover", 0)),
-        
+
         # 时间数据
         "trade_date": self._format_trade_date(raw_data.get("date")),
         "timestamp": self._parse_timestamp(raw_data.get("timestamp")),
-        
+
         # 元数据
         "data_source": "new_sdk",
         "data_version": 1,
@@ -353,23 +353,23 @@ class TestNewSDKProvider:
     @pytest.fixture
     def provider(self):
         return NewSDKProvider(api_key="test_key")
-    
+
     @pytest.mark.asyncio
     async def test_connect(self, provider):
         """测试连接功能"""
         result = await provider.connect()
         assert isinstance(result, bool)
-    
+
     @pytest.mark.asyncio
     async def test_get_stock_basic_info(self, provider):
         """测试获取股票基础信息"""
         result = await provider.get_stock_basic_info("000001")
-        
+
         if result:
             assert "code" in result
             assert "name" in result
             assert "symbol" in result
-    
+
     def test_data_standardization(self, provider):
         """测试数据标准化"""
         raw_data = {
@@ -377,9 +377,9 @@ class TestNewSDKProvider:
             "name": "测试股票",
             "price": 12.34
         }
-        
+
         standardized = provider.standardize_basic_info(raw_data)
-        
+
         assert standardized["code"] == "000001"
         assert standardized["name"] == "测试股票"
         assert "market_info" in standardized
@@ -401,26 +401,26 @@ from app.worker.new_sdk_sync_service import NewSDKSyncService
 async def test_integration():
     """集成测试"""
     logger = logging.getLogger(__name__)
-    
+
     # 测试SDK连接
     provider = NewSDKProvider()
     connected = await provider.connect()
-    
+
     if not connected:
         logger.error("SDK连接失败")
         return False
-    
+
     # 测试数据获取
     basic_info = await provider.get_stock_basic_info("000001")
     quotes = await provider.get_stock_quotes("000001")
-    
+
     logger.info(f"基础信息: {basic_info}")
     logger.info(f"实时行情: {quotes}")
-    
+
     # 测试数据同步
     sync_service = NewSDKSyncService()
     await sync_service.sync_basic_info()
-    
+
     logger.info("集成测试完成")
     return True
 
@@ -453,13 +453,13 @@ from app.worker.new_sdk_sync_service import NewSDKSyncService
 # 在scheduler中添加
 if settings.NEW_SDK_ENABLED:
     new_sdk_sync = NewSDKSyncService()
-    
+
     # 每小时同步基础信息
     scheduler.add_job(
         new_sdk_sync.sync_basic_info,
         CronTrigger(minute=0, timezone=settings.TIMEZONE)
     )
-    
+
     # 每30秒同步实时行情
     scheduler.add_job(
         new_sdk_sync.sync_quotes,
@@ -480,16 +480,16 @@ class RateLimiter:
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = []
-    
+
     async def acquire(self):
         now = datetime.now()
         # 清理过期请求
         self.requests = [req for req in self.requests if now - req < timedelta(seconds=self.time_window)]
-        
+
         if len(self.requests) >= self.max_requests:
             sleep_time = self.time_window - (now - self.requests[0]).total_seconds()
             await asyncio.sleep(sleep_time)
-        
+
         self.requests.append(now)
 ```
 
@@ -513,11 +513,11 @@ def map_fields(self, raw_data: Dict[str, Any], source: str) -> Dict[str, Any]:
     """字段映射"""
     mapping = FIELD_MAPPING.get(source, {})
     mapped_data = {}
-    
+
     for new_field, old_field in mapping.items():
         if old_field in raw_data:
             mapped_data[new_field] = raw_data[old_field]
-    
+
     return mapped_data
 ```
 
@@ -535,7 +535,7 @@ def determine_market_info(self, symbol: str) -> Dict[str, Any]:
         }
     elif symbol.endswith('.US'):
         return {
-            "market": "US", 
+            "market": "US",
             "exchange": "NYSE",  # 或根据具体情况判断
             "currency": "USD",
             "timezone": "America/New_York"

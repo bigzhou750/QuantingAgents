@@ -145,6 +145,38 @@ class TestAgentSchemaValidation:
         result = service._validate_schema("not json at all")
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_llm_call_uses_backend_deepseek(self, service, monkeypatch):
+        from types import SimpleNamespace
+
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-deepseek-key")
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = SimpleNamespace(content="{}")
+
+        with patch("langchain_openai.ChatOpenAI", return_value=fake_llm) as llm_cls:
+            result = await service._call_llm("test prompt")
+
+        llm_cls.assert_called_once_with(
+            model="deepseek-chat",
+            api_key="sk-test-deepseek-key",
+            base_url="https://api.deepseek.com",
+            temperature=0.1,
+        )
+        fake_llm.invoke.assert_called_once_with("test prompt")
+        assert result == "{}"
+
+    @pytest.mark.asyncio
+    async def test_llm_call_without_key_returns_degraded_payload(self, service, monkeypatch):
+        import json
+
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+        result = await service._call_llm("test prompt")
+        payload = json.loads(result)
+
+        assert "模型暂不可用" in payload["event_summary"]
+        assert "DeepSeek 暂不可用" in payload["uncertainties"][0]
+
 
 # ==================== 规则降级测试 ====================
 

@@ -11,7 +11,7 @@ RuntimeError: There is no current event loop in thread 'ThreadPoolExecutor-41_0'
 当在**线程池**（ThreadPoolExecutor）中调用数据源管理器获取股票数据时，所有数据源（Tushare、AKShare、BaoStock）都会失败，错误堆栈显示：
 
 ```python
-File "D:\code\TradingAgents-CN\tradingagents\dataflows\data_source_manager.py", line 792, in _get_tushare_data
+File "D:\code\zhitouagent\tradingagents\dataflows\data_source_manager.py", line 792, in _get_tushare_data
     loop = asyncio.get_event_loop()
   File "C:\Users\hsliu\AppData\Local\Programs\Python\Python310\lib\asyncio\events.py", line 656, in get_event_loop
     raise RuntimeError('There is no current event loop in thread %r.'
@@ -200,13 +200,13 @@ def test_asyncio_in_thread_pool():
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
+
         async def simple_async():
             await asyncio.sleep(0.01)
             return "success"
-        
+
         return loop.run_until_complete(simple_async())
-    
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         future = executor.submit(run_in_thread)
         result = future.result(timeout=5)
@@ -226,11 +226,11 @@ def test_data_source_manager_in_thread_pool():
             period="daily"
         )
         return result
-    
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         future = executor.submit(get_stock_data)
         result = future.result(timeout=30)
-        
+
         # 验证不是事件循环错误
         assert "There is no current event loop" not in str(result)
 ```
@@ -248,17 +248,17 @@ def test_multiple_threads():
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
+
         async def task():
             await asyncio.sleep(0.01)
             return f"Task {task_id} completed"
-        
+
         return loop.run_until_complete(task())
-    
+
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(run_async_task, i) for i in range(5)]
         results = [f.result(timeout=5) for f in futures]
-        
+
         assert len(results) == 5
 ```
 
@@ -297,7 +297,7 @@ python tests/test_asyncio_thread_pool_fix.py
    except RuntimeError:
        loop = asyncio.new_event_loop()
        asyncio.set_event_loop(loop)
-   
+
    # 方案2: asyncio.run()（Python 3.7+，但不适合需要复用loop的场景）
    result = asyncio.run(async_function())
    ```

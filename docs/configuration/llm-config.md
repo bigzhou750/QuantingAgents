@@ -2,7 +2,7 @@
 
 ## 概述
 
-TradingAgents-CN 框架支持多种大语言模型提供商，包括 DeepSeek、阿里百炼、Google AI、OpenAI 和 Anthropic。本文档详细介绍了如何配置和优化不同的 LLM 以获得最佳性能和成本效益。
+zhitouagent 框架支持多种大语言模型提供商，包括 DeepSeek、阿里百炼、Google AI、OpenAI 和 Anthropic。本文档详细介绍了如何配置和优化不同的 LLM 以获得最佳性能和成本效益。
 
 ## 🎯 v0.1.7 LLM支持更新
 
@@ -135,7 +135,7 @@ openai_config = {
     "deep_think_llm": "gpt-4o",           # 用于复杂分析
     "quick_think_llm": "gpt-4o-mini",     # 用于简单任务
     "api_key": os.getenv("OPENAI_API_KEY"),
-    
+
     # 模型参数
     "model_params": {
         "temperature": 0.1,               # 低温度保证一致性
@@ -144,13 +144,13 @@ openai_config = {
         "frequency_penalty": 0.0,         # 频率惩罚
         "presence_penalty": 0.0,          # 存在惩罚
     },
-    
+
     # 速率限制
     "rate_limits": {
         "requests_per_minute": 3500,      # 每分钟请求数
         "tokens_per_minute": 90000,       # 每分钟token数
     },
-    
+
     # 重试配置
     "retry_config": {
         "max_retries": 3,
@@ -195,7 +195,7 @@ anthropic_config = {
     "deep_think_llm": "claude-3-opus-20240229",
     "quick_think_llm": "claude-3-haiku-20240307",
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
-    
+
     # 模型参数
     "model_params": {
         "temperature": 0.1,
@@ -203,7 +203,7 @@ anthropic_config = {
         "top_p": 0.9,
         "top_k": 40,
     },
-    
+
     # 速率限制
     "rate_limits": {
         "requests_per_minute": 1000,
@@ -247,7 +247,7 @@ google_config = {
     "deep_think_llm": "gemini-pro",
     "quick_think_llm": "gemini-2.0-flash",
     "api_key": os.getenv("GOOGLE_API_KEY"),
-    
+
     # 模型参数
     "model_params": {
         "temperature": 0.1,
@@ -264,23 +264,23 @@ google_config = {
 ```python
 class LLMSelector:
     """LLM 选择器 - 根据任务选择最适合的模型"""
-    
+
     def __init__(self, config: Dict):
         self.config = config
         self.task_model_mapping = self._initialize_task_mapping()
-        
+
     def select_model(self, task_type: str, complexity: str = "medium") -> str:
         """根据任务类型和复杂度选择模型"""
-        
+
         task_config = self.task_model_mapping.get(task_type, {})
-        
+
         if complexity == "high":
             return task_config.get("high_complexity", self.config["deep_think_llm"])
         elif complexity == "low":
             return task_config.get("low_complexity", self.config["quick_think_llm"])
         else:
             return task_config.get("medium_complexity", self.config["deep_think_llm"])
-    
+
     def _initialize_task_mapping(self) -> Dict:
         """初始化任务-模型映射"""
         return {
@@ -321,17 +321,17 @@ class LLMSelector:
 ```python
 class CostOptimizer:
     """成本优化器 - 在性能和成本间找到平衡"""
-    
+
     def __init__(self, budget_config: Dict):
         self.daily_budget = budget_config.get("daily_budget", 100)  # 美元
         self.cost_tracking = {}
         self.model_costs = self._load_model_costs()
-        
+
     def get_cost_optimized_config(self, current_usage: Dict) -> Dict:
         """获取成本优化的配置"""
-        
+
         remaining_budget = self._calculate_remaining_budget(current_usage)
-        
+
         if remaining_budget > 50:  # 预算充足
             return {
                 "deep_think_llm": "gpt-4o",
@@ -350,15 +350,15 @@ class CostOptimizer:
                 "quick_think_llm": "gpt-3.5-turbo",
                 "max_debate_rounds": 1
             }
-    
+
     def estimate_request_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """估算请求成本"""
-        
+
         model_cost = self.model_costs.get(model, {"input": 0.001, "output": 0.002})
-        
+
         input_cost = (input_tokens / 1000) * model_cost["input"]
         output_cost = (output_tokens / 1000) * model_cost["output"]
-        
+
         return input_cost + output_cost
 ```
 
@@ -368,15 +368,15 @@ class CostOptimizer:
 ```python
 class PromptOptimizer:
     """提示词优化器"""
-    
+
     def __init__(self):
         self.prompt_templates = self._load_prompt_templates()
-        
+
     def optimize_prompt(self, task_type: str, model: str, context: Dict) -> str:
         """优化提示词"""
-        
+
         base_prompt = self.prompt_templates[task_type]["base"]
-        
+
         # 根据模型特点调整提示词
         if "gpt" in model.lower():
             optimized_prompt = self._optimize_for_gpt(base_prompt, context)
@@ -386,12 +386,12 @@ class PromptOptimizer:
             optimized_prompt = self._optimize_for_gemini(base_prompt, context)
         else:
             optimized_prompt = base_prompt
-        
+
         return optimized_prompt
-    
+
     def _optimize_for_gpt(self, prompt: str, context: Dict) -> str:
         """为 GPT 模型优化提示词"""
-        
+
         # GPT 喜欢结构化的指令
         structured_prompt = f"""
 任务: {context.get('task_description', '')}
@@ -412,10 +412,10 @@ class PromptOptimizer:
 - 置信度: [0-1之间的数值]
 """
         return structured_prompt
-    
+
     def _optimize_for_claude(self, prompt: str, context: Dict) -> str:
         """为 Claude 模型优化提示词"""
-        
+
         # Claude 喜欢对话式的提示
         conversational_prompt = f"""
 我需要你作为一个专业的金融分析师来帮助我分析以下数据。
@@ -437,12 +437,12 @@ class PromptOptimizer:
 ```python
 class LLMConcurrencyManager:
     """LLM 并发管理器"""
-    
+
     def __init__(self, config: Dict):
         self.config = config
         self.semaphores = self._initialize_semaphores()
         self.rate_limiters = self._initialize_rate_limiters()
-        
+
     def _initialize_semaphores(self) -> Dict:
         """初始化信号量控制并发"""
         return {
@@ -450,13 +450,13 @@ class LLMConcurrencyManager:
             "anthropic": asyncio.Semaphore(5),    # Anthropic 最多5个并发
             "google": asyncio.Semaphore(8)        # Google 最多8个并发
         }
-    
+
     async def execute_with_concurrency_control(self, provider: str, llm_call: callable) -> Any:
         """在并发控制下执行LLM调用"""
-        
+
         semaphore = self.semaphores.get(provider)
         rate_limiter = self.rate_limiters.get(provider)
-        
+
         async with semaphore:
             await rate_limiter.acquire()
             try:
@@ -477,7 +477,7 @@ class LLMConcurrencyManager:
 ```python
 class LLMMonitor:
     """LLM 性能监控"""
-    
+
     def __init__(self):
         self.metrics = {
             "request_count": defaultdict(int),
@@ -486,29 +486,29 @@ class LLMMonitor:
             "error_rates": defaultdict(float),
             "costs": defaultdict(float)
         }
-    
-    def record_request(self, model: str, response_time: float, 
+
+    def record_request(self, model: str, response_time: float,
                       input_tokens: int, output_tokens: int, cost: float):
         """记录请求指标"""
-        
+
         self.metrics["request_count"][model] += 1
         self.metrics["response_times"][model].append(response_time)
-        
+
         if model not in self.metrics["token_usage"]:
             self.metrics["token_usage"][model] = {"input": 0, "output": 0}
-        
+
         self.metrics["token_usage"][model]["input"] += input_tokens
         self.metrics["token_usage"][model]["output"] += output_tokens
         self.metrics["costs"][model] += cost
-    
+
     def get_performance_report(self) -> Dict:
         """获取性能报告"""
-        
+
         report = {}
-        
+
         for model in self.metrics["request_count"]:
             response_times = self.metrics["response_times"][model]
-            
+
             report[model] = {
                 "total_requests": self.metrics["request_count"][model],
                 "avg_response_time": sum(response_times) / len(response_times) if response_times else 0,
@@ -517,7 +517,7 @@ class LLMMonitor:
                 "total_cost": self.metrics["costs"][model],
                 "avg_cost_per_request": self.metrics["costs"][model] / self.metrics["request_count"][model] if self.metrics["request_count"][model] > 0 else 0
             }
-        
+
         return report
 ```
 
@@ -525,7 +525,7 @@ class LLMMonitor:
 
 ### 1. 模型选择建议
 - **高精度任务**: 使用 GPT-4o 或 Claude-3-Opus
-- **平衡场景**: 使用 GPT-4o-mini 或 Claude-3-Sonnet  
+- **平衡场景**: 使用 GPT-4o-mini 或 Claude-3-Sonnet
 - **成本敏感**: 使用 GPT-3.5-turbo 或 Claude-3-Haiku
 - **快速响应**: 使用 Gemini-2.0-flash
 

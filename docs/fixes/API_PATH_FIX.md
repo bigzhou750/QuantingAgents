@@ -17,8 +17,8 @@
    ```python
    # app/routers/config.py
    router = APIRouter(prefix="/config", tags=["配置管理"])
-   
-   # app/main.py  
+
+   # app/main.py
    app.include_router(config.router, prefix="/api", tags=["config"])
    ```
    最终路径: `/api` + `/config` = `/api/config`
@@ -27,7 +27,7 @@
    ```typescript
    // 错误的调用
    ApiClient.get('/config/llm/providers')
-   
+
    // 正确的调用
    ApiClient.get('/api/config/llm/providers')
    ```
@@ -51,7 +51,7 @@ getLLMProviders(): Promise<LLMProvider[]> {
   return ApiClient.get('/api/config/llm/providers')  // ✅ 修复后
 },
 
-// 大模型配置管理  
+// 大模型配置管理
 getLLMConfigs(): Promise<LLMConfig[]> {
   return ApiClient.get('/api/config/llm')  // ✅ 修复后
 },
@@ -71,7 +71,7 @@ getSystemSettings(): Promise<Record<string, any>> {
 
 ### 修复的API端点
 - ✅ 大模型厂家管理: 6个端点
-- ✅ 大模型配置管理: 4个端点  
+- ✅ 大模型配置管理: 4个端点
 - ✅ 数据源配置管理: 6个端点
 - ✅ 市场分类管理: 4个端点
 - ✅ 数据源分组管理: 4个端点
@@ -113,6 +113,6 @@ getSystemSettings(): Promise<Record<string, any>> {
 
 ---
 
-**修复完成时间**: 2025-01-09  
-**影响范围**: 配置管理相关功能  
+**修复完成时间**: 2025-01-09
+**影响范围**: 配置管理相关功能
 **修复状态**: ✅ 已完成

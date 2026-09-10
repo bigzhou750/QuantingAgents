@@ -385,9 +385,14 @@ class UserService:
             logger.error("轮换刷新会话失败: %s", type(exc).__name__)
             return False
     
-    async def create_admin_user(self, username: str = "admin", password: str = "admin123", email: str = "admin@tradingagents.cn") -> Optional[User]:
+    async def create_admin_user(self, username: str = "admin", password: str = "", email: str = "zh75067197@gmail.com") -> Optional[User]:
         """创建管理员用户"""
         try:
+            password_error = self.validate_password(password)
+            if password_error:
+                logger.warning("管理员创建被拒绝：初始密码不符合策略")
+                return None
+
             # 检查是否已存在管理员
             existing_admin = self.users_collection.find_one({"username": username})
             if existing_admin:
@@ -427,7 +432,6 @@ class UserService:
             admin_doc["_id"] = result.inserted_id
             
             logger.info(f"✅ 管理员用户创建成功: {username}")
-            logger.info("   ⚠️  管理员初始密码已设置，请通过安全渠道交付并立即修改")
             
             return User(**admin_doc)
             

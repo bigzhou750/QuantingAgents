@@ -403,7 +403,12 @@ class Settings(BaseSettings):
     BAOSTOCK_INIT_AUTO_START: bool = Field(default=False, description="应用启动时自动检查并初始化数据")
 
     # 数据目录配置
-    TRADINGAGENTS_DATA_DIR: str = Field(default="./data")
+    ZHITOUAGENT_DATA_DIR: str = Field(default="./data")
+
+    @property
+    def TRADINGAGENTS_DATA_DIR(self) -> str:
+        """Deprecated compatibility alias for legacy callers."""
+        return self.ZHITOUAGENT_DATA_DIR
 
     @property
     def log_dir(self) -> str:
@@ -456,7 +461,7 @@ settings = Settings()
 
 
 def _read_major_version() -> str:
-    v = os.getenv("TRADINGAGENTS_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
+    v = os.getenv("ZHITOUAGENT_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
     if not v:
         try:
             v = Path(__file__).resolve().parents[3].joinpath("VERSION").read_text(encoding="utf-8").strip()
@@ -468,8 +473,8 @@ def _read_major_version() -> str:
 
 
 def _default_instance_tag() -> str:
-    user = os.getenv("TRADINGAGENTS_DB_USER", "").strip() or getpass.getuser()
-    host = os.getenv("TRADINGAGENTS_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
+    user = os.getenv("ZHITOUAGENT_DB_USER", "").strip() or getpass.getuser()
+    host = os.getenv("ZHITOUAGENT_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
     tag = f"{user}-{host}" if host else user
     return _sanitize_mongo_db_name(tag).strip("_-").lower() or "local"
 

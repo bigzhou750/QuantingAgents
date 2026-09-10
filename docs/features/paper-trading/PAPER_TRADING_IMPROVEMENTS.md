@@ -190,10 +190,10 @@ function viewStockDetail(stockCode: string) {
 ```vue
 <el-table-column label="浮盈" width="100">
   <template #default="{ row }">
-    <span :style="{ 
-      color: (Number(row.last_price || 0) - Number(row.avg_cost || 0)) >= 0 
-        ? '#67C23A' 
-        : '#F56C6C' 
+    <span :style="{
+      color: (Number(row.last_price || 0) - Number(row.avg_cost || 0)) >= 0
+        ? '#67C23A'
+        : '#F56C6C'
     }">
       {{ fmtAmount((Number(row.last_price || 0) - Number(row.avg_cost || 0)) * Number(row.quantity || 0)) }}
     </span>
@@ -267,18 +267,18 @@ export function formatDateTime(
   options?: Intl.DateTimeFormatOptions
 ): string {
   if (!dateStr) return '-'
-  
+
   // 处理时间戳
   if (typeof dateStr === 'number') {
     const timestamp = dateStr < 10000000000 ? dateStr * 1000 : dateStr
     timeStr = new Date(timestamp).toISOString()
   }
-  
+
   // 添加 Z 后缀（UTC 时间）
   if (timeStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/) && !timeStr.endsWith('Z')) {
     timeStr += 'Z'
   }
-  
+
   // 转换为 UTC+8
   const utcDate = new Date(timeStr)
   return utcDate.toLocaleString('zh-CN', {

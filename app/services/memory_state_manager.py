@@ -147,7 +147,7 @@ class MemoryStateManager:
         selected_analysts = parameters.get('selected_analysts', [])
         from tradingagents.llm_clients.provider_keys import normalize_provider_key
 
-        llm_provider = normalize_provider_key(parameters.get('llm_provider', 'dashscope'))
+        llm_provider = normalize_provider_key(parameters.get('llm_provider', 'deepseek'))
 
         # 研究深度映射
         depth_map = {"快速": 1, "标准": 2, "深度": 3}

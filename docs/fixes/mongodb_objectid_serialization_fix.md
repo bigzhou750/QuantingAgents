@@ -1,6 +1,6 @@
 # MongoDB ObjectId 序列化错误修复
 
-**日期**: 2025-10-12  
+**日期**: 2025-10-12
 **问题**: `Unable to serialize unknown type: <class 'bson.objectid.ObjectId'>`
 
 ---
@@ -26,7 +26,7 @@ Unable to serialize unknown type: <class 'bson.objectid.ObjectId'>
 ### 错误堆栈
 
 ```python
-File "D:\code\TradingAgents-CN\app\services\news_data_service.py", line 325
+File "D:\code\zhitouagent\app\services\news_data_service.py", line 325
     self.logger.info(f"📊 查询新闻数据返回 {len(results)} 条记录")
     return results  # ❌ results 包含 ObjectId，无法序列化
 ```
@@ -92,10 +92,10 @@ return results  # ✅ 可以正常序列化
 def convert_objectid_to_str(data: Union[Dict, List[Dict]]) -> Union[Dict, List[Dict]]:
     """
     转换 MongoDB ObjectId 为字符串，避免 JSON 序列化错误
-    
+
     Args:
         data: 单个文档或文档列表
-        
+
     Returns:
         转换后的数据
     """

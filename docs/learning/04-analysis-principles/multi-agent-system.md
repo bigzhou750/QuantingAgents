@@ -1,15 +1,15 @@
 # 多智能体系统详解
 
-**分类**: AI分析股票原理  
-**难度**: 进阶  
-**阅读时间**: 15分钟  
+**分类**: AI分析股票原理
+**难度**: 进阶
+**阅读时间**: 15分钟
 **更新日期**: 2025-11-14
 
 ---
 
 ## 📋 引言
 
-TradingAgents-CN采用多智能体协作机制进行股票分析。什么是多智能体系统？为什么要使用多个AI而不是一个？本文将深入解析多智能体系统的原理和优势。
+zhitouagent采用多智能体协作机制进行股票分析。什么是多智能体系统？为什么要使用多个AI而不是一个？本文将深入解析多智能体系统的原理和优势。
 
 ---
 
@@ -43,7 +43,7 @@ TradingAgents-CN采用多智能体协作机制进行股票分析。什么是多�
 
 ---
 
-## 🏗️ TradingAgents-CN的智能体架构
+## 🏗️ zhitouagent的智能体架构
 
 ### 智能体角色
 
@@ -366,19 +366,19 @@ class MultiAgentSystem:
     def analyze(self, stock_code):
         # 第1步：研究员收集信息
         info = researcher.collect(stock_code)
-        
+
         # 第2步：并行分析
         technical = technical_analyst.analyze(info)
         fundamental = fundamental_analyst.analyze(info)
-        
+
         # 第3步：风险评估
         risk = risk_manager.assess(technical, fundamental)
-        
+
         # 第4步：综合决策
         decision = portfolio_manager.decide(
             technical, fundamental, risk
         )
-        
+
         return decision
 ```
 
@@ -411,7 +411,7 @@ class MultiAgentSystem:
 ### 核心要点
 
 1. **多智能体系统**由多个专业AI协作完成任务
-2. **TradingAgents-CN**包含5个核心智能体角色
+2. **zhitouagent**包含5个核心智能体角色
 3. **协作流程**：收集→分析→评估→决策
 4. **主要优势**：专业分工、多角度、互相制衡
 5. **辩论机制**提高分析的准确性和可靠性

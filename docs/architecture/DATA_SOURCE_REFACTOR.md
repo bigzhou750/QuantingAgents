@@ -76,11 +76,11 @@ tradingagents/dataflows/data_source_manager.py
 # app/services/datasource_config_provider.py
 class DataSourceConfigProvider:
     """数据源配置提供器（统一配置管理）"""
-    
+
     async def get_datasource_config(self, datasource_name: str) -> Optional[Dict]:
         """
         获取数据源配置
-        
+
         优先级：
         1. 数据库配置
         2. 环境变量
@@ -90,14 +90,14 @@ class DataSourceConfigProvider:
         db_config = await self._get_from_database(datasource_name)
         if db_config and db_config.get('api_key'):
             return db_config
-        
+
         # 从环境变量读取
         env_config = self._get_from_env(datasource_name)
         if env_config:
             return env_config
-        
+
         return None
-    
+
     async def get_enabled_datasources(self, market_category: str) -> List[str]:
         """获取启用的数据源列表"""
         # 从数据库读取 datasource_groupings
@@ -106,22 +106,22 @@ class DataSourceConfigProvider:
 # tradingagents/dataflows/data_source_manager.py
 class DataSourceManager:
     """数据源管理器（业务逻辑）"""
-    
+
     def __init__(self, config_provider: DataSourceConfigProvider):
         """
         初始化数据源管理器
-        
+
         Args:
             config_provider: 配置提供器（由 app 层注入）
         """
         self.config_provider = config_provider
         self.available_sources = []
-    
+
     async def initialize(self):
         """异步初始化（检查可用数据源）"""
         # 从配置提供器获取启用的数据源
         enabled_sources = await self.config_provider.get_enabled_datasources('a_shares')
-        
+
         # 检查每个数据源是否可用
         for source_name in enabled_sources:
             config = await self.config_provider.get_datasource_config(source_name)
@@ -148,10 +148,10 @@ class DataSourceManager:
         # 从 app 层获取配置（而不是自己读数据库）
         from app.services.config_service import config_service
         self.config_service = config_service
-        
+
         # 初始化
         self.available_sources = self._check_available_sources()
-    
+
     def _get_datasource_config(self, datasource_name: str) -> Optional[Dict]:
         """从 app 层获取配置"""
         # 调用 app 层的配置服务

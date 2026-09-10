@@ -1,5 +1,5 @@
 """
-TradingAgents-CN v1.0.0-preview FastAPI Backend
+ zhitouagent FastAPI Backend
 主应用程序入口
 
 Copyright (c) 2025 hsliuping. All rights reserved.
@@ -9,8 +9,8 @@ This software is proprietary and confidential. Unauthorized copying, distributio
 or use of this software, via any medium, is strictly prohibited.
 本软件为专有和机密软件。严禁通过任何媒介未经授权复制、分发或使用本软件。
 
-For commercial licensing, please contact: hsliup@163.com
-商业许可咨询，请联系：hsliup@163.com
+For support, please contact: zh75067197@gmail.com
+技术支持请联系：zh75067197@gmail.com
 """
 
 from fastapi import FastAPI, Request
@@ -24,6 +24,12 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
 from pathlib import Path
+import os
+
+# 新部署使用 ZHITOUAGENT_*；旧部署变量仅作为读取兼容，不再写回或展示。
+for _key, _value in list(os.environ.items()):
+    if _key.startswith("TRADINGAGENTS_"):
+        os.environ.setdefault("ZHITOUAGENT_" + _key[len("TRADINGAGENTS_"):], _value)
 
 # 加载 .env.local（如果存在），覆盖 .env 中的同名变量
 # 用途：本地开发时设置 WXPAY_MOCK=true 等，不影响生产 .env
@@ -101,7 +107,7 @@ async def _print_config_summary(logger):
     """显示配置摘要"""
     try:
         logger.info("=" * 70)
-        logger.info("📋 TradingAgents-CN Configuration Summary")
+        logger.info("📋 zhitouagent Configuration Summary")
         logger.info("=" * 70)
 
         # .env 文件路径信息
@@ -244,24 +250,31 @@ async def lifespan(app: FastAPI):
 
     await init_db()
 
-    # 自动创建默认管理员账号（首次部署时）
+    # 受控管理员初始化：只有显式提供强初始密码时才创建管理员
     try:
         from app.services.user_service import user_service
         existing_admin = await user_service.get_user_by_username("admin")
-        if not existing_admin:
-            admin_user = await user_service.create_admin_user(
-                username="admin",
-                password="admin123",
-                email="admin@tradingagents.cn"
-            )
-            if admin_user:
-                logger.info("✅ 已创建默认管理员账号: admin / admin123")
+        initial_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
+        if existing_admin:
+            logger.info("ℹ️ 管理员账号已存在，跳过初始化")
+        elif initial_admin_password:
+            password_error = user_service.validate_password(initial_admin_password)
+            if password_error:
+                logger.warning("管理员初始化失败：初始密码不符合策略，请通过受控渠道重试")
             else:
-                logger.warning("⚠️ 默认管理员账号创建失败")
+                admin_user = await user_service.create_admin_user(
+                    username="admin",
+                    password=initial_admin_password,
+                    email="zh75067197@gmail.com"
+                )
+                if admin_user:
+                    logger.info("✅ 管理员账号初始化完成")
+                else:
+                    logger.warning("⚠️ 管理员账号初始化失败")
         else:
-            logger.info("ℹ️ 管理员账号已存在，跳过创建")
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过自动创建管理员；请使用 scripts/create_default_admin.py 受控初始化")
     except Exception as e:
-        logger.warning(f"⚠️ 默认管理员初始化失败（非阻塞）: {e}")
+        logger.warning(f"⚠️ 管理员初始化检查失败（非阻塞）: {e}")
 
     try:
         from app.services.personal_investment.profile_service import profile_service
@@ -363,13 +376,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Token计费模块初始化失败: {e}")
 
-    #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
+    #  配置桥接：将统一配置写入环境变量，供 zhitouagent 核心库使用
     try:
         from app.core.config_bridge import bridge_config_to_env
         bridge_config_to_env()
     except Exception as e:
         logger.warning(f"⚠️  配置桥接失败: {e}")
-        logger.warning("⚠️  TradingAgents 将使用 .env 文件中的配置")
+        logger.warning("⚠️  zhitouagent 将使用 .env 文件中的配置")
 
     # Apply dynamic settings (log_level, enable_monitoring) from ConfigProvider
     try:
@@ -390,7 +403,7 @@ async def lifespan(app: FastAPI):
     # 显示配置摘要
     await _print_config_summary(logger)
 
-    logger.info("TradingAgents FastAPI backend started")
+    logger.info("zhitouagent FastAPI backend started")
 
     # 启动期：若需要在休市时补充上一交易日收盘快照
     if settings.QUOTES_BACKFILL_ON_STARTUP:
@@ -876,12 +889,12 @@ async def lifespan(app: FastAPI):
             logger.warning(f"UserService cleanup error: {e}")
 
         await close_db()
-        logger.info("TradingAgents FastAPI backend stopped")
+        logger.info("zhitouagent FastAPI backend stopped")
 
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="TradingAgents-CN API",
+    title="zhitouagent API",
     description="股票分析与批量队列系统 API",
     version=get_version(),
     docs_url="/docs" if settings.DEBUG else None,
@@ -1033,7 +1046,7 @@ async def root():
     """根路径，返回API信息"""
     print("🏠 根路径被访问")
     return {
-        "name": "TradingAgents-CN API",
+        "name": "zhitouagent API",
         "version": get_version(),
         "status": "running",
         "docs_url": "/docs" if settings.DEBUG else None

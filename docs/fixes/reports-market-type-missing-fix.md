@@ -296,7 +296,7 @@ async for doc in cursor:
 db.analysis_reports.find({ market_type: { $exists: false } }).forEach(function(doc) {
     var stockSymbol = doc.stock_symbol;
     var marketType = "A股";  // 默认值
-    
+
     // 根据股票代码推断市场类型
     if (/^\d{6}$/.test(stockSymbol)) {
         marketType = "A股";
@@ -305,12 +305,12 @@ db.analysis_reports.find({ market_type: { $exists: false } }).forEach(function(d
     } else if (/^[A-Z]{1,5}$/.test(stockSymbol)) {
         marketType = "美股";
     }
-    
+
     db.analysis_reports.updateOne(
         { _id: doc._id },
         { $set: { market_type: marketType } }
     );
-    
+
     print("Updated: " + doc.analysis_id + " -> " + marketType);
 });
 ```

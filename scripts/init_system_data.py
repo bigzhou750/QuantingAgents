@@ -40,7 +40,7 @@ async def create_default_users(db):
     # 创建默认管理员用户
     admin_user = {
         "username": "admin",
-        "email": "admin@tradingagents.cn",
+        "email": "zh75067197@gmail.com",
         "hashed_password": get_password_hash("admin123"),
         "full_name": "系统管理员",
         "role": UserRole.ADMIN.value,
@@ -338,4 +338,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

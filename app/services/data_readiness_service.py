@@ -485,7 +485,6 @@ class DataReadinessService:
         """持久化报告到 MongoDB"""
         db = get_mongo_db()
         doc = report.to_dict()
-        doc["_id"] = None  # let MongoDB assign
         await db[self.COLLECTION].insert_one(doc)
 
 

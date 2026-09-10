@@ -35,12 +35,12 @@ def _update_steps_by_progress(self, progress_pct: float) -> None:
     for step in self.analysis_steps:
         step_start_pct = cumulative_weight
         step_end_pct = cumulative_weight + (step.weight * 100)
-        
+
         if progress_pct >= step_end_pct:
             step.status = 'completed'
         elif progress_pct > step_start_pct:
             step.status = 'current'  # 当前步骤
-        
+
         cumulative_weight = step_end_pct
 ```
 
@@ -177,7 +177,7 @@ class ProgressManager:
     def __init__(self, tracker: RedisProgressTracker):
         self.tracker = tracker
         self.current_step_index = 0
-    
+
     def advance_to_step(self, step_name: str):
         """根据步骤名称自动计算并更新进度"""
         for index, step in enumerate(self.tracker.analysis_steps):
@@ -190,7 +190,7 @@ class ProgressManager:
                 })
                 self.current_step_index = index
                 break
-    
+
     def _calculate_step_progress(self, step_index: int) -> float:
         """计算步骤的中间进度"""
         cumulative = 0.0

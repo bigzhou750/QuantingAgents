@@ -4,8 +4,8 @@
 
 ## ✅ 完成概览
 
-**执行时间**: 2025-10-09  
-**迁移状态**: ✅ 成功完成  
+**执行时间**: 2025-10-09
+**迁移状态**: ✅ 成功完成
 **影响范围**: 数据库集合、模型定义、API路由
 
 ## 📊 数据库迁移结果
@@ -73,7 +73,7 @@ class StockBasicInfoExtended(BaseModel):
 class SingleAnalysisRequest(BaseModel):
     symbol: Optional[str] = Field(None, description="6位股票代码")
     stock_code: Optional[str] = Field(None, description="已废弃")
-    
+
     def get_symbol(self) -> str:
         """获取股票代码(兼容旧字段)"""
         return self.symbol or self.stock_code or ""

@@ -226,7 +226,7 @@ tail -f logs/app.log | grep "使用.*接口获取实时行情"
 
 ### Q1: 为什么默认是6分钟，不是30秒？
 
-**A**: 
+**A**:
 - Tushare 免费用户每小时只能调用2次 rt_k 接口
 - 30秒采集会立即超限，导致服务不可用
 - 6分钟是平衡实时性和限制的最佳选择
@@ -242,13 +242,13 @@ QUOTES_TUSHARE_HOURLY_LIMIT=1000  # 提高限制
 
 ### Q3: 如何禁用 Tushare，只使用 AKShare？
 
-**A**: 
+**A**:
 1. 不配置 `TUSHARE_TOKEN`（留空）
 2. 或设置 `QUOTES_TUSHARE_HOURLY_LIMIT=0`
 
 ### Q4: 接口轮换是什么意思？
 
-**A**: 
+**A**:
 - 第1次采集：使用 Tushare
 - 第2次采集：使用 AKShare 东方财富
 - 第3次采集：使用 AKShare 新浪财经
@@ -261,14 +261,14 @@ QUOTES_TUSHARE_HOURLY_LIMIT=1000  # 提高限制
 
 ### Q6: AKShare 会被封IP吗？
 
-**A**: 
+**A**:
 - 6分钟采集一次，被封概率很低
 - 启用轮换机制，东方财富和新浪财经交替使用，进一步降低风险
 - 如果被封，会自动切换到另一个接口
 
 ### Q7: 如何手动触发采集？
 
-**A**: 
+**A**:
 1. **前端**：系统配置 → 定时任务管理 → 实时行情入库服务 → 立即执行
 2. **API**：`POST /api/scheduler/jobs/quotes_ingestion_service/trigger`
 

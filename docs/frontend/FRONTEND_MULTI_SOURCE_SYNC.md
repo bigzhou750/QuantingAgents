@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-本文档描述了TradingAgents-CN项目中前端多数据源同步功能的完整实现，包括组件结构、API集成、路由配置和用户界面设计。
+本文档描述了zhitouagent项目中前端多数据源同步功能的完整实现，包括组件结构、API集成、路由配置和用户界面设计。
 
 ## 🏗️ 架构设计
 
@@ -183,7 +183,7 @@ interface SyncStatus {
 
 **问题:** URL重复 `/api/api/sync/...`
 
-**原因:** 
+**原因:**
 - Vite代理配置: `/api` -> `http://localhost:8000`
 - request.ts中baseURL: `/api`
 - API路径: `/api/sync/...`
@@ -278,7 +278,7 @@ VITE_API_BASE_URL=http://localhost:8000
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .action-buttons {
     flex-direction: column;
     .el-button {

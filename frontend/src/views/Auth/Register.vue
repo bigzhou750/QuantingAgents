@@ -2,7 +2,7 @@
   <div class="register-page">
     <el-card class="register-card" shadow="always">
       <div class="header">
-        <img src="/logo.svg" alt="TradingAgents-CN" class="logo" />
+        <img src="/logo.svg" alt="智能投研助手" class="logo" />
         <h1>创建账号</h1>
         <p>注册后开始使用独立的投资研究空间</p>
       </div>
@@ -30,9 +30,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -56,6 +57,17 @@ const submit = async () => {
     loading.value = false
   }
 }
+
+onMounted(async () => {
+  try {
+    const response = await authApi.registrationStatus()
+    if (!response.data?.enabled) {
+      await router.replace('/login')
+    }
+  } catch {
+    // 查询失败时由后端注册接口继续兜底拒绝
+  }
+})
 </script>
 
 <style scoped>

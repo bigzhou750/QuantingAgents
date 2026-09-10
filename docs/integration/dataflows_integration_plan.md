@@ -69,22 +69,22 @@ MongoDB Collections:
 # tradingagents/dataflows/unified_data_service.py
 class UnifiedDataService:
     """统一数据服务 - 整合所有数据源"""
-    
+
     def __init__(self):
         self.historical_service = HistoricalDataService()
         self.financial_service = FinancialDataService()
         self.news_service = NewsDataService()
         self.social_service = SocialMediaService()
         self.cache_manager = DatabaseCacheManager()
-    
+
     async def get_stock_data(self, symbol: str, **kwargs):
         """统一股票数据获取接口"""
         pass
-    
+
     async def get_financial_data(self, symbol: str, **kwargs):
         """统一财务数据获取接口"""
         pass
-    
+
     async def get_news_data(self, symbol: str, **kwargs):
         """统一新闻数据获取接口"""
         pass
@@ -95,25 +95,25 @@ class UnifiedDataService:
 # tradingagents/dataflows/interface.py 扩展
 def get_enhanced_stock_analysis(symbol: str, **kwargs):
     """增强的股票分析 - 集成多维度数据"""
-    
+
     # 1. 基础数据
     basic_data = get_stock_data(symbol)
-    
+
     # 2. 历史数据
     historical_data = unified_service.get_historical_data(symbol)
-    
+
     # 3. 财务数据
     financial_data = unified_service.get_financial_data(symbol)
-    
+
     # 4. 新闻数据
     news_data = unified_service.get_news_data(symbol)
-    
+
     # 5. 社媒数据
     social_data = unified_service.get_social_data(symbol)
-    
+
     # 6. 综合分析
     return comprehensive_analysis(
-        basic_data, historical_data, financial_data, 
+        basic_data, historical_data, financial_data,
         news_data, social_data
     )
 ```
@@ -132,25 +132,25 @@ Level 4: API (数据源)
 ```python
 class SmartCacheStrategy:
     """智能缓存策略"""
-    
+
     def get_data_with_fallback(self, key: str, data_type: str):
         """多级降级数据获取"""
-        
+
         # 1. Redis缓存
         if data := self.redis_cache.get(key):
             return data
-            
+
         # 2. MongoDB
         if data := self.mongo_cache.get(key):
             self.redis_cache.set(key, data)
             return data
-            
+
         # 3. 文件缓存
         if data := self.file_cache.get(key):
             self.mongo_cache.set(key, data)
             self.redis_cache.set(key, data)
             return data
-            
+
         # 4. API获取
         data = self.api_provider.get(key)
         self.save_to_all_caches(key, data)
@@ -163,10 +163,10 @@ class SmartCacheStrategy:
 ```python
 class EnhancedAnalysisFramework:
     """增强分析框架"""
-    
+
     def comprehensive_stock_analysis(self, symbol: str):
         """综合股票分析"""
-        
+
         analysis_result = {
             'basic_info': self.get_basic_analysis(symbol),
             'technical_analysis': self.get_technical_analysis(symbol),
@@ -177,7 +177,7 @@ class EnhancedAnalysisFramework:
             'risk_assessment': self.get_risk_assessment(symbol),
             'recommendation': self.get_recommendation(symbol)
         }
-        
+
         return analysis_result
 ```
 

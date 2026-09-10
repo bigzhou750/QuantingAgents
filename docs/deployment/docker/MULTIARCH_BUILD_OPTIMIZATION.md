@@ -175,19 +175,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
@@ -323,7 +323,7 @@ A: 不一定。GitHub Actions 也是在 x86_64 机器上通过 QEMU 模拟 ARM�
 
 ### Q5: 需要多少磁盘空间？
 
-A: 
+A:
 - 单架构构建：约 3-5 GB
 - 多架构构建：约 6-10 GB
 - 构建完成后自动清理：释放 5-8 GB

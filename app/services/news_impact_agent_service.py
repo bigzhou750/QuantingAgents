@@ -1,12 +1,14 @@
 """
 新闻影响 Agent 分析服务
 
-使用 DashScope LLM 对新闻进行结构化影响分析，输出固定17字段JSON schema。
+使用后端配置的 DeepSeek LLM 对新闻进行结构化影响分析，输出固定17字段JSON schema。
 包含 prompt 模板、schema 校验、规则降级和非交易建议安全过滤。
 """
 
 import json
 import logging
+import asyncio
+import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -63,7 +65,7 @@ class NewsImpactAgentService:
     COLLECTION = "news_analysis_results"
     PROMPT_VERSION = "v1"
     SCHEMA_VERSION = "v1"
-    DEFAULT_MODEL = "qwen-plus"
+    DEFAULT_MODEL = "deepseek-chat"
 
     async def initialize(self):
         db = get_mongo_db()
@@ -200,28 +202,34 @@ class NewsImpactAgentService:
         )
 
     async def _call_llm(self, prompt: str) -> str:
-        """调用 DashScope LLM"""
+        """调用后端配置的 DeepSeek，失败时返回规则降级结果。"""
         try:
-            from dashscope import Generation
+            from langchain_openai import ChatOpenAI
 
-            response = Generation.call(
+            api_key = os.getenv("DEEPSEEK_API_KEY", "")
+            if not api_key or api_key.startswith(("your_", "your-", "change-")):
+                raise RuntimeError("DEEPSEEK_API_KEY 未配置")
+
+            llm = ChatOpenAI(
                 model=self.DEFAULT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                result_format="message",
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
                 temperature=0.1,
             )
 
-            if response.status_code == 200:
-                return response.output.choices[0].message.content
-            else:
-                raise RuntimeError(
-                    f"DashScope API error: {response.code} - {response.message}"
+            response = await asyncio.to_thread(llm.invoke, prompt)
+            content = response.content
+            if isinstance(content, list):
+                content = "".join(
+                    item.get("text", "") if isinstance(item, dict) else str(item)
+                    for item in content
                 )
+            return str(content)
 
-        except ImportError:
-            logger.warning("dashscope not available, returning mock output")
+        except Exception as exc:
+            logger.warning("DeepSeek 新闻分析调用失败，使用规则降级: %s", type(exc).__name__)
             return json.dumps({
-                "event_summary": "mock: dashscope unavailable",
+                "event_summary": "模型暂不可用，已使用规则降级分析",
                 "event_type": "其他",
                 "impact_direction": "neutral",
                 "impact_strength": 1,
@@ -236,7 +244,7 @@ class NewsImpactAgentService:
                 "evidence_strength": "weak",
                 "market_confirmation": "无法确认",
                 "watch_indicators": [],
-                "uncertainties": ["LLM不可用"],
+                "uncertainties": ["DeepSeek 暂不可用，结果需要人工复核"],
                 "non_advisory_note": "本分析仅为研究参考，不构成投资建议",
             })
 

@@ -1,8 +1,8 @@
-# TradingAgents-CN 绿色安装版使用手册
+# zhitouagent 绿色安装版使用手册
 
 ## 📦 简介
 
-TradingAgents-CN 绿色安装版是一个**免安装、开箱即用**的便携版本，无需复杂的环境配置，适合快速部署和测试。
+zhitouagent 绿色安装版是一个**免安装、开箱即用**的便携版本，无需复杂的环境配置，适合快速部署和测试。
 
 ### ✨ 特点
 
@@ -100,10 +100,10 @@ TradingAgents-CN 绿色安装版是一个**免安装、开箱即用**的便携�
    ```env
    # Tushare API Token (推荐)
    TUSHARE_TOKEN=your_tushare_token_here
-   
+
    # Finnhub API Key (可选)
    FINNHUB_API_KEY=your_finnhub_key_here
-   
+
    # LLM API Keys (用于 AI 分析功能)
    OPENAI_API_KEY=your_openai_key_here
    DEEPSEEK_API_KEY=your_deepseek_key_here

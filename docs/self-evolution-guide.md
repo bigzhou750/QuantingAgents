@@ -100,7 +100,7 @@ Promote 前必须同时满足：proposal 已验证、verification sandbox 已清
 ## Artifact Registry
 
 可自进化的资产类型：
-- **Skill**: SKILL.md 文件，存储在 `~/.vibe-trading/skills/user/` 覆盖层
+- **Skill**: SKILL.md 文件，存储在 `~/.zhitouagent/skills/user/` 覆盖层
 - **Prompt**: 系统提示词模板，存储在 MongoDB
 - **Policy**: routing/grounding/safety 策略，存储在 MongoDB
 - **Rubric**: LLM Judge 评分标准，存储在 MongoDB

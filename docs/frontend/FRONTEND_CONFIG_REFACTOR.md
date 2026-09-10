@@ -44,7 +44,7 @@
 
 #### 2. 明确主要配置页面
 - ✅ **保留**: `Settings/ConfigManagement.vue` 作为**唯一的配置管理页面**
-- ✅ **功能**: 
+- ✅ **功能**:
   - 大模型配置管理
   - 数据源配置管理
   - 数据库配置管理
@@ -159,13 +159,13 @@ rm frontend/src/views/Admin/SystemConfig.vue
 
 ### 对于用户
 - **原来**: 在多个地方都能找到配置功能，容易混淆
-- **现在**: 
+- **现在**:
   - 系统配置 → 访问 `/settings/config`
   - 个人设置 → 访问 `/settings`
 
 ### 对于开发者
 - **原来**: 需要在多个文件中同步更新配置功能
-- **现在**: 
+- **现在**:
   - 系统配置功能 → 只在 `ConfigManagement.vue` 中开发
   - 个人偏好功能 → 只在 `Settings/index.vue` 中开发
 

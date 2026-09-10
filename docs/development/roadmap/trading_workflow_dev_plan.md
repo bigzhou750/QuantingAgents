@@ -1,8 +1,8 @@
 # 单人交易学习平台：前端整合与迭代开发计划
 
-> 文档版本：v1.0  
-> 日期：2025-08-21  
-> 适用范围：前端（Vue3 + Pinia + ElementPlus）、后端联动（API 协议）  
+> 文档版本：v1.0
+> 日期：2025-08-21
+> 适用范围：前端（Vue3 + Pinia + ElementPlus）、后端联动（API 协议）
 > 目标：把“筛选→分析→计划→模拟执行→复盘→循环”的个人交易流水线产品化，面向学习/教育场景（仅模拟盘，不接入券商）。
 
 ---
@@ -162,7 +162,7 @@ type Journal = { id: string; planId: string; events: any[]; pnl?: number; adhere
 
 ---
 
-> 附：目录与文件位置  
-> docs/development/roadmap/trading_workflow_dev_plan.md  
+> 附：目录与文件位置
+> docs/development/roadmap/trading_workflow_dev_plan.md
 > 如需细化为更具体的“组件 API 与接口定义”，建议新增：docs/development/api/plans_triggers_sim.md
 

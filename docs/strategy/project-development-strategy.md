@@ -1,4 +1,4 @@
-# TradingAgents-CN 项目发展战略规划
+# zhitouagent 项目发展战略规划
 
 > **文档版本**：v1.0
 > **创建日期**：2026-07-24
@@ -52,7 +52,7 @@
 
 ### 2.1 产品定位
 
-TradingAgents-CN 是 **AI 驱动的股票分析工具**，不是投资顾问服务。
+zhitouagent 是 **AI 驱动的股票分析工具**，不是投资顾问服务。
 
 | 荐股（违规） | 分析工具（合规） |
 |---|---|
@@ -208,7 +208,7 @@ License: Apache 2.0 with Commercial Use Restriction
 - ✅ 个人使用、学习、研究：免费
 - ✅ 内部非商业使用：免费
 - ❌ 商业应用（销售、SaaS、付费服务）：必须获得商业授权
-- 商业授权联系：hsliup@163.com
+- 商业授权联系：zh75067197@gmail.com
 ```
 
 ### 5.2 "商业应用"定义
@@ -397,7 +397,7 @@ Week 4：运营 + 反馈
 
 **招人消息要点**：
 ```
-🔍 TradingAgents-CN 寻找核心贡献者
+🔍 zhitouagent 寻找核心贡献者
 
 我们在做什么：AI 驱动的 A 股分析系统，GitHub 30k+ star
 
@@ -453,12 +453,12 @@ Week 4：运营 + 反馈
 ## 九、仓库结构
 
 ```
-公开仓库：TradingAgents-CN
+公开仓库：zhitouagent
   ├── main 分支：最新开源版本（当前是 v2.0）
   ├── v3.0 分支：v4.0 发布后开源
   └── README 中引导付费版
 
-私有仓库：TradingAgents-CN-Pro
+私有仓库：zhitouagent-Pro
   ├── main 分支：当前付费版（v3.0）
   └── 开发分支：v4.0 开发中
 ```

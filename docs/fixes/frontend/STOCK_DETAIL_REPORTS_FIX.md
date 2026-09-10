@@ -65,20 +65,20 @@
   <el-divider />
   <div class="reports-header">
     <span class="reports-title">📊 详细分析报告 ({{ Object.keys(lastAnalysis.reports).length }})</span>
-    <el-button 
-      text 
-      type="primary" 
+    <el-button
+      text
+      type="primary"
       @click="showReportsDialog = true"
       :icon="Document"
     >
       查看完整报告
     </el-button>
   </div>
-  
+
   <!-- 报告列表预览 -->
   <div class="reports-preview">
-    <el-tag 
-      v-for="(content, key) in lastAnalysis.reports" 
+    <el-tag
+      v-for="(content, key) in lastAnalysis.reports"
       :key="key"
       size="small"
       effect="plain"
@@ -116,7 +116,7 @@
       </div>
     </el-tab-pane>
   </el-tabs>
-  
+
   <template #footer>
     <el-button @click="showReportsDialog = false">关闭</el-button>
     <el-button type="primary" @click="exportReport">导出报告</el-button>
@@ -164,20 +164,20 @@ function exportReport() {
     ElMessage.warning('暂无报告可导出')
     return
   }
-  
+
   // 生成Markdown格式的完整报告
   let fullReport = `# ${code.value} 股票分析报告\n\n`
   fullReport += `**分析日期**: ${lastAnalysis.value.analysis_date}\n`
   fullReport += `**投资建议**: ${lastAnalysis.value.recommendation}\n`
   fullReport += `**信心度**: ${fmtConf(lastAnalysis.value.confidence_score)}\n\n`
   fullReport += `---\n\n`
-  
+
   for (const [key, content] of Object.entries(lastAnalysis.value.reports)) {
     fullReport += `## ${formatReportName(key)}\n\n`
     fullReport += `${content}\n\n`
     fullReport += `---\n\n`
   }
-  
+
   // 创建下载链接
   const blob = new Blob([fullReport], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -188,7 +188,7 @@ function exportReport() {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
-  
+
   ElMessage.success('报告已导出')
 }
 ```

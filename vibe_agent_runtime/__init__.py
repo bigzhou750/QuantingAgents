@@ -1,4 +1,4 @@
-"""Embedded Vibe-Trading Agent runtime for QuantingAgents."""
+"""Embedded zhitouagent Agent runtime for QuantingAgents."""
 
 from .runtime import embedded_agent_runtime
 

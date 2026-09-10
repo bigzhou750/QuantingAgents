@@ -186,9 +186,9 @@ async def sync_historical_data(
 ```python
 # 同步服务添加 period 参数
 async def sync_historical_data(
-    self, 
-    days: int = 30, 
-    batch_size: int = 20, 
+    self,
+    days: int = 30,
+    batch_size: int = 20,
     period: str = "daily"  # 新增
 ) -> BaoStockSyncStats:
     ...
@@ -465,15 +465,15 @@ MONGODB_MAX_POOL_SIZE=100
 ## 🔍 故障排查
 
 ### 问题1: 周线/月线数据为空
-**原因**: API可能对某些股票不提供周线/月线数据  
+**原因**: API可能对某些股票不提供周线/月线数据
 **解决**: 检查日志，确认API返回的数据是否为空
 
 ### 问题2: 数据保存失败
-**原因**: 日期索引处理问题  
+**原因**: 日期索引处理问题
 **解决**: 确保使用最新版本的代码（已修复日期索引问题）
 
 ### 问题3: 同步速度慢
-**原因**: API限流或网络延迟  
+**原因**: API限流或网络延迟
 **解决**: 调整 `rate_limit_delay` 参数或分批同步
 
 ## 📝 最佳实践

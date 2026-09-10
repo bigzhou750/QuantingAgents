@@ -63,14 +63,14 @@ total = (60 + 1800) * 1.0 * 1.3 = 2418秒 = 40分18秒 ❌
 def _get_base_total_time(self) -> float:
     """
     根据分析师数量、研究深度、模型类型预估总时长（秒）
-    
+
     算法设计思路（基于实际测试数据）：
     1. 实测：4级深度 + 3个分析师 = 11分钟（661秒）
     2. 实测：1级快速 = 4-5分钟
     3. 实测：2级基础 = 5-6分钟
     4. 分析师之间有并行处理，不是线性叠加
     """
-    
+
     # 🔧 支持5个级别的分析深度
     depth_map = {
         "快速": 1,  # 1级 - 快速分析
@@ -80,7 +80,7 @@ def _get_base_total_time(self) -> float:
         "全面": 5   # 5级 - 全面分析
     }
     d = depth_map.get(self.research_depth, 3)  # 默认标准分析
-    
+
     # 📊 基于实际测试数据的基础时间（秒）
     # 这是单个分析师的基础耗时
     base_time_per_depth = {
@@ -90,7 +90,7 @@ def _get_base_total_time(self) -> float:
         4: 330,  # 4级：5.5分钟（实测：3个分析师11分钟，反推单个约5.5分钟）
         5: 480   # 5级：8分钟（前端显示：15-25分钟）
     }.get(d, 240)
-    
+
     # 📈 分析师数量影响系数（基于实际测试数据）
     # 实测：4级 + 3个分析师 = 11分钟 = 660秒
     # 反推：330秒 * multiplier = 660秒 => multiplier = 2.0
@@ -105,17 +105,17 @@ def _get_base_total_time(self) -> float:
         analyst_multiplier = 2.4  # 4个分析师约2.4倍时间
     else:
         analyst_multiplier = 2.4 + (analyst_count - 4) * 0.3  # 每增加1个分析师增加30%
-    
+
     # 🚀 模型速度影响（基于实际测试）
     model_mult = {
         'dashscope': 1.0,  # 阿里百炼速度适中
         'deepseek': 0.8,   # DeepSeek较快
         'google': 1.2      # Google较慢
     }.get(self.llm_provider, 1.0)
-    
+
     # 计算总时间
     total_time = base_time_per_depth * analyst_multiplier * model_mult
-    
+
     return total_time
 ```
 

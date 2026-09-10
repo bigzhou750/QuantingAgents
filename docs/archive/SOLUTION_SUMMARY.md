@@ -106,20 +106,20 @@ GET /api/analysis/user/history?stock_code=002475&page=1&page_size=1&status=compl
   <el-divider />
   <div class="reports-header">
     <span class="reports-title">📊 详细分析报告 ({{ Object.keys(lastAnalysis.reports).length }})</span>
-    <el-button 
-      text 
-      type="primary" 
+    <el-button
+      text
+      type="primary"
       @click="showReportsDialog = true"
       :icon="Document"
     >
       查看完整报告
     </el-button>
   </div>
-  
+
   <!-- 报告列表预览 -->
   <div class="reports-preview">
-    <el-tag 
-      v-for="(content, key) in lastAnalysis.reports" 
+    <el-tag
+      v-for="(content, key) in lastAnalysis.reports"
       :key="key"
       size="small"
       effect="plain"
@@ -156,7 +156,7 @@ GET /api/analysis/user/history?stock_code=002475&page=1&page_size=1&status=compl
       </div>
     </el-tab-pane>
   </el-tabs>
-  
+
   <template #footer>
     <el-button @click="showReportsDialog = false">关闭</el-button>
     <el-button type="primary" @click="exportReport">导出报告</el-button>

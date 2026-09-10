@@ -9,13 +9,13 @@
 ### CLI 端包含的完整报告结构：
 - ✅ **I. 分析师团队报告** (Analyst Team Reports)
   - 市场分析师 (Market Analyst)
-  - 社交媒体分析师 (Social Analyst) 
+  - 社交媒体分析师 (Social Analyst)
   - 新闻分析师 (News Analyst)
   - 基本面分析师 (Fundamentals Analyst)
 
 - ✅ **II. 研究团队决策** (Research Team Decision)
   - 多头研究员 (Bull Researcher)
-  - 空头研究员 (Bear Researcher) 
+  - 空头研究员 (Bear Researcher)
   - 研究经理决策 (Research Manager)
 
 - ✅ **III. 交易团队计划** (Trading Team Plan)
@@ -47,7 +47,7 @@
 # 处理各个分析模块的结果 - 包含完整的智能体团队分析
 analysis_keys = [
     'market_report',
-    'fundamentals_report', 
+    'fundamentals_report',
     'sentiment_report',
     'news_report',
     'risk_assessment',
@@ -70,7 +70,7 @@ analysis_keys = [
 
 #### 新增报告部分：
 - 🔬 研究团队决策
-- 💼 交易团队计划  
+- 💼 交易团队计划
 - ⚖️ 风险管理团队决策
 - 🎯 最终交易决策
 

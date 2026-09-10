@@ -6,10 +6,10 @@
 在执行 `/api/sync/multi-source/test-sources` 接口时，其他API接口（如 `/api/notifications/unread_count`）会出现超时错误：
 
 ```
-❌ API错误: undefined /api/notifications/unread_count 
+❌ API错误: undefined /api/notifications/unread_count
 {
-  error: AxiosError, 
-  message: 'timeout of 30000ms exceeded', 
+  error: AxiosError,
+  message: 'timeout of 30000ms exceeded',
   code: 'ECONNABORTED'
 }
 ```
@@ -30,7 +30,7 @@
 async def test_data_sources():
     for adapter in available_adapters:
         # ❌ 这是同步调用，会阻塞事件循环
-        df = adapter.get_stock_list()  
+        df = adapter.get_stock_list()
         trade_date = adapter.find_latest_trade_date()
         df = adapter.get_daily_basic(trade_date)
 ```
@@ -103,7 +103,7 @@ async def _test_single_adapter(adapter) -> dict:
         "available": True,
         "tests": {}
     }
-    
+
     # 测试股票列表获取（在后台线程中执行）
     try:
         df = await asyncio.to_thread(adapter.get_stock_list)
@@ -118,14 +118,14 @@ async def _test_single_adapter(adapter) -> dict:
             "success": False,
             "message": f"Error: {str(e)}"
         }
-    
+
     # 测试最新交易日期（在后台线程中执行）
     try:
         trade_date = await asyncio.to_thread(adapter.find_latest_trade_date)
         # ...
     except Exception as e:
         # ...
-    
+
     # 测试每日基础数据（在后台线程中执行）
     try:
         trade_date = result["tests"]["trade_date"].get("date")
@@ -134,7 +134,7 @@ async def _test_single_adapter(adapter) -> dict:
             # ...
     except Exception as e:
         # ...
-    
+
     return result
 ```
 
@@ -145,17 +145,17 @@ async def _test_single_adapter(adapter) -> dict:
 async def test_data_sources():
     """
     测试所有数据源的连接和数据获取能力
-    
+
     注意：此接口会执行耗时操作（获取股票列表等），
     所有同步操作都在后台线程中执行，避免阻塞事件循环
     """
     manager = DataSourceManager()
     available_adapters = manager.get_available_adapters()
-    
+
     # 并发测试所有适配器（在后台线程中执行）
     test_tasks = [_test_single_adapter(adapter) for adapter in available_adapters]
     test_results = await asyncio.gather(*test_tasks, return_exceptions=True)
-    
+
     # 处理结果...
     return SyncResponse(
         success=True,
@@ -216,7 +216,7 @@ python scripts/test_concurrent_api.py
 
 **终端1：启动后端**
 ```bash
-cd d:\code\TradingAgents-CN
+cd d:\code\zhitouagent
 .\.venv\Scripts\python -m uvicorn app.main:app --reload
 ```
 

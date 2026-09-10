@@ -145,23 +145,33 @@
 
 回答要点：外部绝对路径无法部署、版本不可控、能力边界不清晰；迁入后可以做依赖闭包、许可证边界、启动诊断、统一用户隔离和审计。child process 只是开发机上的临时桥接方案。
 
+代码位置：`vibe_agent_runtime/runtime.py`（`EmbeddedAgentRuntime.run`、`capabilities`）、`app/services/vibe_agent/service.py`（任务生命周期）、`vibe_agent_runtime/vendor/src/agent/loop.py`（`AgentLoop`）。
+
 **Q2：LangGraph 和 AgentLoop 分别负责什么？**
 
 回答要点：LangGraph 负责原有图式分析师流程；AgentLoop 负责自然语言 ReAct 研究；评测 runner 可以调用 Agent runtime 生成 trial。两者是不同抽象层，不需要互相替代。
+
+代码位置：LangGraph 在 `tradingagents/graph/trading_graph.py`（`TradingAgentsGraph.propagate`）和 `app/services/simple_analysis_service.py`；AgentLoop 在 `vibe_agent_runtime/vendor/src/agent/loop.py`，宿主入口在 `vibe_agent_runtime/runtime.py`；评测调用在 `app/services/eval/runner_service.py`。
 
 **Q3：一个用户并发发两个任务会怎样？**
 
 回答要点：API 层用幂等 key 去重；同一用户已有活动任务时返回 409；runtime 层还有 per-session lock 兜底，防止两个 loop 并发写同一 session。
 
+代码位置：`app/services/vibe_agent/service.py`（幂等 key、活动任务 409）、`vibe_agent_runtime/runtime.py`（`_session_locks` 的 per-session lock）。
+
 **Q4：服务重启后正在跑的任务怎么办？**
 
 回答要点：Mongo 任务层标记孤儿任务失败，让用户知道结果不可恢复；Session/Attempt 层根据 `attempt.json` 和 partial response 做恢复或显式中断；SSE 通过事件 sequence 做重放。
+
+代码位置：`app/services/vibe_agent/service.py`（`recover_orphaned_tasks`）、`vibe_agent_runtime/vendor/src/session/store.py`（attempt / partial response）、`vibe_agent_runtime/vendor/src/session/checkpoint.py`、`vibe_agent_runtime/vendor/src/agent/trace.py`；SSE 重放在 `app/routers/vibe_agent.py` 和 `app/services/vibe_agent/service.py`（`replay_events`）。
 
 **Q5：这类系统最脆弱的点在哪里？**
 
 一个比较有说服力的答案：
 
 > 不是 LLM 本身，而是“运行时崩溃、并发、事件丢失、工具权限、状态不一致”。LLM 输出质量可以靠评测和 gate 兜底，但任务状态一旦错乱，用户会直接丢掉一次研究。
+
+代码位置：`vibe_agent_runtime/vendor/src/agent/loop.py`（超时/stall watchdog）、`app/services/vibe_agent/service.py`（事件 sequence / Redis / Mongo 状态）、`vibe_agent_runtime/vendor/src/session/store.py`（文件状态一致性）、`vibe_agent_runtime/policy.py`（工具权限边界）。
 
 ### 2.6 技术优化方向
 
@@ -255,23 +265,33 @@
 2. 再做结构化证据：最终输出拆 claim，claim 对 trace evidence。
 3. 最后用 LLM judge 处理语义质量。
 
+代码位置：运行时 grounding 在 `vibe_agent_runtime/vendor/src/agent/grounding.py`（`authorize_tool_call` / `ingest_tool_result` / `validate_final_answer` / `safe_fallback`）；精确计算在 `vibe_agent_runtime/vendor/src/tools/financial_rigor_tool.py`；报告审计在 `vibe_agent_runtime/vendor/src/tools/report_audit_tool.py`；评测端在 `app/services/eval/scorers/evidence_scorer.py` 和 `app/services/eval/scorers/safety_scorer.py`。
+
 **Q2：为什么用 AST，而不是字符串计算？**
 
 回答要点：AST 白名单可以拒绝任意代码执行，同时支持表达式结构校验；Decimal 保证金融计算不出现 `0.1+0.2` 的浮点误差。需要说清“AST 不是用来理解自然语言，是用来安全计算算式”。
+
+代码位置：`vibe_agent_runtime/vendor/src/tools/financial_rigor_tool.py` 的 `_safe_arith` / `_AST_BINOPS`，白名单只允许 `+ - * /`，并用 `Decimal` 计算。
 
 **Q3：Claim-Evidence 怎么处理中文？**
 
 回答要点：当前实现用中文字符 n-gram（2-gram/3-gram）与证据文本做重叠；这是启发式方案，适合发现无证据 claim，不适合替代语义理解。
 
+代码位置：`app/services/eval/scorers/evidence_scorer.py` 的 `_extract_claims`、`_tokenize_chinese`、`_map_claims_to_evidence`。
+
 **Q4：Recall 95%、F1 93% 怎么证明？**
 
 回答要点：说明评测集规模、正类定义、是否按 Claim 计算、哪些样本被 excluded、人工真值版本、scorer 版本、阈值口径。如果样本只有几十条，不要说“稳定达到”，改说“当前离线集”。
+
+代码位置：`app/services/eval/metrics_service.py` 的 `compute_hallucination_metrics`，正类、标签和统计口径都在这里实现。
 
 **Q5：哪些幻觉检测不到？**
 
 能主动说边界很加分：
 
 > n-gram 对同义改写召回有限；非价格类数值不一定全部有自动校验；需要人工真值才能算分类指标；语义幻觉最终依赖 LLM judge。
+
+代码位置：`app/services/eval/scorers/evidence_scorer.py`（n-gram 匹配边界）、`vibe_agent_runtime/vendor/src/agent/grounding.py`（身份/价格类证据）、`app/services/eval/metrics_service.py`（人工真值参与计算）。
 
 ### 3.6 技术优化方向
 
@@ -356,17 +376,25 @@
 
 回答要点：不是“记住就永久生效”。记忆受质量分、访问次数和来源可信度约束；用户确认/拒绝是最高权重；系统反馈打折；单 session 有剂量上限；低价值记忆只会归档，不会轻易删除。
 
+代码位置：`vibe_agent_runtime/vendor/src/memory/lifecycle.py` 的 `reinforce` / `run_gc`，以及 `vibe_agent_runtime/vendor/src/memory/persistent.py` 的 `compute_importance` / `add`。
+
 **Q2：FTS5 和 BM25 有什么区别？**
 
 回答要点：FTS5 是 SQLite 全文索引，排序逻辑依赖内置 rank；BM25 是信息检索里的排序公式。如果项目没用专门 BM25 实现，不要硬说用过；可以说“当前用 FTS5，接下来可以切换 BM25 或向量召回”。
+
+代码位置：本项目实现是 `vibe_agent_runtime/vendor/src/memory/search_index.py`（SQLite FTS5 + CJK unigram/bigram），跨会话搜索在 `vibe_agent_runtime/vendor/src/session/search.py`。
 
 **Q3：记忆会不会泄露其他用户数据？**
 
 这里要诚实：当前 vendored runtime 的记忆路径基于运行 root，业务层还接入了用户维度的画像和策略上下文；但跨用户记忆隔离需要结合部署配置和权限面验证。面试时应说明你清楚这个风险。
 
+代码位置：`app/services/vibe_agent/paths.py`（`user_runtime_root` / `assert_within_user_scope` / `resolve_user_relative_path`），runtime 以 user/session 作为 `run_dir`。
+
 **Q4：为什么不用 MongoDB 存记忆？**
 
 当前文件型存储零依赖、适合本地单机；MongoDB 本身已经用于 sessions/tasks/events 元数据。如果规模上去了，可以迁移到按 user 的 Mongo 集合 + embedding 向量库。
+
+代码位置：文件型实现在 `vibe_agent_runtime/vendor/src/session/store.py` 和 `vibe_agent_runtime/vendor/src/memory/persistent.py`；Mongo 元数据在 `app/services/vibe_agent/service.py`。
 
 ---
 
@@ -438,17 +466,25 @@
 
 回答要点：Preset 是数据而不是代码；新增一个角色只需要加 YAML agent 和 task；上线前用 `inspect_preset` 做 dry-run 校验，能提前发现重复 id、未知依赖、模板变量缺失。
 
+代码位置：`vibe_agent_runtime/vendor/src/swarm/presets.py` 的 `load_preset` / `inspect_preset` / `build_run_from_preset`，YAML 样例在 `vibe_agent_runtime/vendor/src/swarm/presets/`。
+
 **Q2：怎么理解分层并行？**
 
 回答要点：`topological_layers` 把 task 按依赖分层，同一层可并行，不同层按拓扑依赖执行。这是 DAG 调度，不是全量并行。
+
+代码位置：`vibe_agent_runtime/vendor/src/swarm/task_store.py` 的 `validate_dag` / `topological_layers`，执行入口在 `vibe_agent_runtime/vendor/src/swarm/runtime.py` 的 `_execute_layer`。
 
 **Q3：下游 Agent 会引用上游 Agent 的幻觉数据吗？**
 
 回答要点：用 grounding block 和 hard rule 约束“数字必须来自工具或可信上下文”；下游如果引用上游，上游必须先说明来源。但本质上这是 prompt 约束加工具白名单，不是数学证明。
 
+代码位置：`vibe_agent_runtime/vendor/src/swarm/grounding.py` 的 `fetch_grounding_data` / `format_grounding_block`，worker prompt 组装在 `vibe_agent_runtime/vendor/src/swarm/worker.py` 的 `build_worker_prompt`，预取在 `vibe_agent_runtime/vendor/src/swarm/runtime.py` 的 `_prefetch_grounding_data`。
+
 **Q4：规模怎么扩展？**
 
 当前 `ThreadPoolExecutor` 适合单机；如果要扩展，可以把 SwarmRun 改成分布式任务队列，例如 Redis/Celery，或让每个 agent 单独进 worker，而不是线程。
+
+代码位置：当前线程池实现是 `vibe_agent_runtime/vendor/src/swarm/runtime.py` 的 `_execute_layer` + `vibe_agent_runtime/vendor/src/swarm/worker.py` 的 `run_worker`；任务持久化在 `vibe_agent_runtime/vendor/src/swarm/task_store.py`。
 
 ---
 
@@ -524,21 +560,31 @@
 
 回答要点：run 创建时保存 dataset version、case_content snapshot、scorer_config snapshot、judge_config、data_window；候选验证只允许 validation split，不能访问 test/holdout/production split。
 
+代码位置：`app/models/eval.py` 的 `RunSnapshot` / `EvalRun.snapshot`，创建 run 时固化在 `app/services/eval/runner_service.py` 的 `create_run`，case 解析固定用快照的 `_resolve_run_cases`；数据集版本发布在 `app/services/eval/dataset_service.py`。
+
 **Q2：pass@k 和 pass^k 的区别？**
 
 回答要点：pass@k 更接近“存在一次成功”，适合评估覆盖率；pass^k 要求 k 次全过，适合评估稳定性。公式来自组合计数，不是简单算平均值。trial=1 时信息量低。
+
+代码位置：`app/services/eval/metrics_service.py` 的 `compute_pass_at_k` / `_combination`。
 
 **Q3：为什么未启用 scorer 不能算低分？**
 
 回答要点：`ScoreStatus` 区分 passed/failed/skipped/not_configured/error；DeepEval/Ragas 等外部评分器未安装或未启用时显示 not_configured，避免污染聚合和 Release Gate。
 
+代码位置：`app/models/eval.py` 的 `ScoreStatus`，`app/services/eval/scorer_hub.py` 的 `list_scorers` / `score_trial`。
+
 **Q4：Bad Case 怎么回流？**
 
 回答要点：线上抽样或人工复核标记失败 -> 进入 Bad Case 池 -> 补充期望输出和评分标准 -> 转换为正式 case -> 加入指定数据集版本 -> 后续 run 覆盖该回归样本。
 
+代码位置：`app/services/eval/bad_case_service.py` 的 `create_from_failed_trial` / `convert_to_case` / `reflow_with_policy`，API 在 `app/routers/eval.py`；线上采样在 `app/services/eval/online_badcase_service.py`。
+
 **Q5：如果模型升级后评测集通过率上升，但线上变差怎么办？**
 
 回答要点：说明评测集可能没覆盖线上长尾；需要线上抽样回流、Bad Case 补充、Holdout 隔离、Release Gate、灰度观察和 rollback。这也是自进化闭环要解决的问题。
+
+代码位置：`app/services/eval/metrics_service.py` 的 `compare_runs`、`app/services/eval/bad_case_service.py` 的 `create_online_bad_case`、`app/routers/eval.py` 的 Release Gate，以及 `app/services/evolution/` 的验证与回流。
 
 ---
 
@@ -610,21 +656,31 @@
 
 回答要点：Agent 不能同时充当问题发现者、修改者和发布审批者；需要 allowlist、sandbox、固定验证集、人工 gate、change budget、版本锁、smoke test 和 rollback。
 
+代码位置：`app/services/evolution/proposal_service.py` 的 `_check_forbidden` / `_surface_to_artifact_type`，`app/services/evolution/governance_service.py` 的 `validate_target` / `validate_change_budget`，发布限定在 `app/services/evolution/artifact_registry.py` 和 `app/services/evolution/artifact_publisher.py`。
+
 **Q2：候选版本怎么保证真的被验证了？**
 
 回答要点：verification 创建 overlay context，runner 把 context 传入 runtime；runtime 读取 sandbox 内容并记录 loaded_files；production run 没有 overlay，只读取 active artifact。面试时不要只说“生成了 candidate”，要说“候选如何进入执行链路”。
+
+代码位置：`app/services/evolution/verification_service.py` 的 `run_verification` / `_create_sandbox` / `_compute_comparison`；overlay 进入 trial 在 `app/services/eval/runner_service.py` 的 `_session_config_for_trial`。
 
 **Q3：怎么避免对同一个问题无限生成 proposal？**
 
 回答要点：用 proposal fingerprint 去重、active duplicate 检查、cooldown、窗口锁和每日 run/cost budget；相同失败模式聚类后生成一个提案，而不是每个 trial 生成一个。
 
+代码位置：`app/services/evolution/governance_service.py` 的 `fingerprint` / `find_active_duplicate` / `check_cooldown`，触发侧在 `app/services/evolution/proposal_service.py` 的 `create_from_trigger`。
+
 **Q4：如何证明自进化真的有效？**
 
 回答要点：固定同一 dataset version、同一 scorer/rubric 版本，baseline/candidate 对照回放，比较 pass@k、pass^k、grounding、judge、安全、延迟、成本和新增 regression；验证集不能被当成测试集反复调参。
 
+代码位置：`app/services/evolution/verification_service.py` 的 `_compute_comparison`，`app/services/eval/metrics_service.py` 的 `compare_runs` / `compute_pass_at_k`，并用 `app/services/eval/runner_service.py` 的 `create_run` snapshot 固定版本。
+
 **Q5：你提到 10+ Bad Case、7 个候选版本，分别怎么解释？**
 
 建议准备一张表：Bad Case ID、失败类型、来源、对应 artifact、候选版本、验证 run、指标变化、是否发布。否则这两个数字很容易被认为是口号。
+
+代码位置：Bad Case 数据结构和来源在 `app/models/eval.py` 与 `app/services/eval/bad_case_service.py`，候选/基线对比在 `app/services/eval/metrics_service.py` 和 `app/services/evolution/verification_service.py`，发布版本与 receipt 在 `app/services/evolution/promote_service.py` / `receipt_service.py`。
 
 ---
 
@@ -696,17 +752,25 @@
 
 回答要点：优先使用 provider 返回的 usage metadata，缺失时才按字符长度估算；swarm worker 也遵循同一规则。要承认估算值不等于计费值，所以成本是“估算成本”。
 
+代码位置：`vibe_agent_runtime/vendor/src/agent/loop.py` 的 `_normalize_llm_usage` / `_record_llm_usage`，Swarm worker 在 `vibe_agent_runtime/vendor/src/swarm/worker.py` 的 `_estimate_tokens`。
+
 **Q2：上下文压缩会不会丢失正确信息？**
 
 回答要点：会，所以压缩不是简单截断。先做零成本折叠，再做结构化摘要，并保留最近 tail 和 grounding 记录；关键数值可以在需要时重新调用工具验证。
+
+代码位置：`vibe_agent_runtime/vendor/src/agent/loop.py` 的 `_microcompact` / `_context_collapse` / `_auto_compact` / `_fix_tool_pairs` / `_verification_ledger`。
 
 **Q3：怎么防止一次任务烧掉大量 token？**
 
 回答要点：任务超时、max iterations、max tokens、tool timeout、并发限制、取消能力；评测和自进化另有每日 run/cost budget。若做多租户，还要加用户级日预算和告警。
 
+代码位置：`vibe_agent_runtime/vendor/src/agent/loop.py` 的 `max_iterations`、tool/LLM timeout、stall watchdog；自进化预算在 `app/services/evolution/governance_service.py` 的 `assert_verification_budget` / `validate_change_budget`。
+
 **Q4：如果 provider 没有返回 usage，怎么处理？**
 
 回答要点：fallback 估算并打标，不让 0 token 掩盖真实消耗；在指标口径里说明是估算。更好的方案是统一接入 tokenizer 或代理层计费。
+
+代码位置：`vibe_agent_runtime/vendor/src/agent/loop.py` 的 `_record_llm_usage` 回退逻辑，`vibe_agent_runtime/vendor/src/swarm/worker.py` 的 `_estimate_tokens` 同样先读 `usage_metadata` 再估算。
 
 ---
 
@@ -740,6 +804,8 @@
 2. 把评测集的“人工真值、数据快照、时间窗口、scorer 版本”变成硬性约束，避免不可复盘；
 3. 把自进化的 overlay 从“prompt 注入”升级成真正的 artifact 加载边界，减少验证结果与生产不一致。
 
+代码位置：契约层看 `app/routers/vibe_agent.py`、`app/services/vibe_agent/service.py`、`app/services/vibe_agent/paths.py`；评测快照看 `app/models/eval.py` 和 `app/services/eval/runner_service.py`；overlay 硬化看 `app/services/evolution/verification_service.py` 和 `app/services/eval/runner_service.py`。
+
 **Q2：这个项目最可能出现哪个线上故障？**
 
 可以讲：
@@ -750,19 +816,27 @@
 - 评测数据版本漂移导致回归误判；
 - 自进化写回正式 artifact 但没有真正在验证时加载 candidate。
 
+代码位置：长任务失控看 `vibe_agent_runtime/vendor/src/agent/loop.py`；SSE 乱序/丢事件看 `app/services/vibe_agent/service.py`；文件状态和 Mongo 不一致看 `vibe_agent_runtime/vendor/src/session/store.py` 与 `app/services/vibe_agent/service.py`；版本漂移看 `app/services/eval/runner_service.py` 的 `create_run`；overlay 未真实加载看 `app/services/eval/runner_service.py` 的 `_session_config_for_trial` 与 `app/services/evolution/verification_service.py` 的 `run_verification`。
+
 **Q3：如何保证 LLM 输出安全？**
 
 回答结构：工具权限白名单 -> 高危工具禁用 -> system prompt 边界 -> grounding gate -> 安全评分器 -> 人工复核 -> Release Gate -> 线上抽样。不能只说“加了 Prompt”。
 
+代码位置：工具白名单在 `vibe_agent_runtime/policy.py`（`disabled_tool_names`）和 `vibe_agent_runtime/runtime.py`（`include_shell_tools=False`）；运行时 gate 在 `vibe_agent_runtime/vendor/src/agent/grounding.py`；评测安全分在 `app/services/eval/scorers/safety_scorer.py`；Release Gate 在 `app/routers/eval.py`。
+
 **Q4：如何做灰度发布？**
 
 回答方向：按用户/会话灰度；先 off 配置；用定时回归跑 golden set；对比 baseline/candidate 指标；线上抽样入 Bad Case；发现回退自动 rollback；发布 receipt 和版本关联。
+
+代码位置：版本切换和回滚在 `app/services/evolution/artifact_registry.py`、`app/services/evolution/promote_service.py`；线上观察在 `app/services/evolution/governance_service.py`（`evaluate_post_release` / `route_post_release_observation`）和 `app/services/eval/bad_case_service.py`。
 
 **Q5：你在这个项目里最大贡献是什么？**
 
 建议不要回答“写了很多接口”，而是给出一个有判断的答案：
 
 > 我在项目里不只实现了功能，更把“Agent 能不能跑”升级成“Agent 跑得好不好、有没有证据、能不能被验证、能不能安全更新”。核心贡献是评测平台、幻觉治理和受控自进化这条治理链路。
+
+代码位置：评测平台在 `app/services/eval/`（runner / scorer_hub / metrics_service / bad_case_service），幻觉治理在 `vibe_agent_runtime/vendor/src/agent/grounding.py` + scorer，受控自进化在 `app/services/evolution/`（trigger / proposal / verification / promote）。
 
 ---
 

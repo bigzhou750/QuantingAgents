@@ -1,7 +1,7 @@
 # 估值指标计算问题总结
 
-**日期**: 2025-10-26  
-**问题**: 三个数据源的 PS/PE 计算都存在问题  
+**日期**: 2025-10-26
+**问题**: 三个数据源的 PS/PE 计算都存在问题
 **严重程度**: 高（影响所有股票的估值指标）
 
 ---
@@ -178,47 +178,47 @@ if daily_basic is not None and not daily_basic.empty:
 def _calculate_ttm_from_tushare(income_statements: List[dict], field: str) -> Optional[float]:
     """
     从 Tushare 利润表数据计算 TTM
-    
+
     Args:
         income_statements: 利润表数据列表（按报告期倒序）
         field: 字段名（'total_revenue' 或 'n_income'）
-    
+
     Returns:
         TTM 值，如果无法计算则返回 None
     """
     if not income_statements or len(income_statements) < 1:
         return None
-    
+
     latest = income_statements[0]
     latest_period = latest.get('end_date')
     latest_value = latest.get(field)
-    
+
     if not latest_period or latest_value is None:
         return None
-    
+
     # 判断是否是年报
     if latest_period.endswith('1231'):
         return latest_value
-    
+
     # 非年报，需要计算 TTM
     # 查找最近年报和去年同期
     year = int(latest_period[:4])
     month_day = latest_period[4:]
-    
+
     last_annual_period = f"{year-1}1231"
     last_same_period = f"{year-1}{month_day}"
-    
+
     last_annual = next((x for x in income_statements if x.get('end_date') == last_annual_period), None)
     last_same = next((x for x in income_statements if x.get('end_date') == last_same_period), None)
-    
+
     if last_annual and last_same:
         last_annual_value = last_annual.get(field)
         last_same_value = last_same.get(field)
-        
+
         if last_annual_value is not None and last_same_value is not None:
             # TTM = 最近年报 + (本期 - 去年同期)
             return last_annual_value + (latest_value - last_same_value)
-    
+
     # 降级：简单年化
     if month_day == '0630':
         return latest_value * 2
@@ -226,7 +226,7 @@ def _calculate_ttm_from_tushare(income_statements: List[dict], field: str) -> Op
         return latest_value * 4
     elif month_day == '0930':
         return latest_value * 4 / 3
-    
+
     return None
 ```
 

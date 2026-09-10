@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢您对 TradingAgents-CN 项目的关注！我们欢迎各种形式的贡献，并为持续贡献者提供明确的成长路径和回报机制。
+感谢您对 zhitouagent 项目的关注！我们欢迎各种形式的贡献，并为持续贡献者提供明确的成长路径和回报机制。
 
 ---
 
@@ -155,8 +155,8 @@ test: 测试相关
 
 ### 1. 克隆仓库
 ```bash
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 ```
 
 ### 2. 创建虚拟环境
@@ -251,7 +251,7 @@ I have read and agree to the CLA.
 
 - **GitHub Issues**：问题报告和讨论
 - **GitHub Discussions**：社区交流
-- **邮箱**：hsliup@163.com
+- **邮箱**：zh75067197@gmail.com
 - **项目文档**：详细的开发指南
 
 ---

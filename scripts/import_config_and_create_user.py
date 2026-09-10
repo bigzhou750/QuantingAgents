@@ -4,7 +4,7 @@
 
 功能：
 1. 从导出的 JSON 文件导入配置数据到 MongoDB
-2. 创建默认管理员用户（admin/admin123）
+2. 使用 INITIAL_ADMIN_PASSWORD 创建管理员用户
 3. 支持选择性导入集合
 4. 支持覆盖或跳过已存在的数据
 
@@ -18,6 +18,7 @@ import json
 import sys
 import hashlib
 import re
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -47,7 +48,7 @@ def load_env_config(script_dir: Path) -> dict:
         'mongodb_port': 27017,  # 默认端口
         'mongodb_host': 'localhost',
         'mongodb_username': 'admin',
-        'mongodb_password': 'tradingagents123',
+        'mongodb_password': os.getenv('MONGODB_PASSWORD', ''),
         'mongodb_database': 'tradingagents',
         'mongodb_auth_source': 'admin',
         'mongodb_connection_string': None,
@@ -96,8 +97,8 @@ def load_env_config(script_dir: Path) -> dict:
 # 默认管理员用户
 DEFAULT_ADMIN = {
     "username": "admin",
-    "password": "admin123",
-    "email": "admin@tradingagents.cn"
+    "password": os.getenv("INITIAL_ADMIN_PASSWORD", ""),
+    "email": "zh75067197@gmail.com"
 }
 
 # 配置集合列表（按照导出顺序）
@@ -294,7 +295,7 @@ def connect_mongodb(use_docker: bool = True, config: dict = None) -> MongoClient
             'mongodb_port': 27017,
             'mongodb_host': 'localhost',
             'mongodb_username': 'admin',
-            'mongodb_password': 'tradingagents123',
+            'mongodb_password': os.getenv('MONGODB_PASSWORD', ''),
             'mongodb_database': 'tradingagents',
             'mongodb_auth_source': 'admin',
             'mongodb_connection_string': None,
@@ -400,6 +401,10 @@ def import_collection(
 def create_default_admin(db: Any, overwrite: bool = False) -> bool:
     """创建默认管理员用户"""
     print(f"\n👤 创建默认管理员用户...")
+
+    if not DEFAULT_ADMIN["password"]:
+        print("❌ 未配置 INITIAL_ADMIN_PASSWORD，跳过管理员创建")
+        return False
     
     users_collection = db.users
     
@@ -445,7 +450,6 @@ def create_default_admin(db: Any, overwrite: bool = False) -> bool:
     
     print(f"✅ 默认管理员用户创建成功")
     print(f"   用户名: {DEFAULT_ADMIN['username']}")
-    print(f"   密码: {DEFAULT_ADMIN['password']}")
     print(f"   邮箱: {DEFAULT_ADMIN['email']}")
     print(f"   角色: 管理员")
     
@@ -640,16 +644,13 @@ def main():
     print("=" * 80)
     
     if not args.skip_user:
-        print(f"\n🔐 登录信息:")
-        print(f"   用户名: {DEFAULT_ADMIN['username']}")
-        print(f"   密码: {DEFAULT_ADMIN['password']}")
+        print(f"\n🔐 管理员账号: {DEFAULT_ADMIN['username']}")
     
     print(f"\n📝 后续步骤:")
     print(f"   1. 重启后端服务: docker restart tradingagents-backend")
-    print(f"   2. 访问前端并使用默认账号登录")
+    print(f"   2. 访问前端并使用管理员账号登录")
     print(f"   3. 检查系统配置是否正确加载")
 
 
 if __name__ == "__main__":
     main()
-

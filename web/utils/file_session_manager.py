@@ -14,12 +14,12 @@ from pathlib import Path
 
 class FileSessionManager:
     """基于文件的会话管理器"""
-    
+
     def __init__(self):
         self.data_dir = Path("./data/sessions")
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_hours = 24  # 会话有效期24小时
-        
+
     def _get_browser_fingerprint(self) -> str:
         """生成浏览器指纹"""
         try:
@@ -60,17 +60,17 @@ class FileSessionManager:
             if hasattr(st, 'session_state'):
                 st.session_state.file_session_fingerprint = fingerprint
             return fingerprint
-    
+
     def _get_session_file_path(self, fingerprint: str) -> Path:
         """获取会话文件路径"""
         return self.data_dir / f"{fingerprint}.json"
-    
+
     def _cleanup_old_sessions(self):
         """清理过期的会话文件"""
         try:
             current_time = time.time()
             max_age_seconds = self.max_age_hours * 3600
-            
+
             for session_file in self.data_dir.glob("*.json"):
                 try:
                     # 检查文件修改时间
@@ -79,10 +79,10 @@ class FileSessionManager:
                         session_file.unlink()
                 except Exception:
                     continue
-                    
+
         except Exception:
             pass  # 清理失败不影响主要功能
-    
+
     def save_analysis_state(self, analysis_id: str, status: str = "running",
                            stock_symbol: str = "", market_type: str = "",
                            form_config: Dict[str, Any] = None):
@@ -107,7 +107,7 @@ class FileSessionManager:
             # 添加表单配置
             if form_config:
                 session_data["form_config"] = form_config
-            
+
             # 保存到文件
             with open(session_file, 'w', encoding='utf-8') as f:
                 json.dump(session_data, f, ensure_ascii=False, indent=2)
@@ -120,11 +120,11 @@ class FileSessionManager:
             st.session_state.session_fingerprint = fingerprint
 
             return True
-            
+
         except Exception as e:
             st.warning(f"⚠️ 保存会话状态失败: {e}")
             return False
-    
+
     def load_analysis_state(self) -> Optional[Dict[str, Any]]:
         """加载分析状态"""
         try:
@@ -147,36 +147,36 @@ class FileSessionManager:
                 return None
 
             return session_data
-            
+
         except Exception as e:
             st.warning(f"⚠️ 加载会话状态失败: {e}")
             return None
-    
+
     def clear_analysis_state(self):
         """清除分析状态"""
         try:
             fingerprint = self._get_browser_fingerprint()
             session_file = self._get_session_file_path(fingerprint)
-            
+
             # 删除文件
             if session_file.exists():
                 session_file.unlink()
-            
+
             # 清除session state
             keys_to_remove = ['current_analysis_id', 'analysis_running', 'last_stock_symbol', 'last_market_type', 'session_fingerprint']
             for key in keys_to_remove:
                 if key in st.session_state:
                     del st.session_state[key]
-            
+
         except Exception as e:
             st.warning(f"⚠️ 清除会话状态失败: {e}")
-    
+
     def get_debug_info(self) -> Dict[str, Any]:
         """获取调试信息"""
         try:
             fingerprint = self._get_browser_fingerprint()
             session_file = self._get_session_file_path(fingerprint)
-            
+
             debug_info = {
                 "fingerprint": fingerprint,
                 "session_file": str(session_file),
@@ -184,12 +184,12 @@ class FileSessionManager:
                 "data_dir": str(self.data_dir),
                 "session_state_keys": [k for k in st.session_state.keys() if 'analysis' in k.lower() or 'session' in k.lower()]
             }
-            
+
             # 统计会话文件数量
             session_files = list(self.data_dir.glob("*.json"))
             debug_info["total_session_files"] = len(session_files)
             debug_info["session_files"] = [f.name for f in session_files]
-            
+
             if session_file.exists():
                 try:
                     with open(session_file, 'r', encoding='utf-8') as f:
@@ -198,9 +198,9 @@ class FileSessionManager:
                     debug_info["age_hours"] = (time.time() - session_data.get("timestamp", 0)) / 3600
                 except Exception as e:
                     debug_info["file_error"] = str(e)
-            
+
             return debug_info
-            
+
         except Exception as e:
             return {"error": str(e)}
 
@@ -213,7 +213,7 @@ def get_persistent_analysis_id() -> Optional[str]:
         # 1. 首先检查session state
         if st.session_state.get('current_analysis_id'):
             return st.session_state.current_analysis_id
-        
+
         # 2. 检查文件会话数据
         session_data = file_session_manager.load_analysis_state()
         if session_data:
@@ -231,7 +231,7 @@ def get_persistent_analysis_id() -> Optional[str]:
                     st.session_state.form_config = session_data['form_config']
 
                 return analysis_id
-        
+
         # 3. 最后从Redis/文件恢复最新分析
         try:
             from .async_progress_tracker import get_latest_analysis_id
@@ -241,9 +241,9 @@ def get_persistent_analysis_id() -> Optional[str]:
                 return latest_id
         except Exception:
             pass
-        
+
         return None
-        
+
     except Exception as e:
         st.warning(f"⚠️ 获取持久化分析ID失败: {e}")
         return None
@@ -265,6 +265,6 @@ def set_persistent_analysis_id(analysis_id: str, status: str = "running",
 
         # 保存到文件会话
         file_session_manager.save_analysis_state(analysis_id, status, stock_symbol, market_type, form_config)
-        
+
     except Exception as e:
         st.warning(f"⚠️ 设置持久化分析ID失败: {e}")

@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """
-创建默认管理员用户
+创建管理员用户
 
 功能：
-- 创建默认管理员用户（admin/admin123）
+- 使用 INITIAL_ADMIN_PASSWORD 或显式参数创建管理员
 - 如果用户已存在，可选择覆盖或跳过
 
 使用方法：
-    python scripts/create_default_admin.py
+    INITIAL_ADMIN_PASSWORD=<强密码> python scripts/create_default_admin.py
     python scripts/create_default_admin.py --overwrite
-    python scripts/create_default_admin.py --username myuser --password mypass123
+    python scripts/create_default_admin.py --username myuser --password "<强密码>"
 """
 
 import sys
-import hashlib
 from datetime import datetime
 from pathlib import Path
 import argparse
+import os
+import bcrypt
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent
@@ -31,8 +32,8 @@ DB_NAME = "tradingagentscn"
 
 
 def hash_password(password: str) -> str:
-    """使用 SHA256 哈希密码（与系统一致）"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """使用 bcrypt 哈希密码（与后端系统一致）"""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
 
 
 def connect_mongodb() -> MongoClient:
@@ -106,7 +107,6 @@ def create_admin_user(
     
     print(f"✅ 管理员用户创建成功")
     print(f"   用户名: {username}")
-    print(f"   密码: {password}")
     print(f"   邮箱: {email}")
     print(f"   角色: 管理员")
     print(f"   配额: {user_doc['daily_quota']} 次/天")
@@ -153,8 +153,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  # 创建默认管理员（admin/admin123）
-  python scripts/create_default_admin.py
+  # 使用环境变量创建管理员
+  INITIAL_ADMIN_PASSWORD=<强密码> python scripts/create_default_admin.py
   
   # 覆盖已存在的用户
   python scripts/create_default_admin.py --overwrite
@@ -174,8 +174,8 @@ def main():
     )
     parser.add_argument(
         "--password",
-        default="admin123",
-        help="密码（默认: admin123）"
+        default=os.getenv("INITIAL_ADMIN_PASSWORD", ""),
+        help="密码（优先使用 INITIAL_ADMIN_PASSWORD 环境变量）"
     )
     parser.add_argument(
         "--email",
@@ -193,6 +193,10 @@ def main():
     )
     
     args = parser.parse_args()
+
+    if not args.list and not args.password:
+        print("❌ 必须通过 --password 或 INITIAL_ADMIN_PASSWORD 环境变量提供管理员初始密码")
+        sys.exit(1)
     
     # 设置默认邮箱
     if not args.email:
@@ -237,10 +241,6 @@ def main():
         print("✅ 操作完成！")
         print("=" * 80)
         print()
-        print("🔐 登录信息:")
-        print(f"   用户名: {args.username}")
-        print(f"   密码: {args.password}")
-        print()
         print("📝 后续步骤:")
         print("   1. 访问前端并使用上述账号登录")
         print("   2. 建议登录后立即修改密码")
@@ -248,4 +248,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

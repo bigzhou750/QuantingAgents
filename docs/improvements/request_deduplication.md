@@ -43,11 +43,11 @@ async def _get_hk_quote(self, code: str, force_refresh: bool = False) -> Dict:
         cached_data = self._check_cache(code)
         if cached_data:
             return cached_data
-    
+
     # 2. 🔥 获取锁（每个股票代码有独立的锁）
     request_key = f"HK_quote_{code}"
     lock = self._request_locks[request_key]
-    
+
     async with lock:
         # 3. 🔥 再次检查缓存（可能在等待锁的过程中，其他请求已经完成并缓存了数据）
         if not force_refresh:
@@ -55,13 +55,13 @@ async def _get_hk_quote(self, code: str, force_refresh: bool = False) -> Dict:
             if cached_data:
                 logger.info(f"⚡ [去重后] 从缓存获取: {code}")
                 return cached_data
-        
+
         # 4. 调用API获取数据
         data = await self._fetch_from_api(code)
-        
+
         # 5. 保存到缓存
         self._save_to_cache(code, data)
-        
+
         return data
 ```
 
@@ -125,7 +125,7 @@ async def test_concurrent_hk_quote_requests():
     code = '00700'
     tasks = [service._get_hk_quote(code) for _ in range(10)]
     results = await asyncio.gather(*tasks)
-    
+
     # 验证：只有1次API调用
     assert api_call_count == 1
     assert len(results) == 10
@@ -137,9 +137,9 @@ async def test_different_stocks_no_blocking():
     tasks = []
     for code in codes:
         tasks.extend([service._get_hk_quote(code) for _ in range(5)])
-    
+
     results = await asyncio.gather(*tasks)
-    
+
     # 验证：每个股票只调用1次API
     assert api_call_count['00700'] == 1
     assert api_call_count['00941'] == 1

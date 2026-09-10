@@ -41,23 +41,23 @@ class ChatDashScopeOpenAI(ChatOpenAI):
     阿里百炼 OpenAI 兼容适配器
     利用百炼模型的原生 OpenAI 兼容性，无需额外的工具转换
     """
-    
+
     def __init__(self, **kwargs):
         # 设置 DashScope OpenAI 兼容接口配置
         kwargs.setdefault("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         kwargs.setdefault("api_key", os.getenv("DASHSCOPE_API_KEY"))
         kwargs.setdefault("model", "qwen-turbo")
-        
+
         # 直接调用父类初始化
         super().__init__(**kwargs)
-    
+
     def _generate(self, *args, **kwargs):
         # 调用父类生成方法
         result = super()._generate(*args, **kwargs)
-        
+
         # 只保留 token 追踪功能
         # ... token tracking logic ...
-        
+
         return result
 ```
 
@@ -148,7 +148,7 @@ def bind_tools(self, tools, **kwargs):
 
 ---
 
-**文件位置**: `c:\code\TradingAgentsCN\tradingagents\llm_adapters\dashscope_openai_adapter.py`  
-**简化日期**: 2024年当前日期  
-**代码减少**: 326 行 (60% 减少)  
+**文件位置**: `c:\code\TradingAgentsCN\tradingagents\llm_adapters\dashscope_openai_adapter.py`
+**简化日期**: 2024年当前日期
+**代码减少**: 326 行 (60% 减少)
 **维护者**: TradingAgents 团队

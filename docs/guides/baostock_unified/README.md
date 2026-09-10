@@ -2,7 +2,7 @@
 
 ## 🎯 概述
 
-BaoStock统一数据源集成方案为TradingAgents-CN系统提供了完整的BaoStock数据支持，包括股票基础信息、历史K线数据、实时行情和财务数据的自动化同步功能。
+BaoStock统一数据源集成方案为zhitouagent系统提供了完整的BaoStock数据支持，包括股票基础信息、历史K线数据、实时行情和财务数据的自动化同步功能。
 
 ## 🏗️ 架构设计
 
@@ -49,13 +49,13 @@ graph TD
     B --> C[数据标准化]
     C --> D[MongoDB存储]
     D --> E[统一数据接口]
-    
+
     F[APScheduler] --> G[定时同步任务]
     G --> B
-    
+
     H[CLI工具] --> I[BaoStockInitService]
     I --> B
-    
+
     J[Web API] --> I
 ```
 
@@ -290,7 +290,7 @@ logs/tradingagents.log
    ```bash
    # 检查网络连接
    python cli/baostock_init.py --test-connection
-   
+
    # 检查BaoStock服务状态
    curl -X GET "http://localhost:8000/api/baostock-init/connection-test"
    ```
@@ -299,7 +299,7 @@ logs/tradingagents.log
    ```bash
    # 调整批处理大小
    BAOSTOCK_INIT_BATCH_SIZE=30
-   
+
    # 检查网络延迟
    ping -c 4 baostock.com
    ```
@@ -308,7 +308,7 @@ logs/tradingagents.log
    ```bash
    # 减少批处理大小
    BAOSTOCK_INIT_BATCH_SIZE=20
-   
+
    # 限制历史数据范围
    BAOSTOCK_INIT_HISTORICAL_DAYS=180
    ```
@@ -331,13 +331,13 @@ logs/tradingagents.log
    # 1. 配置环境变量
    cp .env.example .env
    # 编辑 .env 文件
-   
+
    # 2. 测试连接
    python cli/baostock_init.py --test-connection
-   
+
    # 3. 完整初始化
    python cli/baostock_init.py --full
-   
+
    # 4. 启动应用
    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
    ```
@@ -346,7 +346,7 @@ logs/tradingagents.log
    ```bash
    # 检查数据状态
    python cli/baostock_init.py --check-only
-   
+
    # 手动同步（如需要）
    python cli/baostock_init.py --basic-only
    ```
@@ -407,7 +407,7 @@ BaoStock与Tushare、AKShare形成三数据源架构：
 
 ## 🎉 总结
 
-BaoStock统一数据源集成方案为TradingAgents-CN系统提供了：
+BaoStock统一数据源集成方案为zhitouagent系统提供了：
 
 - ✅ **完整的数据覆盖**: 基础信息、行情、历史、财务数据
 - ✅ **自动化同步**: APScheduler定时任务，无需人工干预

@@ -1,9 +1,9 @@
 # 配置验证器实现文档
 
 > **实施日期**: 2025-10-05
-> 
+>
 > **实施阶段**: Phase 1 - 准备和清理（第1周）
-> 
+>
 > **相关文档**: `docs/configuration_optimization_plan.md`
 
 ---
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     setup_logging()
     logger = logging.getLogger("app.main")
-    
+
     # 验证启动配置
     try:
         from app.core.startup_validator import validate_startup_config
@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"配置验证失败: {e}")
         raise
-    
+
     await init_db()
     # ... 其他启动逻辑
 ```
@@ -175,7 +175,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ```
 ======================================================================
-📋 TradingAgents-CN 配置验证结果
+📋 zhitouagent 配置验证结果
 ======================================================================
 
 ✅ 所有必需配置已完成
@@ -189,7 +189,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ```
 ======================================================================
-📋 TradingAgents-CN 配置验证结果
+📋 zhitouagent 配置验证结果
 ======================================================================
 
 ❌ 缺少必需配置:
@@ -240,7 +240,7 @@ mv .env.backup .env
 ```bash
 .\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-**预期结果**: 
+**预期结果**:
 - 显示配置验证结果
 - 显示配置摘要
 - 正常启动服务

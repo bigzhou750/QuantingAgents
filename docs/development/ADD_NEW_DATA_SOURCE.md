@@ -23,9 +23,9 @@ tradingagents/constants/data_sources.py
 ```python
 class DataSourceCode(str, Enum):
     """数据源编码枚举"""
-    
+
     # ... 现有数据源 ...
-    
+
     # 添加新数据源
     YOUR_NEW_SOURCE = "your_new_source"  # 使用小写字母和下划线
 ```
@@ -44,7 +44,7 @@ class DataSourceCode(str, Enum):
 ```python
 DATA_SOURCE_REGISTRY: Dict[str, DataSourceInfo] = {
     # ... 现有数据源 ...
-    
+
     # 注册新数据源
     DataSourceCode.YOUR_NEW_SOURCE: DataSourceInfo(
         code=DataSourceCode.YOUR_NEW_SOURCE,
@@ -90,7 +90,7 @@ DATA_SOURCE_REGISTRY: Dict[str, DataSourceInfo] = {
 class DataSourceType(str, Enum):
     """数据源类型枚举"""
     # ... 现有数据源 ...
-    
+
     # 添加新数据源（使用统一编码）
     YOUR_NEW_SOURCE = "your_new_source"
 ```
@@ -122,26 +122,26 @@ logger = get_logger("default")
 
 class YourNewSourceProvider:
     """YourNewSource 数据提供器"""
-    
+
     def __init__(self, api_key: Optional[str] = None):
         """
         初始化
-        
+
         Args:
             api_key: API 密钥
         """
         self.api_key = api_key
         self.base_url = "https://api.example.com"
-    
+
     def get_stock_data(self, symbol: str, start_date: str, end_date: str) -> Dict[str, Any]:
         """
         获取股票历史数据
-        
+
         Args:
             symbol: 股票代码
             start_date: 开始日期（YYYY-MM-DD）
             end_date: 结束日期（YYYY-MM-DD）
-        
+
         Returns:
             股票数据字典
         """
@@ -153,17 +153,17 @@ class YourNewSourceProvider:
                 "end": end_date,
                 "apikey": self.api_key
             }
-            
+
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
-            
+
             data = response.json()
             logger.info(f"✅ [YourNewSource] 获取 {symbol} 数据成功")
             return data
         except Exception as e:
             logger.error(f"❌ [YourNewSource] 获取 {symbol} 数据失败: {e}")
             raise
-    
+
     # 实现其他必要的方法...
 
 
@@ -202,9 +202,9 @@ class ChinaDataSource(Enum):
 def _check_available_sources(self) -> List[ChinaDataSource]:
     """检查可用的数据源"""
     available = []
-    
+
     # ... 现有检测逻辑 ...
-    
+
     # 检查新数据源
     try:
         from .providers.china.your_new_source import get_your_new_source_provider
@@ -214,7 +214,7 @@ def _check_available_sources(self) -> List[ChinaDataSource]:
             logger.info("✅ YourNewSource 数据源可用")
     except Exception as e:
         logger.warning(f"⚠️ YourNewSource 数据源不可用: {e}")
-    
+
     return available
 ```
 
@@ -226,12 +226,12 @@ def _get_your_new_source_data(self, symbol: str, start_date: str, end_date: str,
     try:
         from .providers.china.your_new_source import get_your_new_source_provider
         provider = get_your_new_source_provider()
-        
+
         data = provider.get_stock_data(symbol, start_date, end_date)
-        
+
         # 转换为标准格式
         # ... 数据转换逻辑 ...
-        
+
         return formatted_data
     except Exception as e:
         logger.error(f"❌ YourNewSource 获取数据失败: {e}")
@@ -244,7 +244,7 @@ def _get_your_new_source_data(self, symbol: str, start_date: str, end_date: str,
 def _get_data_source_priority_order(self, symbol: Optional[str] = None) -> List[ChinaDataSource]:
     """从数据库获取数据源优先级顺序"""
     # ...
-    
+
     # 转换为 ChinaDataSource 枚举
     source_mapping = {
         'tushare': ChinaDataSource.TUSHARE,
@@ -252,7 +252,7 @@ def _get_data_source_priority_order(self, symbol: Optional[str] = None) -> List[
         'baostock': ChinaDataSource.BAOSTOCK,
         'your_new_source': ChinaDataSource.YOUR_NEW_SOURCE,  # 添加新数据源
     }
-    
+
     # ...
 ```
 
@@ -262,16 +262,16 @@ def _get_data_source_priority_order(self, symbol: Optional[str] = None) -> List[
 def _try_fallback_sources(self, symbol: str, start_date: str, end_date: str, period: str = "daily") -> str:
     """尝试备用数据源"""
     # ...
-    
+
     for source in fallback_order:
         if source != self.current_source and source in self.available_sources:
             try:
                 # ... 现有数据源 ...
-                
+
                 # 添加新数据源
                 elif source == ChinaDataSource.YOUR_NEW_SOURCE:
                     result = self._get_your_new_source_data(symbol, start_date, end_date, period)
-                
+
                 # ...
 ```
 
@@ -394,7 +394,7 @@ class PolygonProvider:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://api.polygon.io"
-    
+
     def get_stock_data(self, symbol: str, start_date: str, end_date: str):
         # 实现数据获取逻辑
         pass

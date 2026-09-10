@@ -30,7 +30,7 @@ def init_logging(config_override: Optional[dict] = None) -> None:
     logger = get_logger('tradingagents.init')
     
     # 记录初始化信息
-    logger.info("🚀 TradingAgents-CN 日志系统初始化完成")
+    logger.info("🚀 zhitouagent 日志系统初始化完成")
     logger.info(f"📁 日志目录: {logger_manager.config.get('handlers', {}).get('file', {}).get('directory', 'N/A')}")
     logger.info(f"📊 日志级别: {logger_manager.config.get('level', 'INFO')}")
     
@@ -91,7 +91,7 @@ def log_startup_info():
     logger = get_logger('tradingagents.startup')
     
     logger.info("=" * 60)
-    logger.info("🎯 TradingAgents-CN 启动")
+    logger.info("🎯 zhitouagent 启动")
     logger.info("=" * 60)
     
     # 系统信息
@@ -102,8 +102,8 @@ def log_startup_info():
     # 环境信息
     env_info = {
         'DOCKER_CONTAINER': os.getenv('DOCKER_CONTAINER', 'false'),
-        'TRADINGAGENTS_LOG_LEVEL': os.getenv('TRADINGAGENTS_LOG_LEVEL', 'INFO'),
-        'TRADINGAGENTS_LOG_DIR': os.getenv('TRADINGAGENTS_LOG_DIR', './logs'),
+        'ZHITOUAGENT_LOG_LEVEL': os.getenv('ZHITOUAGENT_LOG_LEVEL', 'INFO'),
+        'ZHITOUAGENT_LOG_DIR': os.getenv('ZHITOUAGENT_LOG_DIR', './logs'),
     }
     
     for key, value in env_info.items():
@@ -117,7 +117,7 @@ def log_shutdown_info():
     logger = get_logger('tradingagents.shutdown')
     
     logger.info("=" * 60)
-    logger.info("🛑 TradingAgents-CN 关闭")
+    logger.info("🛑 zhitouagent 关闭")
     logger.info("=" * 60)
 
 

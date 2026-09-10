@@ -16,7 +16,7 @@ graph TD
         RESMGR[研究经理]
         RISKMGR[风险经理]
     end
-    
+
     subgraph "分析层 (Analysis Layer)"
         FA[基本面分析师]
         MA[市场分析师]
@@ -24,36 +24,36 @@ graph TD
         SA[社交媒体分析师]
         CA[中国市场分析师]
     end
-    
+
     subgraph "研究层 (Research Layer)"
         BR[看涨研究员]
         BEAR[看跌研究员]
     end
-    
+
     subgraph "执行层 (Execution Layer)"
         TRADER[交易员]
     end
-    
+
     subgraph "风险层 (Risk Layer)"
         CONSERVATIVE[保守辩论者]
         NEUTRAL[中性辩论者]
         AGGRESSIVE[激进辩论者]
     end
-    
+
     %% 数据流向
     分析层 --> 研究层
     研究层 --> 执行层
     执行层 --> 风险层
     风险层 --> 管理层
     管理层 --> 分析层
-    
+
     %% 样式定义
     classDef analysisNode fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef researchNode fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef executionNode fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef riskNode fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef managementNode fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-    
+
     class FA,MA,NA,SA,CA analysisNode
     class BR,BEAR researchNode
     class TRADER executionNode
@@ -81,23 +81,23 @@ from langgraph.graph import MessagesState
 
 class AgentState(MessagesState):
     """智能体状态管理类 - 继承自 LangGraph MessagesState"""
-    
+
     # 基础信息
     company_of_interest: Annotated[str, "目标分析公司股票代码"]
     trade_date: Annotated[str, "交易日期"]
     sender: Annotated[str, "发送消息的智能体"]
-    
+
     # 分析师报告
     market_report: Annotated[str, "市场分析师报告"]
     sentiment_report: Annotated[str, "社交媒体分析师报告"]
     news_report: Annotated[str, "新闻分析师报告"]
     fundamentals_report: Annotated[str, "基本面分析师报告"]
-    
+
     # 研究和决策
     investment_debate_state: Annotated[InvestDebateState, "投资辩论状态"]
     investment_plan: Annotated[str, "投资计划"]
     trader_investment_plan: Annotated[str, "交易员投资计划"]
-    
+
     # 风险管理
     risk_debate_state: Annotated[RiskDebateState, "风险辩论状态"]
     final_trade_decision: Annotated[str, "最终交易决策"]
@@ -152,27 +152,27 @@ def create_fundamentals_analyst(llm, toolkit):
     def fundamentals_analyst_node(state):
         """基本面分析师节点实现"""
         logger = get_logger("default")
-        
+
         # 获取输入参数
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
-        
+
         # 股票类型检测
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(ticker)
-        
+
         # 选择合适的分析工具
         if toolkit.config["online_tools"]:
             tools = [toolkit.get_stock_fundamentals_unified]
         else:
             # 离线模式工具选择
             tools = [toolkit.get_fundamentals_openai]
-        
+
         # 执行分析逻辑
         # ...
-        
+
         return state
-    
+
     return fundamentals_analyst_node
 ```
 
@@ -188,7 +188,7 @@ def create_market_analyst(llm, toolkit):
         # 技术分析和市场趋势分析
         # ...
         return state
-    
+
     return market_analyst_node
 ```
 
@@ -204,7 +204,7 @@ def create_news_analyst(llm, toolkit):
         # 新闻情绪分析和事件影响评估
         # ...
         return state
-    
+
     return news_analyst_node
 ```
 
@@ -220,7 +220,7 @@ def create_social_media_analyst(llm, toolkit):
         # 社交媒体情绪分析
         # ...
         return state
-    
+
     return social_media_analyst_node
 ```
 
@@ -236,7 +236,7 @@ def create_china_market_analyst(llm, toolkit):
         # 专门针对中国A股市场的分析
         # ...
         return state
-    
+
     return china_market_analyst_node
 ```
 
@@ -253,7 +253,7 @@ def create_bull_researcher(llm):
         # 基于分析师报告生成看涨观点
         # ...
         return state
-    
+
     return bull_researcher_node
 ```
 
@@ -268,7 +268,7 @@ def create_bear_researcher(llm):
         # 基于分析师报告生成看跌观点
         # ...
         return state
-    
+
     return bear_researcher_node
 ```
 
@@ -287,24 +287,24 @@ def create_trader(llm, memory):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
-        
+
         # 股票类型检测
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(company_name)
-        
+
         # 货币单位确定
         currency = market_info['currency_name']
         currency_symbol = market_info['currency_symbol']
-        
+
         # 历史记忆检索
         if memory is not None:
             past_memories = memory.get_memories(curr_situation, n_matches=2)
-        
+
         # 生成交易决策
         # ...
-        
+
         return state
-    
+
     return trader_node
 ```
 
@@ -321,7 +321,7 @@ def create_conservative_debator(llm):
         # 保守的风险评估观点
         # ...
         return state
-    
+
     return conservative_debator_node
 ```
 
@@ -336,7 +336,7 @@ def create_neutral_debator(llm):
         # 中性的风险评估观点
         # ...
         return state
-    
+
     return neutral_debator_node
 ```
 
@@ -351,7 +351,7 @@ def create_aggressive_debator(llm):
         # 激进的风险评估观点
         # ...
         return state
-    
+
     return aggressive_debator_node
 ```
 
@@ -368,7 +368,7 @@ def create_research_manager(llm):
         # 协调研究员辩论，形成投资计划
         # ...
         return state
-    
+
     return research_manager_node
 ```
 
@@ -383,7 +383,7 @@ def create_risk_manager(llm):
         # 协调风险辩论，做出最终决策
         # ...
         return state
-    
+
     return risk_manager_node
 ```
 
@@ -396,20 +396,20 @@ def create_risk_manager(llm):
 ```python
 class ToolKit:
     """统一工具包"""
-    
+
     def __init__(self, config):
         self.config = config
-    
+
     # 基本面分析工具
     def get_stock_fundamentals_unified(self, ticker: str):
         """统一基本面分析工具，自动识别股票类型"""
         pass
-    
+
     # 市场数据工具
     def get_market_data(self, ticker: str):
         """获取市场数据"""
         pass
-    
+
     # 新闻数据工具
     def get_news_data(self, ticker: str):
         """获取新闻数据"""
@@ -479,11 +479,11 @@ print(f"货币: {market_info['currency_name']}")
 ```python
 class Memory:
     """智能体记忆管理"""
-    
+
     def get_memories(self, query: str, n_matches: int = 2):
         """检索相关历史记忆"""
         pass
-    
+
     def add_memory(self, content: str, metadata: dict):
         """添加新记忆"""
         pass
@@ -496,7 +496,7 @@ class Memory:
 ```python
 class GoogleToolCallHandler:
     """Google AI 工具调用处理器"""
-    
+
     def handle_tool_calls(self, response, tools, state):
         """处理Google AI的工具调用"""
         pass
@@ -537,7 +537,7 @@ def create_custom_analyst(llm, toolkit):
     def custom_analyst_node(state):
         # 自定义分析逻辑
         return state
-    
+
     return custom_analyst_node
 ```
 

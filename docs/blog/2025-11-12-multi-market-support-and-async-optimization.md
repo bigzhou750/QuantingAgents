@@ -1,7 +1,7 @@
 # 多市场支持与异步事件循环优化
 
-**日期**: 2025-11-12  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-11-12
+**作者**: zhitouagent 开发团队
 **标签**: `多市场支持` `港股` `美股` `异步优化` `事件循环` `模拟交易` `Bug修复`
 
 ---
@@ -188,7 +188,7 @@ def get_hk_stock_info_cached(symbol: str) -> Dict:
             cached_data, timestamp = _hk_stock_cache[symbol]
             if time.time() - timestamp < CACHE_EXPIRY:
                 return cached_data
-        
+
         # 获取新数据
         data = fetch_hk_stock_info(symbol)
         _hk_stock_cache[symbol] = (data, time.time())
@@ -224,7 +224,7 @@ def get_hk_stock_info_cached(symbol: str) -> Dict:
 
 ```vue
 <!-- frontend/src/views/Stocks/Detail.vue -->
-<el-button 
+<el-button
   v-if="market !== 'HK' && market !== 'US'"
   @click="syncData"
 >
@@ -310,24 +310,24 @@ def _trigger_data_sync_sync(self, ...):
 ```python
 # tradingagents/utils/stock_validator.py
 async def prepare_stock_data_async(stock_code: str, market_type: str = "auto",
-                                   period_days: int = None, 
+                                   period_days: int = None,
                                    analysis_date: str = None) -> StockDataPreparationResult:
     """
     异步版本：预获取和验证股票数据
-    
+
     🔥 专门用于 FastAPI 异步上下文，避免事件循环冲突
     """
     preparer = get_stock_preparer()
-    
+
     # 1. 基本格式验证
     format_result = preparer._validate_format(stock_code, market_type)
     if not format_result.is_valid:
         return format_result
-    
+
     # 2. 自动检测市场类型
     if market_type == "auto":
         market_type = preparer._detect_market_type(stock_code)
-    
+
     # 3. 预获取数据并验证（使用异步版本）
     return await preparer._prepare_data_by_market_async(
         stock_code, market_type, period_days, analysis_date
@@ -338,7 +338,7 @@ async def prepare_stock_data_async(stock_code: str, market_type: str = "auto",
 
 ```python
 async def _prepare_data_by_market_async(self, stock_code: str, market_type: str,
-                                       period_days: int, 
+                                       period_days: int,
                                        analysis_date: str) -> StockDataPreparationResult:
     """根据市场类型预获取数据（异步版本）"""
     if market_type == "A股":
@@ -354,21 +354,21 @@ async def _prepare_data_by_market_async(self, stock_code: str, market_type: str,
 3. **创建异步版本的A股数据准备函数**（`9316d4b`）：
 
 ```python
-async def _prepare_china_stock_data_async(self, stock_code: str, 
+async def _prepare_china_stock_data_async(self, stock_code: str,
                                          period_days: int,
                                          analysis_date: str) -> StockDataPreparationResult:
     """预获取A股数据（异步版本），包含数据库检查和自动同步"""
-    
+
     # 检查数据库
     db_check_result = self._check_database_data(stock_code, start_date, end_date)
-    
+
     # 如果需要同步，使用异步方法
     if not db_check_result["has_data"] or not db_check_result["is_latest"]:
         # 🔥 直接调用异步方法，不创建新的事件循环
         sync_result = await self._trigger_data_sync_async(
             stock_code, start_date, end_date
         )
-    
+
     # 获取数据并返回结果
     ...
 ```

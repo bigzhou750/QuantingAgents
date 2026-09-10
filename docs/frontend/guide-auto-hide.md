@@ -26,7 +26,7 @@
 ```python
 # 默认显示逻辑
 default_show_guide = not (
-    st.session_state.get('analysis_running', False) or 
+    st.session_state.get('analysis_running', False) or
     st.session_state.get('analysis_results') is not None
 )
 

@@ -4,10 +4,10 @@
     <div class="hero-section">
       <div class="hero-content">
         <div class="hero-text">
-          <h1 class="hero-title">智投</h1>
-          <p class="hero-subtitle">AI智能股票分析平台</p>
+          <h1 class="hero-title">智能投研助手</h1>
+          <p class="hero-subtitle">zhitouagent · AI 投资研究工作台</p>
           <p class="hero-description">
-            基于先进的多智能体AI技术，覆盖A股、美股、港股，为投资者提供全方位的分析视角。
+            面向研究与学习，整理 A 股、港股、美股的公开信息，提供多角度分析、研究对话和可追溯的分析报告。
           </p>
           <div class="hero-actions">
             <el-button type="primary" size="large" @click="goToAnalysis">
@@ -22,7 +22,8 @@
     <!-- Footer -->
     <div class="footer-section">
       <div class="footer-content">
-        <p>&copy; 2025 智投. All rights reserved.</p>
+        <p>&copy; 2026 智能投研助手 · zhitouagent. 保留所有权利。</p>
+        <p>支持：<a href="mailto:zh75067197@gmail.com">zh75067197@gmail.com</a></p>
       </div>
     </div>
   </div>

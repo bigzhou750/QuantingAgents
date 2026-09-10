@@ -36,7 +36,7 @@ def fetch_daily_basic_mv_map(trade_date: str) -> Dict[str, Dict[str, float]]:
 
     fields = "ts_code,total_mv,circ_mv,pe,pb,turnover_rate,volume_ratio,pe_ttm,pb_mrq"
     db = api.daily_basic(trade_date=trade_date, fields=fields)
-    
+
     # 解析数据...
 ```
 
@@ -58,19 +58,19 @@ def fetch_daily_basic_mv_map(trade_date: str) -> Dict[str, Dict[str, float]]:
 class BasicsSyncService:
     async def run_full_sync(self, force: bool = False) -> Dict[str, Any]:
         """Run a full sync. If already running, return current status unless force."""
-        
+
         # Step 1: 获取股票基本信息列表
         stock_df = await asyncio.to_thread(self._fetch_stock_basic_df)
-        
+
         # Step 2: 获取最近交易日
         latest_trade_date = await asyncio.to_thread(self._find_latest_trade_date)
-        
+
         # Step 3: 获取该交易日的 PE/PB 等指标
         daily_data_map = await asyncio.to_thread(
-            self._fetch_daily_basic_mv_map, 
+            self._fetch_daily_basic_mv_map,
             latest_trade_date
         )
-        
+
         # Step 4: 更新到 MongoDB stock_basic_info 集合
         # ...
 ```

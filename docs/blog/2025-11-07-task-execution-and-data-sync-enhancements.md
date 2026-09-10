@@ -1,7 +1,7 @@
 # 任务执行控制与数据同步功能增强
 
-**日期**: 2025-11-07  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-11-07
+**作者**: zhitouagent 开发团队
 **标签**: `任务执行` `数据同步` `基本数据` `LLM配置` `性能优化` `Bug修复`
 
 ---
@@ -259,15 +259,15 @@ messages = [msg for msg in messages if not isinstance(msg, ToolMessage)]
 # 自动创建索引
 def ensure_indexes(self):
     """确保所有必要的索引都已创建"""
-    
+
     # 股票基本信息索引
     self.db.stock_basic_info.create_index("symbol", unique=True)
     self.db.stock_basic_info.create_index("name")
-    
+
     # 日线数据索引
     self.db.stock_daily_quotes.create_index([("symbol", 1), ("date", -1)])
     self.db.stock_daily_quotes.create_index("data_source")
-    
+
     # 自选股索引
     self.db.user_favorites.create_index([("user_id", 1), ("symbol", 1)])
 ```

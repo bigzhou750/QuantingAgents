@@ -37,7 +37,7 @@ return {
     "messages": [AIMessage(content=analysis_result)]
 }
 
-# 修复后  
+# 修复后
 return {
     "messages": [AIMessage(content=analysis_result)],
     "news_report": analysis_result
@@ -68,10 +68,10 @@ if not has_tool_calls and not has_main_tool_call:
 def bind_tools(self, tools):
     """
     绑定工具到LLM
-    
+
     Args:
         tools: 工具列表
-        
+
     Returns:
         绑定了工具的LLM实例
     """
@@ -105,7 +105,7 @@ def bind_tools(self, tools):
 ```
 由于当前可用的工具均需要额外的参数（如日期或查询词），无法直接获取新闻数据。
 请提供以下信息之一：
-- 查询日期范围  
+- 查询日期范围
 - 查询关键词
 ```
 
@@ -127,7 +127,7 @@ def bind_tools(self, tools):
 ## 总结
 通过以上三个关键修复：
 1. 修复了DashScope模型预处理模式的返回值问题
-2. 为非DashScope模型添加了完整的工具调用失败补救机制  
+2. 为非DashScope模型添加了完整的工具调用失败补救机制
 3. 为DeepSeekAdapter添加了必要的bind_tools方法支持
 
 成功解决了DeepSeek模型在新闻分析时返回错误提示的问题，现在能够正常生成高质量的新闻分析报告。

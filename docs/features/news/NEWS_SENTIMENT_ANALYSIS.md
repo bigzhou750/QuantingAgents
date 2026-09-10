@@ -109,14 +109,14 @@
     "source": "东方财富",                   # 新闻来源
     "author": "张三",                      # 作者
     "publish_time": "2025-09-30 10:00:00", # 发布时间
-    
+
     # 分析结果
     "category": "company_announcement",     # 新闻分类
     "sentiment": "positive",                # 情绪类型
     "sentiment_score": 0.75,                # 情绪分数
     "keywords": ["业绩", "增长", "盈利"],   # 关键词列表
     "importance": "high",                   # 重要性级别
-    
+
     "data_source": "akshare"                # 数据源
 }
 ```

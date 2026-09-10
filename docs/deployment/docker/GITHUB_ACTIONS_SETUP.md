@@ -22,7 +22,7 @@
 3. 左侧菜单选择 **Security**
 4. 点击 **New Access Token**
 5. 填写信息：
-   - **Access Token Description**: `GitHub Actions - TradingAgents-CN`
+   - **Access Token Description**: `GitHub Actions - zhitouagent`
    - **Access permissions**: 选择 **Read, Write, Delete**
 6. 点击 **Generate**
 7. **重要**：复制生成的 token（只显示一次，请妥善保存）
@@ -33,7 +33,7 @@
 
 ### 1. 打开仓库设置
 
-1. 访问您的 GitHub 仓库：`https://github.com/YOUR_USERNAME/TradingAgents-CN`
+1. 访问您的 GitHub 仓库：`https://github.com/YOUR_USERNAME/zhitouagent`
 2. 点击 **Settings** 标签
 3. 左侧菜单选择 **Secrets and variables** → **Actions**
 
@@ -196,7 +196,7 @@ Manifests:
   Name:      your-username/tradingagents-backend:latest@sha256:...
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/amd64
-  
+
   Name:      your-username/tradingagents-backend:latest@sha256:...
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/arm64
@@ -226,7 +226,7 @@ services:
   backend:
     image: your-username/tradingagents-backend:latest
     # ...
-  
+
   frontend:
     image: your-username/tradingagents-frontend:latest
     # ...
@@ -380,11 +380,11 @@ strategy:
 
 通过 GitHub Actions 自动构建，您可以：
 
-✅ **自动化发布**：推送 tag 即可自动构建和发布镜像  
-✅ **多架构支持**：一次构建，支持 amd64 和 arm64  
-✅ **缓存加速**：利用 GitHub Actions 缓存，加速后续构建  
-✅ **版本管理**：自动生成多个版本标签（latest、v1.0.0、1.0 等）  
-✅ **无需本地构建**：不占用本地服务器资源和磁盘空间  
+✅ **自动化发布**：推送 tag 即可自动构建和发布镜像
+✅ **多架构支持**：一次构建，支持 amd64 和 arm64
+✅ **缓存加速**：利用 GitHub Actions 缓存，加速后续构建
+✅ **版本管理**：自动生成多个版本标签（latest、v1.0.0、1.0 等）
+✅ **无需本地构建**：不占用本地服务器资源和磁盘空间
 ✅ **免费使用**：GitHub Actions 对公开仓库免费（每月 2000 分钟）
 
 现在，您只需要专注于开发代码，推送 tag 后，GitHub Actions 会自动帮您构建和发布 Docker 镜像！🚀

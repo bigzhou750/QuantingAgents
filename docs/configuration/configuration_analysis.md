@@ -1,9 +1,9 @@
-# TradingAgents-CN 配置管理全面分析
+# zhitouagent 配置管理全面分析
 
 > **文档目的**: 全面梳理系统中所有配置管理相关的代码、存储位置、优先级和使用方式，为后续代码优化和整理提供参考。
-> 
+>
 > **生成时间**: 2025-10-04
-> 
+>
 > **版本**: v0.1.16
 
 ---
@@ -26,7 +26,7 @@
 
 ### 1.1 配置管理系统架构
 
-TradingAgents-CN 系统存在**多套配置管理系统**，分别服务于不同的模块：
+zhitouagent 系统存在**多套配置管理系统**，分别服务于不同的模块：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -77,8 +77,8 @@ TradingAgents-CN 系统存在**多套配置管理系统**，分别服务于不�
 
 #### 2.1.1 环境变量文件
 
-**文件**: `.env`  
-**模板**: `.env.example`  
+**文件**: `.env`
+**模板**: `.env.example`
 **用途**: 存储敏感信息和系统级配置
 
 **主要配置项**:
@@ -186,7 +186,7 @@ BAOSTOCK_UNIFIED_ENABLED=true
 
 #### 2.2.2 Redis存储
 
-**用途**: 
+**用途**:
 - 会话管理
 - 实时缓存
 - PubSub通知
@@ -200,7 +200,7 @@ BAOSTOCK_UNIFIED_ENABLED=true
 
 #### 2.3.1 LocalStorage
 
-**存储位置**: 浏览器 LocalStorage  
+**存储位置**: 浏览器 LocalStorage
 **管理**: Pinia Store + VueUse
 
 **存储项**:
@@ -259,7 +259,7 @@ async def get_effective_system_settings(self) -> Dict[str, Any]:
     # 1. 从数据库加载基础配置
     cfg = await config_service.get_system_config()
     base = dict(cfg.system_settings) if cfg else {}
-    
+
     # 2. 环境变量覆盖数据库配置
     merged = dict(base)
     for k, v in base.items():
@@ -272,7 +272,7 @@ async def get_effective_system_settings(self) -> Dict[str, Any]:
             if env_key in os.environ:
                 merged[k] = os.environ[env_key]
                 break
-    
+
     return merged
 ```
 
@@ -294,8 +294,8 @@ async def get_effective_system_settings(self) -> Dict[str, Any]:
 
 #### 4.1.1 Settings (Pydantic)
 
-**文件**: `app/core/config.py`  
-**类**: `Settings`  
+**文件**: `app/core/config.py`
+**类**: `Settings`
 **用途**: 应用级配置，从环境变量加载
 
 **特点**:
@@ -311,25 +311,25 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=True)
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
-    
+
     # 数据库配置
     MONGODB_HOST: str = Field(default="localhost")
     MONGODB_PORT: int = Field(default=27017)
     REDIS_HOST: str = Field(default="localhost")
     REDIS_PORT: int = Field(default=6379)
-    
+
     # JWT配置
     JWT_SECRET: str = Field(default="change-me-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
-    
+
     # 队列配置
     QUEUE_MAX_SIZE: int = Field(default=10000)
     WORKER_HEARTBEAT_INTERVAL: int = Field(default=30)
-    
+
     # SSE配置
     SSE_POLL_TIMEOUT_SECONDS: float = Field(default=1.0)
     SSE_HEARTBEAT_INTERVAL_SECONDS: int = Field(default=10)
-    
+
     # 数据同步配置
     TUSHARE_UNIFIED_ENABLED: bool = Field(default=True)
     AKSHARE_UNIFIED_ENABLED: bool = Field(default=True)
@@ -338,8 +338,8 @@ class Settings(BaseSettings):
 
 #### 4.1.2 ConfigManager (TradingAgents)
 
-**文件**: `tradingagents/config/config_manager.py`  
-**类**: `ConfigManager`  
+**文件**: `tradingagents/config/config_manager.py`
+**类**: `ConfigManager`
 **用途**: 管理 TradingAgents 库的配置（旧格式）
 
 **功能**:
@@ -357,8 +357,8 @@ class Settings(BaseSettings):
 
 #### 4.1.3 UnifiedConfigManager
 
-**文件**: `app/core/unified_config.py`  
-**类**: `UnifiedConfigManager`  
+**文件**: `app/core/unified_config.py`
+**类**: `UnifiedConfigManager`
 **用途**: 统一配置管理，整合多个配置源
 
 **功能**:
@@ -369,8 +369,8 @@ class Settings(BaseSettings):
 
 #### 4.1.4 ConfigService
 
-**文件**: `app/services/config_service.py`  
-**类**: `ConfigService`  
+**文件**: `app/services/config_service.py`
+**类**: `ConfigService`
 **用途**: 配置业务逻辑服务
 
 **功能**:
@@ -381,8 +381,8 @@ class Settings(BaseSettings):
 
 #### 4.1.5 ConfigProvider
 
-**文件**: `app/services/config_provider.py`  
-**类**: `ConfigProvider`  
+**文件**: `app/services/config_provider.py`
+**类**: `ConfigProvider`
 **用途**: 提供有效配置（合并环境变量和数据库配置）
 
 **功能**:
@@ -443,8 +443,8 @@ class SystemConfig(BaseModel):
 
 #### 5.1.1 App Store
 
-**文件**: `frontend/src/stores/app.ts`  
-**Store**: `useAppStore`  
+**文件**: `frontend/src/stores/app.ts`
+**Store**: `useAppStore`
 **用途**: 应用全局状态和用户偏好
 
 **状态**:
@@ -453,11 +453,11 @@ interface AppState {
   // 主题和语言
   theme: 'light' | 'dark' | 'auto'
   language: 'zh-CN' | 'en-US'
-  
+
   // 布局
   sidebarCollapsed: boolean
   sidebarWidth: number
-  
+
   // 用户偏好
   preferences: {
     defaultMarket: 'A股' | '美股' | '港股'
@@ -473,8 +473,8 @@ interface AppState {
 
 #### 5.1.2 Auth Store
 
-**文件**: `frontend/src/stores/auth.ts`  
-**Store**: `useAuthStore`  
+**文件**: `frontend/src/stores/auth.ts`
+**Store**: `useAuthStore`
 **用途**: 用户认证和会话管理
 
 **状态**:
@@ -489,7 +489,7 @@ interface AuthState {
 
 ### 5.2 配置管理页面
 
-**文件**: `frontend/src/views/Settings/ConfigManagement.vue`  
+**文件**: `frontend/src/views/Settings/ConfigManagement.vue`
 **路由**: `/settings/config`
 
 **功能模块**:
@@ -503,7 +503,7 @@ interface AuthState {
 
 ### 5.3 设置页面
 
-**文件**: `frontend/src/views/Settings/index.vue`  
+**文件**: `frontend/src/views/Settings/index.vue`
 **路由**: `/settings`
 
 **功能模块**:
@@ -575,7 +575,7 @@ def get_env_info(env_var: str) -> dict
 
 ### 7.1 系统配置接口
 
-**路由前缀**: `/api/config`  
+**路由前缀**: `/api/config`
 **文件**: `app/routers/config.py`
 
 | 端点 | 方法 | 功能 | 权限 |
@@ -599,7 +599,7 @@ def get_env_info(env_var: str) -> dict
 
 ### 7.2 系统配置摘要接口
 
-**路由前缀**: `/api/system`  
+**路由前缀**: `/api/system`
 **文件**: `app/routers/system_config.py`
 
 | 端点 | 方法 | 功能 | 权限 |
@@ -767,16 +767,16 @@ class ConfigValidator:
     def validate_required_configs(self):
         """验证必需配置"""
         errors = []
-        
+
         # 检查数据库配置
         if not settings.MONGODB_HOST:
             errors.append("MONGODB_HOST is required")
-        
+
         # 检查至少一个LLM配置
         llm_configs = await config_service.get_llm_configs()
         if not llm_configs:
             errors.append("At least one LLM configuration is required")
-        
+
         if errors:
             raise ConfigurationError("\n".join(errors))
 ```
@@ -910,7 +910,7 @@ class ConfigVersion(BaseModel):
 
 ## 总结
 
-TradingAgents-CN 系统的配置管理较为复杂，存在多套配置系统并存的情况。主要问题包括：
+zhitouagent 系统的配置管理较为复杂，存在多套配置系统并存的情况。主要问题包括：
 
 1. **配置系统重复** - 旧系统（JSON文件）和新系统（MongoDB）并存
 2. **命名不一致** - 环境变量命名规则不统一
@@ -1117,7 +1117,7 @@ async def startup_event():
 
     # 2. 显示配置摘要
     logger.info("=" * 60)
-    logger.info("TradingAgents-CN Configuration Summary")
+    logger.info("zhitouagent Configuration Summary")
     logger.info("=" * 60)
     logger.info(f"Environment: {'Production' if not settings.DEBUG else 'Development'}")
     logger.info(f"MongoDB: {settings.MONGODB_HOST}:{settings.MONGODB_PORT}")

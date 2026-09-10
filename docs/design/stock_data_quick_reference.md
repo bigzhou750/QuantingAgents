@@ -9,7 +9,7 @@
 from tradingagents.dataflows.interface import get_stock_data_by_market
 
 # A股: 000001, 002475
-# 港股: 0700.HK, 0941.HK  
+# 港股: 0700.HK, 0941.HK
 # 美股: AAPL, TSLA
 data = get_stock_data_by_market("000001", "2024-01-01", "2024-12-31")
 ```

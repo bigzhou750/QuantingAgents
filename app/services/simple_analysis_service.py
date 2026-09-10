@@ -1,6 +1,6 @@
 """
 简化的股票分析服务
-直接调用现有的 TradingAgents 分析功能
+直接调用现有的 zhitouagent 分析功能
 """
 
 import asyncio
@@ -15,11 +15,11 @@ import sys
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 初始化TradingAgents日志系统
+# 初始化zhitouagent日志系统
 from tradingagents.utils.logging_init import init_logging
 init_logging()
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.graph.trading_graph import zhitouagentGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from app.models.analysis import (
     AnalysisTask, AnalysisStatus, SingleAnalysisRequest, AnalysisParameters
@@ -426,7 +426,7 @@ def _get_default_provider_by_model(model_name: str) -> str:
         'chatglm3-6b': 'glm'
     }
 
-    provider = model_provider_map.get(model_name, 'qwen')  # 默认使用阿里百炼
+    provider = model_provider_map.get(model_name, 'deepseek')  # 默认使用 DeepSeek
     logger.info(f"🔧 使用默认映射: {model_name} -> {provider}")
     return provider
 
@@ -728,26 +728,26 @@ class SimpleAnalysisService:
             logger.warning(f"⚠️ 生成新的用户ID: {new_object_id}")
             return PyObjectId(new_object_id)
 
-    def _get_trading_graph(self, config: Dict[str, Any]) -> TradingAgentsGraph:
-        """获取或创建TradingAgents实例
+    def _get_trading_graph(self, config: Dict[str, Any]) -> zhitouagentGraph:
+        """获取或创建zhitouagent实例
 
         ⚠️ 注意：为了避免并发执行时的数据混淆，每次都创建新实例
         虽然这会增加一些初始化开销，但可以确保线程安全
 
-        TradingAgentsGraph 实例包含可变状态（self.ticker, self.curr_state等），
+        zhitouagentGraph 实例包含可变状态（self.ticker, self.curr_state等），
         如果多个线程共享同一个实例，会导致数据混淆。
         """
         # 🔧 [并发安全] 每次都创建新实例，避免多线程共享状态
-        # 不再使用缓存，因为 TradingAgentsGraph 有可变的实例变量
-        logger.info(f"🔧 创建新的TradingAgents实例（并发安全模式）...")
+        # 不再使用缓存，因为 zhitouagentGraph 有可变的实例变量
+        logger.info(f"🔧 创建新的zhitouagent实例（并发安全模式）...")
 
-        trading_graph = TradingAgentsGraph(
+        trading_graph = zhitouagentGraph(
             selected_analysts=config.get("selected_analysts", ["market", "fundamentals"]),
             debug=config.get("debug", False),
             config=config
         )
 
-        logger.info(f"✅ TradingAgents实例创建成功（实例ID: {id(trading_graph)}）")
+        logger.info(f"✅ zhitouagent实例创建成功（实例ID: {id(trading_graph)}）")
 
         return trading_graph
 
@@ -1331,7 +1331,7 @@ class SimpleAnalysisService:
             import time
 
             def simulate_progress():
-                """模拟TradingAgents内部进度"""
+                """模拟zhitouagent内部进度"""
                 try:
                     if not progress_tracker:
                         return
@@ -2757,7 +2757,7 @@ class SimpleAnalysisService:
             project_root = Path(__file__).parent.parent.parent
 
             # 确定results目录路径 - 与web目录保持一致
-            results_dir_env = os.getenv("TRADINGAGENTS_RESULTS_DIR")
+            results_dir_env = os.getenv("ZHITOUAGENT_RESULTS_DIR")
             if results_dir_env:
                 if not os.path.isabs(results_dir_env):
                     results_dir = project_root / results_dir_env

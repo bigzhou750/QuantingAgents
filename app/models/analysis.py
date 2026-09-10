@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, model_validator
 from enum import Enum
 from bson import ObjectId
 from .user import PyObjectId
@@ -51,6 +51,16 @@ class AnalysisParameters(BaseModel):
     # 模型配置
     quick_analysis_model: Optional[str] = "deepseek-chat"
     deep_analysis_model: Optional[str] = "deepseek-reasoner"
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_client_model_credentials(cls, data):
+        if isinstance(data, dict):
+            for key in ("api_key", "api_secret", "provider", "base_url"):
+                value = data.get(key)
+                if value not in (None, ""):
+                    raise ValueError("客户端不得提交模型凭据")
+        return data
 
 
 class AnalysisResult(BaseModel):
@@ -161,6 +171,18 @@ class SingleAnalysisRequest(BaseModel):
         """获取股票代码(兼容旧字段)"""
         return self.symbol or self.stock_code or ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_client_model_credentials(cls, data):
+        if isinstance(data, dict):
+            params = data.get("parameters")
+            if isinstance(params, dict):
+                for key in ("api_key", "api_secret", "provider", "base_url"):
+                    value = params.get(key)
+                    if value not in (None, ""):
+                        raise ValueError("客户端不得提交模型凭据")
+        return data
+
 
 class BatchAnalysisRequest(BaseModel):
     """批量分析请求"""
@@ -173,6 +195,18 @@ class BatchAnalysisRequest(BaseModel):
     def get_symbols(self) -> List[str]:
         """获取股票代码列表(兼容旧字段)"""
         return self.symbols or self.stock_codes or []
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_client_model_credentials(cls, data):
+        if isinstance(data, dict):
+            params = data.get("parameters")
+            if isinstance(params, dict):
+                for key in ("api_key", "api_secret", "provider", "base_url"):
+                    value = params.get(key)
+                    if value not in (None, ""):
+                        raise ValueError("客户端不得提交模型凭据")
+        return data
 
 
 class AnalysisTaskResponse(BaseModel):

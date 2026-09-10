@@ -152,11 +152,11 @@ result.update({
 4. **验证返回数据**：
    ```javascript
    const { elapsed_time, remaining_time, estimated_total_time } = response.data;
-   
+
    // 验证数学一致性
    const sum = elapsed_time + remaining_time;
    const diff = Math.abs(sum - estimated_total_time);
-   
+
    console.assert(diff < 1, '时间数据应该一致');
    ```
 
@@ -199,10 +199,10 @@ def to_dict(self) -> Dict[str, Any]:
     if self.start_time:
         elapsed_time = (datetime.now() - self.start_time).total_seconds()
         data['elapsed_time'] = elapsed_time
-        
+
         progress = self.progress / 100 if self.progress > 0 else 0
         estimated_total = self.estimated_duration if self.estimated_duration else 300
-        
+
         if progress >= 1.0:
             data['remaining_time'] = 0
             data['estimated_total_time'] = elapsed_time

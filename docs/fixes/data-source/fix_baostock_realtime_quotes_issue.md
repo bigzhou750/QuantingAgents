@@ -14,33 +14,33 @@
    - 最新数据只能获取到前一个交易日的收盘数据
 
 2. **代码实现**
-   
+
    在 `tradingagents/dataflows/providers/china/baostock.py` 中：
-   
+
    ```python
    async def get_stock_quotes(self, code: str) -> Dict[str, Any]:
        """
        获取股票实时行情
-       
+
        Args:
            code: 股票代码
-           
+
        Returns:
            股票行情数据
        """
        if not self.connected:
            return {}
-       
+
        try:
            # BaoStock没有实时行情接口，使用最新日K线数据
            quotes_data = await self._get_latest_kline_data(code)
            # ...
    ```
-   
+
    **注释明确说明**：`BaoStock没有实时行情接口，使用最新日K线数据`
 
 3. **任务配置问题**
-   
+
    - **任务名称**：`BaoStock-实时行情同步` ❌（误导性）
    - **调度时间**：`*/15 9-15 * * 1-5`（交易时间每15分钟）❌（不合理）
    - **实际功能**：获取最新交易日的日K线数据
@@ -94,15 +94,15 @@ BAOSTOCK_DAILY_QUOTES_SYNC_CRON: str = Field(default="0 16 * * 1-5", description
 async def sync_realtime_quotes(self, batch_size: int = 50) -> BaoStockSyncStats:
     """
     同步实时行情数据
-    
+
     Args:
         batch_size: 批处理大小
-        
+
     Returns:
         同步统计信息
     """
     stats = BaoStockSyncStats()
-    
+
     try:
         logger.info("🔄 开始BaoStock实时行情同步...")
         # ...
@@ -113,17 +113,17 @@ async def sync_realtime_quotes(self, batch_size: int = 50) -> BaoStockSyncStats:
 async def sync_daily_quotes(self, batch_size: int = 50) -> BaoStockSyncStats:
     """
     同步日K线数据（最新交易日）
-    
+
     注意：BaoStock不支持实时行情，此方法获取最新交易日的日K线数据
-    
+
     Args:
         batch_size: 批处理大小
-        
+
     Returns:
         同步统计信息
     """
     stats = BaoStockSyncStats()
-    
+
     try:
         logger.info("🔄 开始BaoStock日K线同步（最新交易日）...")
         logger.info("ℹ️ 注意：BaoStock不支持实时行情，此任务同步最新交易日的日K线数据")

@@ -138,7 +138,6 @@ import {
   ChatDotRound,
   DataAnalysis,
   Setting,
-  InfoFilled,
   CreditCard,
   UserFilled,
   Bell,

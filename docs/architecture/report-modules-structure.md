@@ -2,7 +2,7 @@
 
 ## 概述
 
-TradingAgents-CN 采用**多智能体协作**的方式生成股票分析报告。系统实际保存 **9个主要报告模块**，但在前端展示时会拆分为更细粒度的视图，让用户可以看到完整的团队辩论过程。
+zhitouagent 采用**多智能体协作**的方式生成股票分析报告。系统实际保存 **9个主要报告模块**，但在前端展示时会拆分为更细粒度的视图，让用户可以看到完整的团队辩论过程。
 
 ## 报告生成流程
 
@@ -67,26 +67,26 @@ TradingAgents-CN 采用**多智能体协作**的方式生成股票分析报告�
   "summary": "执行摘要...",
   "analysts": ["市场分析师", "基本面分析师", ...],
   "research_depth": 3,
-  
+
   "reports": {
     // 第一阶段：分析师团队（4个独立报告）
     "market_report": "市场技术分析内容...",
     "fundamentals_report": "基本面分析内容...",
     "sentiment_report": "市场情绪分析内容...",
     "news_report": "新闻事件分析内容...",
-    
+
     // 第二阶段：研究团队决策（1个综合报告）
     "research_team_decision": "研究经理的综合决策内容（包含多空辩论摘要）...",
-    
+
     // 第三阶段：交易团队（1个独立报告）
     "trader_investment_plan": "交易员计划内容...",
-    
+
     // 第四阶段：风险管理决策（1个综合报告）
     "risk_management_decision": "投资组合经理的综合决策内容（包含风险辩论摘要）...",
-    
+
     // 第五阶段：最终决策（1个独立报告）
     "final_trade_decision": "最终交易决策内容...",
-    
+
     // 可选：早期版本的投资建议
     "investment_plan": "投资建议内容..."
   }
@@ -103,23 +103,23 @@ class AgentState(MessagesState):
     company_of_interest: str
     trade_date: str
     sender: str
-    
+
     # 第一阶段：分析师报告
     market_report: str
     sentiment_report: str
     news_report: str
     fundamentals_report: str
-    
+
     # 第二阶段：研究团队辩论状态
     investment_debate_state: InvestDebateState  # 包含 bull_history, bear_history, judge_decision
     investment_plan: str  # 可选
-    
+
     # 第三阶段：交易员计划
     trader_investment_plan: str
-    
+
     # 第四阶段：风险管理团队辩论状态
     risk_debate_state: RiskDebateState  # 包含 risky_history, safe_history, neutral_history, judge_decision
-    
+
     # 第五阶段：最终决策
     final_trade_decision: str
 ```

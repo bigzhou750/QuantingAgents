@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-AKShare统一数据源集成方案是TradingAgents-CN系统的第二个主要数据源，与Tushare统一方案并行运行，为系统提供更全面、更可靠的股票数据支持。
+AKShare统一数据源集成方案是zhitouagent系统的第二个主要数据源，与Tushare统一方案并行运行，为系统提供更全面、更可靠的股票数据支持。
 
 ## 🎯 核心特性
 
@@ -48,7 +48,7 @@ AKShare SDK → AKShareProvider → AKShareSyncService → MongoDB
 
 #### 1. AKShareProvider (数据提供器)
 - **位置**: `tradingagents/dataflows/providers/akshare_provider.py`
-- **功能**: 
+- **功能**:
   - AKShare SDK封装
   - 数据标准化转换
   - 错误处理和重试
@@ -205,7 +205,7 @@ AKShare原始数据 → 标准化数据模型：
 # 基础信息标准化
 {
     "code": "000001",
-    "name": "平安银行", 
+    "name": "平安银行",
     "area": "深圳",
     "industry": "银行",
     "market": "深圳证券交易所",
@@ -311,7 +311,7 @@ python cli/akshare_init.py --full
 
 ## 🎉 总结
 
-AKShare统一数据源集成方案为TradingAgents-CN系统提供了：
+AKShare统一数据源集成方案为zhitouagent系统提供了：
 
 ✅ **完整的数据覆盖** - 股票基础信息、实时行情、历史数据、财务数据
 ✅ **自动化同步** - APScheduler集成，无需人工干预

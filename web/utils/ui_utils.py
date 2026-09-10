@@ -17,59 +17,59 @@ def apply_hide_deploy_button_css():
         .stAppToolbar {
             display: none !important;
         }
-        
+
         header[data-testid="stHeader"] {
             display: none !important;
         }
-        
+
         .stDeployButton {
             display: none !important;
         }
-        
+
         /* 新版本Streamlit的Deploy按钮选择器 */
         [data-testid="stToolbar"] {
             display: none !important;
         }
-        
+
         [data-testid="stDecoration"] {
             display: none !important;
         }
-        
+
         [data-testid="stStatusWidget"] {
             display: none !important;
         }
-        
+
         /* 隐藏整个顶部区域 */
         .stApp > header {
             display: none !important;
         }
-        
+
         .stApp > div[data-testid="stToolbar"] {
             display: none !important;
         }
-        
+
         /* 隐藏主菜单按钮 */
         #MainMenu {
             visibility: hidden !important;
             display: none !important;
         }
-        
+
         /* 隐藏页脚 */
         footer {
             visibility: hidden !important;
             display: none !important;
         }
-        
+
         /* 隐藏"Made with Streamlit"标识 */
         .viewerBadge_container__1QSob {
             display: none !important;
         }
-        
+
         /* 隐藏所有可能的工具栏元素 */
         div[data-testid="stToolbar"] {
             display: none !important;
         }
-        
+
         /* 隐藏右上角的所有按钮 */
         .stApp > div > div > div > div > section > div {
             padding-top: 0 !important;
@@ -84,7 +84,7 @@ def apply_common_styles():
     """
     # 隐藏Deploy按钮
     apply_hide_deploy_button_css()
-    
+
     # 其他通用样式
     st.markdown("""
     <style>
@@ -97,7 +97,7 @@ def apply_common_styles():
             color: white;
             text-align: center;
         }
-        
+
         .metric-card {
             background: #f0f2f6;
             padding: 1rem;
@@ -105,7 +105,7 @@ def apply_common_styles():
             border-left: 4px solid #1f77b4;
             margin: 0.5rem 0;
         }
-        
+
         .analysis-section {
             background: white;
             padding: 1.5rem;
@@ -113,7 +113,7 @@ def apply_common_styles():
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin: 1rem 0;
         }
-        
+
         .success-box {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -121,7 +121,7 @@ def apply_common_styles():
             padding: 1rem;
             margin: 1rem 0;
         }
-        
+
         .warning-box {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -129,7 +129,7 @@ def apply_common_styles():
             padding: 1rem;
             margin: 1rem 0;
         }
-        
+
         .error-box {
             background: #f8d7da;
             border: 1px solid #f5c6cb;

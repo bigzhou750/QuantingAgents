@@ -51,9 +51,9 @@ TUSHARE_TOKEN: str = Field(default="", description="Tushare API Token")
 #### 1. get_financial_data()
 ```python
 async def get_financial_data(
-    symbol: str, 
-    report_type: str = "quarterly", 
-    period: str = None, 
+    symbol: str,
+    report_type: str = "quarterly",
+    period: str = None,
     limit: int = 4
 ) -> Optional[Dict[str, Any]]
 ```
@@ -73,7 +73,7 @@ async def get_financial_data(
     "report_period": "20231231",
     "ann_date": "20240320",
     "report_type": "annual",
-    
+
     # 利润表核心指标
     "revenue": 500000000000.0,      # 营业收入
     "net_income": 50000000000.0,    # 净利润
@@ -81,7 +81,7 @@ async def get_financial_data(
     "total_profit": 55000000000.0,  # 利润总额
     "oper_cost": 300000000000.0,    # 营业成本
     "rd_exp": 10000000000.0,        # 研发费用
-    
+
     # 资产负债表核心指标
     "total_assets": 4500000000000.0,    # 总资产
     "total_liab": 4200000000000.0,      # 总负债
@@ -90,13 +90,13 @@ async def get_financial_data(
     "accounts_receiv": 50000000000.0,   # 应收账款
     "inventories": 30000000000.0,       # 存货
     "fix_assets": 200000000000.0,       # 固定资产
-    
+
     # 现金流量表核心指标
     "n_cashflow_act": 80000000000.0,        # 经营活动现金流
     "n_cashflow_inv_act": -20000000000.0,   # 投资活动现金流
     "n_cashflow_fin_act": -10000000000.0,   # 筹资活动现金流
     "c_cash_equ_end_period": 180000000000.0, # 期末现金
-    
+
     # 财务指标
     "roe": 23.21,                   # 净资产收益率
     "roa": 1.44,                    # 总资产收益率
@@ -105,7 +105,7 @@ async def get_financial_data(
     "debt_to_assets": 93.33,        # 资产负债率
     "current_ratio": 1.2,           # 流动比率
     "quick_ratio": 0.8,             # 速动比率
-    
+
     # 原始数据（用于详细分析）
     "raw_data": {
         "income_statement": [...],      # 利润表原始数据
@@ -120,9 +120,9 @@ async def get_financial_data(
 #### 2. get_financial_data_by_period()
 ```python
 async def get_financial_data_by_period(
-    symbol: str, 
-    start_period: str = None, 
-    end_period: str = None, 
+    symbol: str,
+    start_period: str = None,
+    end_period: str = None,
     report_type: str = "quarterly"
 ) -> Optional[List[Dict[str, Any]]]
 ```
@@ -132,7 +132,7 @@ async def get_financial_data_by_period(
 #### 3. get_financial_indicators_only()
 ```python
 async def get_financial_indicators_only(
-    symbol: str, 
+    symbol: str,
     limit: int = 4
 ) -> Optional[Dict[str, Any]]
 ```
@@ -153,7 +153,7 @@ provider = get_tushare_provider()
 if provider.is_available():
     # 获取最新财务数据
     financial_data = await provider.get_financial_data("000001")
-    
+
     if financial_data:
         print(f"营业收入: {financial_data['revenue']:,.0f}")
         print(f"净利润: {financial_data['net_income']:,.0f}")
@@ -237,14 +237,14 @@ symbols = ["000001", "000002", "600000", "600036"]
 for symbol in symbols:
     try:
         financial_data = await provider.get_financial_data(symbol)
-        
+
         if financial_data:
             # 处理财务数据
             process_financial_data(symbol, financial_data)
-        
+
         # API限流
         await asyncio.sleep(0.5)
-        
+
     except Exception as e:
         print(f"处理 {symbol} 失败: {e}")
 ```
@@ -306,12 +306,12 @@ def analyze_financial_health(financial_data):
     roe = financial_data.get('roe', 0)
     debt_ratio = financial_data.get('debt_to_assets', 0)
     current_ratio = financial_data.get('current_ratio', 0)
-    
+
     score = 0
     if roe > 15: score += 30
     if debt_ratio < 60: score += 30
     if current_ratio > 1.2: score += 40
-    
+
     return {
         'score': score,
         'level': 'excellent' if score >= 80 else 'good' if score >= 60 else 'fair'
@@ -324,18 +324,18 @@ def analyze_financial_health(financial_data):
 async def analyze_financial_trend(symbol, periods=8):
     """分析财务指标趋势"""
     provider = get_tushare_provider()
-    
+
     financial_data = await provider.get_financial_data(
         symbol=symbol,
         limit=periods
     )
-    
+
     if financial_data and financial_data.get('raw_data'):
         indicators = financial_data['raw_data']['financial_indicators']
-        
+
         # 计算ROE趋势
         roe_trend = [item.get('roe', 0) for item in indicators]
-        
+
         # 计算增长率
         if len(roe_trend) >= 2:
             growth_rate = (roe_trend[0] - roe_trend[1]) / roe_trend[1] * 100
@@ -344,7 +344,7 @@ async def analyze_financial_trend(symbol, periods=8):
                 'growth_rate': growth_rate,
                 'trend': 'up' if growth_rate > 0 else 'down'
             }
-    
+
     return None
 ```
 
@@ -355,18 +355,18 @@ async def compare_with_industry(symbols, metric='roe'):
     """行业财务指标对比"""
     provider = get_tushare_provider()
     results = {}
-    
+
     for symbol in symbols:
         financial_data = await provider.get_financial_data(symbol)
         if financial_data:
             results[symbol] = financial_data.get(metric, 0)
-        
+
         await asyncio.sleep(0.5)  # API限流
-    
+
     # 计算行业平均值
     values = list(results.values())
     industry_avg = sum(values) / len(values) if values else 0
-    
+
     return {
         'individual': results,
         'industry_average': industry_avg,

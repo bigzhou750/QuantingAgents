@@ -113,7 +113,7 @@ config = {
 #### 性能型配置（质量优先）
 ```python
 config = {
-    "llm_provider": "dashscope", 
+    "llm_provider": "dashscope",
     "deep_think_llm": "qwen-max",       # 深度思考使用Max
     "quick_think_llm": "qwen-plus",     # 快速任务使用Plus
     "max_debate_rounds": 2,             # 增加辩论轮次
@@ -227,7 +227,7 @@ Error: Model not found
    ```python
    import dashscope
    dashscope.api_key = "your_api_key"
-   
+
    from dashscope import Generation
    response = Generation.call(
        model="qwen-turbo",

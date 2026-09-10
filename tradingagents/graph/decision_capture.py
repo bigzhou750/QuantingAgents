@@ -1,4 +1,4 @@
-"""TradingAgents graph 节点级决策采集。"""
+"""zhitouagent graph 节点级决策采集。"""
 
 import uuid
 from typing import Any, Callable, Dict, List, Optional

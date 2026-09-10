@@ -34,19 +34,19 @@
 # 检查用户认证状态
 if not auth_manager.is_authenticated():
     # 最后一次尝试从session state恢复认证状态
-    if (st.session_state.get('authenticated', False) and 
-        st.session_state.get('user_info') and 
+    if (st.session_state.get('authenticated', False) and
+        st.session_state.get('user_info') and
         st.session_state.get('login_time')):
         logger.info("🔄 从session state恢复认证状态")
         try:
             auth_manager.login_user(
-                st.session_state.user_info, 
+                st.session_state.user_info,
                 st.session_state.login_time
             )
             logger.info(f"✅ 成功从session state恢复用户 {st.session_state.user_info.get('username', 'Unknown')} 的认证状态")
         except Exception as e:
             logger.warning(f"⚠️ 从session state恢复认证状态失败: {e}")
-    
+
     # 如果仍然未认证，显示登录页面
     if not auth_manager.is_authenticated():
         render_login_form()
@@ -85,7 +85,7 @@ if st.session_state.get('authenticated', False):
         logger.info("🔄 同步认证状态到auth_manager")
         try:
             auth_manager.login_user(
-                st.session_state.user_info, 
+                st.session_state.user_info,
                 st.session_state.get('login_time', time.time())
             )
             logger.info("✅ 认证状态同步成功")

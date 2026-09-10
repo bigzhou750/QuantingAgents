@@ -159,13 +159,13 @@ TradingAgentsCN/
 ```python
 class HKStockAdapter(DataSourceAdapter):
     """港股数据适配器（基于yfinance + AKShare）"""
-    
+
     def get_stock_list(self) -> List[Dict]:
         """获取港股列表（从AKShare）"""
-    
+
     def get_realtime_quotes(self, symbols: List[str]) -> Dict:
         """获取实时行情（从yfinance）"""
-    
+
     def get_stock_info(self, symbol: str) -> Dict:
         """获取基本信息（从yfinance.info）"""
 ```
@@ -174,13 +174,13 @@ class HKStockAdapter(DataSourceAdapter):
 ```python
 class USStockAdapter(DataSourceAdapter):
     """美股数据适配器（基于yfinance）"""
-    
+
     def get_stock_list(self) -> List[Dict]:
         """获取美股列表（从预定义列表或API）"""
-    
+
     def get_realtime_quotes(self, symbols: List[str]) -> Dict:
         """获取实时行情"""
-    
+
     def get_stock_info(self, symbol: str) -> Dict:
         """获取基本信息"""
 ```
@@ -205,19 +205,19 @@ class USStockAdapter(DataSourceAdapter):
 async def get_quote(market: str, code: str):
     """
     获取股票行情（支持多市场）
-    
+
     Args:
         market: 市场类型 (cn/hk/us)
         code: 股票代码
     """
     # 标准化代码
     normalized = normalize_symbol(source="api", code=code, market=market.upper())
-    
+
     # 查询数据库
     quote = await db.market_quotes.find_one({
         "full_symbol": normalized["full_symbol"]
     })
-    
+
     return ok(data=quote)
 ```
 
@@ -255,7 +255,7 @@ export const stocksApi = {
   async searchStocks(params: StockSearchParams) {
     return ApiClient.get<StockInfo[]>('/api/stocks/search', { params })
   },
-  
+
   // 获取行情（支持多市场）
   async getQuote(market: string, symbol: string) {
     return ApiClient.get(`/api/stocks/${market}/${symbol}/quote`)

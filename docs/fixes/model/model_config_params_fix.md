@@ -44,14 +44,14 @@ def create_analysis_config(
     deep_model_config: dict = None    # 新增
 ) -> dict:
     # ... 其他代码 ...
-    
+
     # 添加模型配置参数
     if quick_model_config:
         config["quick_model_config"] = quick_model_config
-    
+
     if deep_model_config:
         config["deep_model_config"] = deep_model_config
-    
+
     return config
 ```
 
@@ -83,7 +83,7 @@ for llm_config in llm_configs:
             "retry_times": llm_config.retry_times,
             "api_base": llm_config.api_base
         }
-    
+
     if llm_config.model_name == deep_model:
         deep_model_config = {
             "max_tokens": llm_config.max_tokens,

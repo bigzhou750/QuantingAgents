@@ -1,9 +1,9 @@
-# TradingAgents-CN 配置管理优化实施计划
+# zhitouagent 配置管理优化实施计划
 
 > **目标**: 建立清晰的配置管理体系，基础配置在 `.env` 文件中实现最小化运行，用户通过 Web 界面管理动态配置。
-> 
+>
 > **时间**: 4-6周
-> 
+>
 > **优先级**: 高
 
 ---
@@ -148,7 +148,7 @@
 ```python
 class StartupValidator:
     """启动配置验证器"""
-    
+
     # 必需配置项
     REQUIRED_CONFIGS = [
         "MONGODB_HOST",
@@ -158,21 +158,21 @@ class StartupValidator:
         "REDIS_PORT",
         "JWT_SECRET"
     ]
-    
+
     # 推荐配置项
     RECOMMENDED_CONFIGS = [
         "DEEPSEEK_API_KEY",
         "DASHSCOPE_API_KEY"
     ]
-    
+
     def validate(self) -> ValidationResult:
         """验证配置"""
         pass
-    
+
     def check_database_connection(self) -> bool:
         """检查数据库连接"""
         pass
-    
+
     def check_llm_configs(self) -> bool:
         """检查大模型配置"""
         pass
@@ -297,7 +297,7 @@ warnings.warn(
 
 class ConfigManager:
     """配置管理器（已废弃）
-    
+
     .. deprecated:: 0.1.16
         Use :class:`app.services.config_service.ConfigService` instead.
     """
@@ -630,8 +630,8 @@ Week 5-6: Phase 4 - 测试和文档
 
 ---
 
-**项目负责人**: [待定]  
-**开始日期**: [待定]  
-**预计完成日期**: [待定]  
+**项目负责人**: [待定]
+**开始日期**: [待定]
+**预计完成日期**: [待定]
 **当前状态**: 计划中
 

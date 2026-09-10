@@ -1,4 +1,4 @@
-# TradingAgents/graph/trading_graph.py
+# zhitouagent/graph/trading_graph.py
 
 import os
 from pathlib import Path
@@ -189,7 +189,7 @@ def _create_provider_pair(
     return deep_llm, quick_llm
 
 
-class TradingAgentsGraph:
+class zhitouagentGraph:
     """Main class that orchestrates the trading agents framework."""
 
     def __init__(
@@ -698,7 +698,7 @@ class TradingAgentsGraph:
         """
 
         # 添加详细的接收日志
-        logger.debug(f"🔍 [GRAPH DEBUG] ===== TradingAgentsGraph.propagate 接收参数 =====")
+        logger.debug(f"🔍 [GRAPH DEBUG] ===== zhitouagentGraph.propagate 接收参数 =====")
         logger.debug(f"🔍 [GRAPH DEBUG] 接收到的company_name: '{company_name}' (类型: {type(company_name)})")
         logger.debug(f"🔍 [GRAPH DEBUG] 接收到的trade_date: '{trade_date}' (类型: {type(trade_date)})")
         logger.debug(f"🔍 [GRAPH DEBUG] 接收到的task_id: '{task_id}'")
@@ -1201,11 +1201,11 @@ class TradingAgentsGraph:
         }
 
         # Save to file
-        directory = Path(f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/")
+        directory = Path(f"eval_results/{self.ticker}/zhitouagentStrategy_logs/")
         directory.mkdir(parents=True, exist_ok=True)
 
         with open(
-            f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/full_states_log.json",
+            f"eval_results/{self.ticker}/zhitouagentStrategy_logs/full_states_log.json",
             "w",
         ) as f:
             json.dump(self.log_states_dict, f, indent=4)
@@ -1231,3 +1231,7 @@ class TradingAgentsGraph:
     def process_signal(self, full_signal, stock_symbol=None):
         """Process a signal to extract the core decision."""
         return self.signal_processor.process_signal(full_signal, stock_symbol)
+
+
+# Compatibility export for direct module imports.
+TradingAgentsGraph = zhitouagentGraph

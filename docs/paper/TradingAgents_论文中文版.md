@@ -2,11 +2,11 @@
 
 **作者**: Yijia Xiao¹'³, Edward Sun¹'³, Di Luo¹'², Wei Wang¹'³
 
-¹ 加州大学洛杉矶分校 (UCLA)  
-² 麻省理工学院 (MIT)  
+¹ 加州大学洛杉矶分校 (UCLA)
+² 麻省理工学院 (MIT)
 ³ Tauric Research
 
-**项目地址**: https://github.com/TauricResearch/TradingAgents
+**项目地址**: mailto:zh75067197@gmail.com
 
 ---
 
@@ -385,7 +385,7 @@ MDD = max_{t∈[0,T]} ((Peak_t - Trough_t) / Peak_t) × 100%
 
 ---
 
-**项目开源地址**: https://github.com/TauricResearch/TradingAgents
+**项目开源地址**: mailto:zh75067197@gmail.com
 
 **许可证**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
 

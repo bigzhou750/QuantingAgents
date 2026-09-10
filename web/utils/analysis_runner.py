@@ -224,7 +224,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
 
     try:
         # 导入必要的模块
-        from tradingagents.graph.trading_graph import TradingAgentsGraph
+        from tradingagents.graph.trading_graph import zhitouagentGraph
         from tradingagents.default_config import DEFAULT_CONFIG
 
         # 创建配置
@@ -327,13 +327,13 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
             else:  # 全面分析
                 config["quick_think_llm"] = "ernie-4.0-turbo-8k"
                 config["deep_think_llm"] = "ernie-4.0-turbo-8k"
-            
+
             logger.info(f"🤖 [千帆] 快速模型: {config['quick_think_llm']}")
             logger.info(f"🤖 [千帆] 深度模型: {config['deep_think_llm']}")
         elif llm_provider == "google":
             # Google AI不需要backend_url，使用默认的OpenAI格式
             config["backend_url"] = "https://api.openai.com/v1"
-            
+
             # 根据研究深度优化Google模型选择
             if research_depth == 1:  # 快速分析 - 使用最快模型
                 config["quick_think_llm"] = "gemini-2.5-flash-lite-preview-06-17"  # 1.45s
@@ -350,7 +350,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
             else:  # 全面分析 - 使用最强模型
                 config["quick_think_llm"] = "gemini-2.5-pro"  # 16.68s
                 config["deep_think_llm"] = "gemini-2.5-pro"  # 16.68s
-            
+
             logger.info(f"🤖 [Google AI] 快速模型: {config['quick_think_llm']}")
             logger.info(f"🤖 [Google AI] 深度模型: {config['deep_think_llm']}")
         elif llm_provider == "openai":
@@ -378,7 +378,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
         # 修复路径问题 - 优先使用环境变量配置
         # 数据目录：优先使用环境变量，否则使用默认路径
         if not config.get("data_dir") or config["data_dir"] == "./data":
-            env_data_dir = os.getenv("TRADINGAGENTS_DATA_DIR")
+            env_data_dir = os.getenv("ZHITOUAGENT_DATA_DIR")
             if env_data_dir:
                 # 如果环境变量是相对路径，相对于项目根目录解析
                 if not os.path.isabs(env_data_dir):
@@ -390,7 +390,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
 
         # 结果目录：优先使用环境变量，否则使用默认路径
         if not config.get("results_dir") or config["results_dir"] == "./results":
-            env_results_dir = os.getenv("TRADINGAGENTS_RESULTS_DIR")
+            env_results_dir = os.getenv("ZHITOUAGENT_RESULTS_DIR")
             if env_results_dir:
                 # 如果环境变量是相对路径，相对于项目根目录解析
                 if not os.path.isabs(env_results_dir):
@@ -402,7 +402,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
 
         # 缓存目录：优先使用环境变量，否则使用默认路径
         if not config.get("data_cache_dir"):
-            env_cache_dir = os.getenv("TRADINGAGENTS_CACHE_DIR")
+            env_cache_dir = os.getenv("ZHITOUAGENT_CACHE_DIR")
             if env_cache_dir:
                 # 如果环境变量是相对路径，相对于项目根目录解析
                 if not os.path.isabs(env_cache_dir):
@@ -422,7 +422,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
         logger.info(f"  - 数据目录: {config['data_dir']}")
         logger.info(f"  - 结果目录: {config['results_dir']}")
         logger.info(f"  - 缓存目录: {config['data_cache_dir']}")
-        logger.info(f"  - 环境变量 TRADINGAGENTS_RESULTS_DIR: {os.getenv('TRADINGAGENTS_RESULTS_DIR', '未设置')}")
+        logger.info(f"  - 环境变量 ZHITOUAGENT_RESULTS_DIR: {os.getenv('ZHITOUAGENT_RESULTS_DIR', '未设置')}")
 
         logger.info(f"使用配置: {config}")
         logger.info(f"分析师列表: {analysts}")
@@ -457,7 +457,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
 
         # 初始化交易图
         update_progress("🔧 初始化分析引擎...")
-        graph = TradingAgentsGraph(analysts, config=config, debug=False)
+        graph = zhitouagentGraph(analysts, config=config, debug=False)
 
         # 执行分析
         update_progress(f"📊 开始分析 {formatted_symbol} 股票，这可能需要几分钟时间...")
@@ -550,7 +550,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
         try:
             update_progress("💾 正在保存分析报告...")
             from .report_exporter import save_analysis_report, save_modular_reports_to_results_dir
-            
+
             # 1. 保存分模块报告到本地目录
             logger.info(f"📁 [本地保存] 开始保存分模块报告到本地目录")
             local_files = save_modular_reports_to_results_dir(results, stock_symbol)
@@ -560,14 +560,14 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
                     logger.info(f"  - {module}: {path}")
             else:
                 logger.warning(f"⚠️ [本地保存] 本地报告文件保存失败")
-            
+
             # 2. 保存分析报告到MongoDB
             logger.info(f"🗄️ [MongoDB保存] 开始保存分析报告到MongoDB")
             save_success = save_analysis_report(
                 stock_symbol=stock_symbol,
                 analysis_results=results
             )
-            
+
             if save_success:
                 logger.info(f"✅ [MongoDB保存] 分析报告已成功保存到MongoDB")
                 update_progress("✅ 分析报告已保存到数据库和本地文件")
@@ -577,7 +577,7 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
                     update_progress("✅ 本地报告已保存，但数据库保存失败")
                 else:
                     update_progress("⚠️ 报告保存失败，但分析已完成")
-                
+
         except Exception as save_error:
             logger.error(f"❌ [报告保存] 保存分析报告时发生错误: {str(save_error)}")
             update_progress("⚠️ 报告保存出错，但分析已完成")
@@ -624,13 +624,13 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
 
 def format_analysis_results(results):
     """格式化分析结果用于显示"""
-    
+
     if not results['success']:
         return {
             'error': results['error'],
             'success': False
         }
-    
+
     state = results['state']
     decision = results['decision']
 
@@ -702,10 +702,10 @@ def format_analysis_results(results):
             'target_price': None,
             'reasoning': f'分析结果: {str(decision)}'
         }
-    
+
     # 格式化状态信息
     formatted_state = {}
-    
+
     # 处理各个分析模块的结果 - 包含完整的智能体团队分析
     analysis_keys = [
         'market_report',
@@ -720,7 +720,7 @@ def format_analysis_results(results):
         'risk_debate_state',        # 风险管理团队决策
         'final_trade_decision'      # 最终交易决策
     ]
-    
+
     # 添加调试信息
     logger.debug(f"🔍 [格式化调试] 原始state中的键: {list(state.keys())}")
     for key in state.keys():
@@ -748,7 +748,7 @@ def format_analysis_results(results):
                 formatted_state[key] = risk_assessment
         else:
             logger.debug(f"🔍 [格式化调试] 缺失字段: {key}")
-    
+
     return {
         'stock_symbol': results['stock_symbol'],
         'decision': formatted_decision,
@@ -803,32 +803,32 @@ def validate_analysis_params(stock_symbol, analysis_date, analysts, research_dep
             import re
             if not re.match(r'^[A-Z]{1,5}$', symbol.upper()):
                 errors.append("美股代码格式错误，应为1-5位字母（如：AAPL）")
-    
+
     # 验证分析师列表
     if not analysts or len(analysts) == 0:
         errors.append("必须至少选择一个分析师")
-    
+
     valid_analysts = ['market', 'social', 'news', 'fundamentals']
     invalid_analysts = [a for a in analysts if a not in valid_analysts]
     if invalid_analysts:
         errors.append(f"无效的分析师类型: {', '.join(invalid_analysts)}")
-    
+
     # 验证研究深度
     if not isinstance(research_depth, int) or research_depth < 1 or research_depth > 5:
         errors.append("研究深度必须是1-5之间的整数")
-    
+
     # 验证分析日期
     try:
         from datetime import datetime
         datetime.strptime(analysis_date, '%Y-%m-%d')
     except ValueError:
         errors.append("分析日期格式无效，应为YYYY-MM-DD格式")
-    
+
     return len(errors) == 0, errors
 
 def get_supported_stocks():
     """获取支持的股票列表"""
-    
+
     # 常见的美股股票代码
     popular_stocks = [
         {'symbol': 'AAPL', 'name': '苹果公司', 'sector': '科技'},
@@ -844,7 +844,7 @@ def get_supported_stocks():
         {'symbol': 'SPY', 'name': 'S&P 500 ETF', 'sector': 'ETF'},
         {'symbol': 'QQQ', 'name': '纳斯达克100 ETF', 'sector': 'ETF'},
     ]
-    
+
     return popular_stocks
 
 def generate_demo_results_deprecated(stock_symbol, analysis_date, analysts, research_depth, llm_provider, llm_model, error_msg, market_type="美股"):

@@ -69,14 +69,13 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_entry, ensure_ascii=False)
 
 
-class TradingAgentsLogger:
-    """TradingAgents统一日志管理器"""
+class zhitouagentLogger:
+    """zhitouagent统一日志管理器"""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or self._load_default_config()
         self.loggers: Dict[str, logging.Logger] = {}
         self._setup_logging()
-    
     def _load_default_config(self) -> Dict[str, Any]:
         """加载默认日志配置"""
         # 尝试从配置文件加载
@@ -85,8 +84,8 @@ class TradingAgentsLogger:
             return config
 
         # 从环境变量获取配置
-        log_level = os.getenv('TRADINGAGENTS_LOG_LEVEL', 'INFO').upper()
-        log_dir = os.getenv('TRADINGAGENTS_LOG_DIR', './logs')
+        log_level = os.getenv('ZHITOUAGENT_LOG_LEVEL', 'INFO').upper()
+        log_dir = os.getenv('ZHITOUAGENT_LOG_DIR', './logs')
 
         return {
             'level': log_level,
@@ -425,14 +424,14 @@ class TradingAgentsLogger:
 
 
 # 全局日志管理器实例
-_logger_manager: Optional[TradingAgentsLogger] = None
+_logger_manager: Optional[zhitouagentLogger] = None
 
 
-def get_logger_manager() -> TradingAgentsLogger:
+def get_logger_manager() -> zhitouagentLogger:
     """获取全局日志管理器实例"""
     global _logger_manager
     if _logger_manager is None:
-        _logger_manager = TradingAgentsLogger()
+        _logger_manager = zhitouagentLogger()
     return _logger_manager
 
 
@@ -444,5 +443,9 @@ def get_logger(name: str) -> logging.Logger:
 def setup_logging(config: Optional[Dict[str, Any]] = None):
     """设置项目日志系统（便捷函数）"""
     global _logger_manager
-    _logger_manager = TradingAgentsLogger(config)
+    _logger_manager = zhitouagentLogger(config)
     return _logger_manager
+
+
+# Compatibility export for existing integrations.
+TradingAgentsLogger = zhitouagentLogger

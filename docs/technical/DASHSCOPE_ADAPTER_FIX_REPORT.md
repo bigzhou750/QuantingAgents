@@ -17,15 +17,15 @@
 ```python
 def bind_tools(self, tools, **kwargs):
     """绑定工具到模型 - 增强版"""
-    
+
     # 1. 详细的工具转换过程追踪
     formatted_tools = []
     failed_tools = []
-    
+
     for i, tool in enumerate(tools):
         # 2. 尝试标准转换
         openai_tool = convert_to_openai_tool(tool)
-        
+
         # 3. 验证转换后的格式
         if self._validate_openai_tool_format(openai_tool, tool_name):
             formatted_tools.append(openai_tool)
@@ -36,7 +36,7 @@ def bind_tools(self, tools, **kwargs):
                 formatted_tools.append(backup_tool)
             else:
                 failed_tools.append(tool_name)
-    
+
     # 5. 确保至少有一个工具成功绑定
     if not formatted_tools:
         raise ValueError("所有工具转换失败")
@@ -59,12 +59,12 @@ def bind_tools(self, tools, **kwargs):
 ```python
 def _generate(self, *args, **kwargs):
     """重写生成方法，添加工具调用响应验证"""
-    
+
     result = super()._generate(*args, **kwargs)
-    
+
     # 验证和修复工具调用响应
     result = self._validate_and_fix_tool_calls(result)
-    
+
     return result
 ```
 

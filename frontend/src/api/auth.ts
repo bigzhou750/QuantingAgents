@@ -14,6 +14,13 @@ import type {
 } from '@/types/auth'
 
 export const authApi = {
+  // 注册开关（匿名可访问）
+  registrationStatus: () =>
+    ApiClient.get<{ enabled: boolean }>('/api/auth/registration-status', undefined, {
+      skipAuth: true,
+      skipErrorHandler: true
+    }),
+
   // 登录
   login: (data: LoginForm) =>
     ApiClient.post<LoginResponse>('/api/auth/login', data, {

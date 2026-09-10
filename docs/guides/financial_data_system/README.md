@@ -2,7 +2,7 @@
 
 ## 🎯 概述
 
-TradingAgents-CN财务数据系统提供了完整的股票财务数据管理功能，支持多数据源同步、统一存储、高效查询和数据对比分析。
+zhitouagent财务数据系统提供了完整的股票财务数据管理功能，支持多数据源同步、统一存储、高效查询和数据对比分析。
 
 ### ✨ 核心特性
 
@@ -63,7 +63,7 @@ graph TD
   "report_period": "20231231",  // 报告期 (YYYYMMDD)
   "report_type": "quarterly",   // 报告类型 (quarterly/annual)
   "ann_date": "2024-03-20",     // 公告日期
-  
+
   // 核心财务指标
   "revenue": 500000000000.0,        // 营业收入
   "net_income": 50000000000.0,      // 净利润
@@ -71,14 +71,14 @@ graph TD
   "total_equity": 280000000000.0,   // 股东权益
   "total_liab": 4200000000000.0,    // 总负债
   "cash_and_equivalents": 180000000000.0, // 现金及现金等价物
-  
+
   // 财务比率
   "roe": 23.21,          // 净资产收益率
   "roa": 1.44,           // 总资产收益率
   "gross_margin": 75.0,  // 毛利率
   "net_margin": 36.11,   // 净利率
   "debt_to_assets": 93.33, // 资产负债率
-  
+
   // 元数据
   "data_source": "tushare",     // 数据源
   "created_at": ISODate("..."), // 创建时间
@@ -292,20 +292,20 @@ db.stock_financial_data.aggregate([
 # 跨数据源数据对比
 async def compare_financial_data(symbol: str, report_period: str):
     service = await get_financial_data_service()
-    
+
     # 获取不同数据源的数据
     tushare_data = await service.get_financial_data(
         symbol=symbol,
         report_period=report_period,
         data_source="tushare"
     )
-    
+
     akshare_data = await service.get_financial_data(
         symbol=symbol,
         report_period=report_period,
         data_source="akshare"
     )
-    
+
     # 对比关键指标
     return compare_indicators(tushare_data, akshare_data)
 ```
@@ -317,14 +317,14 @@ async def compare_financial_data(symbol: str, report_period: str):
 async def analyze_industry_financials(industry: str):
     # 获取行业股票列表
     stocks = await get_industry_stocks(industry)
-    
+
     # 批量获取财务数据
     financial_data = []
     for symbol in stocks:
         data = await service.get_latest_financial_data(symbol)
         if data:
             financial_data.append(data)
-    
+
     # 计算行业平均指标
     return calculate_industry_metrics(financial_data)
 ```
@@ -335,7 +335,7 @@ async def analyze_industry_financials(industry: str):
 # 定时同步任务
 async def scheduled_financial_sync():
     sync_service = await get_financial_sync_service()
-    
+
     # 同步主要股票的财务数据
     results = await sync_service.sync_financial_data(
         symbols=get_major_stocks(),
@@ -343,7 +343,7 @@ async def scheduled_financial_sync():
         batch_size=100,
         delay_seconds=0.5
     )
-    
+
     # 记录同步结果
     log_sync_results(results)
 ```
@@ -393,7 +393,7 @@ async def scheduled_financial_sync():
 
 ## 📝 总结
 
-财务数据系统为TradingAgents-CN提供了强大的财务数据管理能力：
+财务数据系统为zhitouagent提供了强大的财务数据管理能力：
 
 - ✅ **完整性**: 支持三大数据源的财务数据
 - ✅ **统一性**: 标准化的数据模型和API接口

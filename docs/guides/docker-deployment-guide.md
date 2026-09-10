@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-TradingAgents-CN v0.1.7 引入了完整的Docker容器化部署方案，让您可以通过一条命令启动完整的股票分析环境。本指南将详细介绍如何使用Docker部署和管理TradingAgents-CN。
+zhitouagent v0.1.7 引入了完整的Docker容器化部署方案，让您可以通过一条命令启动完整的股票分析环境。本指南将详细介绍如何使用Docker部署和管理zhitouagent。
 
 ## 🎯 Docker部署优势
 
@@ -87,8 +87,8 @@ docker-compose --version
 
 ```bash
 # 克隆项目
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 检查版本
 cat VERSION
@@ -96,7 +96,7 @@ cat VERSION
 
 ### 📦 关于Docker镜像
 
-**重要说明**: TradingAgents-CN目前不提供预构建的Docker镜像，需要在本地构建。
+**重要说明**: zhitouagent目前不提供预构建的Docker镜像，需要在本地构建。
 
 #### 为什么需要本地构建？
 
@@ -213,7 +213,7 @@ docker-compose ps
 
 1. **访问主界面**: http://localhost:8501
 2. **选择LLM模型**: 推荐DeepSeek V3（成本低）
-3. **输入股票代码**: 
+3. **输入股票代码**:
    - A股: 000001, 600519, 000858
    - 美股: AAPL, TSLA, MSFT
 4. **选择分析深度**: 快速/标准/深度
@@ -428,12 +428,12 @@ REDIS_PASSWORD=secure_redis_password
 
 如果在Docker部署过程中遇到问题：
 
-- 🐛 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues)
-- 💬 [GitHub Discussions](https://github.com/hsliuping/TradingAgents-CN/discussions)
+- 🐛 [GitHub Issues](mailto:zh75067197@gmail.com)
+- 💬 [GitHub Discussions](mailto:zh75067197@gmail.com)
 - 📚 [Docker官方文档](https://docs.docker.com/)
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *贡献者: [@breeze303](https://github.com/breeze303)*

@@ -95,16 +95,9 @@ class StartupValidator:
         ConfigItem(
             key="DEEPSEEK_API_KEY",
             level=ConfigLevel.RECOMMENDED,
-            description="DeepSeek API密钥（推荐，性价比高）",
+            description="DeepSeek API密钥（生产环境必需）",
             example="sk-xxx",
             help_url="https://platform.deepseek.com/"
-        ),
-        ConfigItem(
-            key="DASHSCOPE_API_KEY",
-            level=ConfigLevel.RECOMMENDED,
-            description="阿里百炼API密钥（推荐，国产稳定）",
-            example="sk-xxx",
-            help_url="https://dashscope.aliyun.com/"
         ),
         ConfigItem(
             key="TUSHARE_TOKEN",
@@ -236,6 +229,43 @@ class StartupValidator:
         else:
             logger.info("ℹ️  开发环境模式（DEBUG=true）")
 
+        # 生产环境必须使用后端 DeepSeek 配置，不允许缺失或占位符
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY", "")
+        if settings.is_production and not self._is_valid_api_key(deepseek_key):
+            self.result.invalid_configs.append((
+                ConfigItem(
+                    key="DEEPSEEK_API_KEY",
+                    level=ConfigLevel.REQUIRED,
+                    description="生产环境必须配置有效的 DeepSeek API 密钥",
+                    example="sk-xxx",
+                ),
+                "生产环境缺少有效的 DEEPSEEK_API_KEY，系统拒绝启动",
+            ))
+
+        if settings.is_production:
+            origins = getattr(settings, "ALLOWED_ORIGINS", [])
+            hosts = getattr(settings, "ALLOWED_HOSTS", [])
+            if not origins or "*" in origins:
+                self.result.invalid_configs.append((
+                    ConfigItem(
+                        key="ALLOWED_ORIGINS",
+                        level=ConfigLevel.REQUIRED,
+                        description="生产环境必须配置明确的允许来源",
+                        example="https://your-domain.example",
+                    ),
+                    "生产环境不允许使用通配 CORS Origin",
+                ))
+            if not hosts or "*" in hosts:
+                self.result.invalid_configs.append((
+                    ConfigItem(
+                        key="ALLOWED_HOSTS",
+                        level=ConfigLevel.REQUIRED,
+                        description="生产环境必须配置明确的 Host 白名单",
+                        example="your-domain.example",
+                    ),
+                    "生产环境不允许使用通配 Host",
+                ))
+
         # Multi-account isolation must have a dedicated, writable root.  In
         # production, a disabled isolation switch is a startup error rather
         # than a warning because shared runtime state can leak user data.
@@ -313,7 +343,7 @@ class StartupValidator:
     def _print_validation_result(self):
         """输出验证结果"""
         logger.info("\n" + "=" * 70)
-        logger.info("TradingAgents-CN Configuration Validation Result")
+        logger.info("zhitouagent Configuration Validation Result")
         logger.info("=" * 70)
         
         # 必需配置

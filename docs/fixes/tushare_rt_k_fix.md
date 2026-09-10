@@ -40,7 +40,7 @@
 
 ### 2. 修改内容
 
-#### 2.1 修复 `TushareProvider.get_stock_quotes()` 
+#### 2.1 修复 `TushareProvider.get_stock_quotes()`
 
 **文件**: `tradingagents/dataflows/providers/china/tushare.py`
 
@@ -77,10 +77,10 @@ async def get_realtime_quotes_batch(self) -> Optional[Dict[str, Dict[str, Any]]]
     """
     # 使用通配符一次性获取全市场
     df = await asyncio.to_thread(
-        self.api.rt_k, 
+        self.api.rt_k,
         ts_code='3*.SZ,6*.SH,0*.SZ,9*.BJ'  # 创业板、上交所、深交所、北交所
     )
-    
+
     # 转换为字典格式
     result = {}
     for _, row in df.iterrows():
@@ -132,11 +132,11 @@ def _is_trading_time(self) -> bool:
     # 检查周末
     if now.weekday() >= 5:
         return False
-    
+
     # 检查时间段
     is_morning = 9:30 <= current_time <= 11:30
     is_afternoon = 13:00 <= current_time <= 15:00
-    
+
     return is_morning or is_afternoon
 ```
 

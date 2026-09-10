@@ -61,14 +61,14 @@ def create_fundamentals_analyst(llm, toolkit):
     @log_analyst_module("fundamentals")
     def fundamentals_analyst_node(state):
         ticker = state["company_of_interest"]
-        
+
         # 获取股票市场信息
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(ticker)
-        
+
         # 获取公司名称
         company_name = _get_company_name_for_fundamentals(ticker, market_info)
-        
+
         # 选择合适的工具
         if toolkit.config["online_tools"]:
             tools = [toolkit.get_stock_fundamentals_unified]
@@ -225,7 +225,7 @@ graph TB
     A --> C[市场分析师]
     A --> D[新闻分析师]
     A --> E[社交媒体分析师]
-    
+
     B --> F[基本面报告]
     C --> G[市场分析报告]
     D --> H[新闻分析报告]

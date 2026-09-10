@@ -1,7 +1,7 @@
 {
-  "name": "zhitou-frontend",
+  "name": "zhitouagent-frontend",
   "version": "1.0.0-preview",
-  "description": "智投 AI智能股票分析平台",
+  "description": "智能投研助手 zhitouagent",
   "type": "module",
   "scripts": {
     "dev": "vite",

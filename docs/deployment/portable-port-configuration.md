@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-TradingAgents-CN 绿色版使用以下端口：
+zhitouagent 绿色版使用以下端口：
 
 | 服务 | 默认端口 | 说明 | 配置文件 |
 |------|---------|------|---------|
@@ -81,7 +81,7 @@ TradingAgents-CN 绿色版使用以下端口：
    ```
 
 4. **同时修改 Nginx 配置**：
-   
+
    打开 `runtime/nginx.conf`，找到第 31-33 行：
    ```nginx
    # Backend upstream
@@ -89,7 +89,7 @@ TradingAgents-CN 绿色版使用以下端口：
        server 127.0.0.1:8000;
    }
    ```
-   
+
    修改为新端口：
    ```nginx
    # Backend upstream
@@ -152,13 +152,13 @@ MongoDB 的配置文件是在启动时自动生成的，需要修改启动脚本
    ```
 
 4. **修改 `.env` 文件**：
-   
+
    打开 `.env`，找到 MongoDB 配置（大约在第 228-233 行）：
    ```ini
    MONGODB_HOST=localhost
    MONGODB_PORT=27017
    ```
-   
+
    修改为新端口：
    ```ini
    MONGODB_HOST=localhost
@@ -193,13 +193,13 @@ MongoDB 的配置文件是在启动时自动生成的，需要修改启动脚本
    ```
 
 4. **修改 `.env` 文件**：
-   
+
    打开 `.env`，找到 Redis 配置（大约在第 238-241 行）：
    ```ini
    REDIS_HOST=localhost
    REDIS_PORT=6379
    ```
-   
+
    修改为新端口：
    ```ini
    REDIS_HOST=localhost
@@ -229,7 +229,7 @@ MongoDB 的配置文件是在启动时自动生成的，需要修改启动脚本
    ```nginx
    # 第 36 行：前端端口
    listen       8080;
-   
+
    # 第 32 行：后端代理端口
    upstream backend {
        server 127.0.0.1:8001;
@@ -241,11 +241,11 @@ MongoDB 的配置文件是在启动时自动生成的，需要修改启动脚本
    # 后端端口
    HOST=0.0.0.0
    PORT=8001
-   
+
    # MongoDB 端口
    MONGODB_HOST=localhost
    MONGODB_PORT=27018
-   
+
    # Redis 端口
    REDIS_HOST=localhost
    REDIS_PORT=6380
@@ -336,7 +336,7 @@ netstat -ano | findstr :80
 
 ### Q4: 如何恢复默认端口？
 
-**A:** 
+**A:**
 1. 重新解压绿色版压缩包
 2. 或者按照本文档将端口改回默认值：
    - 前端：80
@@ -361,7 +361,7 @@ netstat -ano | findstr :80
    ```
 
 3. 提交 Issue：
-   - GitHub: https://github.com/your-repo/TradingAgents-CN/issues
+   - GitHub: https://github.com/your-repo/zhitouagent/issues
    - 请附上错误日志和配置文件内容
 
 ---
