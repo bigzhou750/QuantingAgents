@@ -73,16 +73,17 @@ log "📋 .env 已同步到 deploy/"
 
 # 3. 构建/拉取 Docker 镜像
 if [[ "$COMPOSE_FILE" == *"local-build"* ]]; then
-    log "🔨 本地构建 Docker 镜像（仅重建变更部分）..."
-    $COMPOSE_CMD build --no-cache=false
+    log "🔨 本地构建 Docker 镜像（强制重建 backend + frontend）..."
+    # 必须 --no-cache 重建应用镜像，否则 Docker 层缓存会导致代码变更不生效
+    $COMPOSE_CMD build --no-cache backend frontend
 else
     log "🐳 拉取最新 Docker 镜像..."
     $COMPOSE_CMD pull mongodb redis backend frontend nginx
 fi
 
-# 4. 重启服务
+# 4. 重启服务（--force-recreate 确保使用新镜像）
 log "🔄 重启服务..."
-$COMPOSE_CMD up -d --remove-orphans
+$COMPOSE_CMD up -d --force-recreate --remove-orphans
 
 # 5. 清理旧镜像
 log "🧹 清理旧镜像..."
