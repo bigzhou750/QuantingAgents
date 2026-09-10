@@ -28,10 +28,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Waffo API 基础 URL（test/prod 通过 API Key 区分，共用同一域名）
+# Waffo API 基础 URL（参考官方文档: https://docs.waffo.ai）
 WAFFO_API_BASE = {
-    "test": "https://api.waffo.ai",
-    "prod": "https://api.waffo.ai",
+    "test": "https://api-sandbox.waffo.com",
+    "prod": "https://api.waffo.com",
 }
 
 
