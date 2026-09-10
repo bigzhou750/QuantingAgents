@@ -206,10 +206,15 @@ else
         exit 1
     fi
 
-    # 生成随机安全密钥（数据库密码使用默认值，与 compose 文件保持一致）
+    # 生成随机安全密钥，数据库密码不再使用固定默认值
     JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null || openssl rand -base64 48)
     CSRF_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null || openssl rand -base64 48)
     WEBHOOK_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
+    MONGODB_PASSWORD="${MONGODB_PASSWORD:-$(openssl rand -hex 16)}"
+    REDIS_PASSWORD="${REDIS_PASSWORD:-$(openssl rand -hex 16)}"
+    ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://localhost}"
+    ALLOWED_HOSTS="${ALLOWED_HOSTS:-localhost}"
+    DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
 
     # 复制模板并替换安全密钥占位符
     cp "$TEMPLATE" "$WORKTREE_DIR/.env"
@@ -217,15 +222,21 @@ else
         -e "s|{{JWT_SECRET}}|${JWT_SECRET}|g" \
         -e "s|{{CSRF_SECRET}}|${CSRF_SECRET}|g" \
         -e "s|{{WEBHOOK_SECRET}}|${WEBHOOK_SECRET}|g" \
+        -e "s|{{MONGODB_PASSWORD}}|${MONGODB_PASSWORD}|g" \
+        -e "s|{{REDIS_PASSWORD}}|${REDIS_PASSWORD}|g" \
+        -e "s|{{ALLOWED_ORIGINS}}|${ALLOWED_ORIGINS}|g" \
+        -e "s|{{ALLOWED_HOSTS}}|${ALLOWED_HOSTS}|g" \
+        -e "s|{{DEEPSEEK_API_KEY}}|${DEEPSEEK_API_KEY}|g" \
         "$WORKTREE_DIR/.env"
 
     chmod 600 "$WORKTREE_DIR/.env"
 
-    echo "✅ .env 已生成（JWT/CSRF/Webhook 密钥已随机化）"
-    echo ""
-    echo "⚠️  重要：请编辑 .env 填入 AI 模型 API 密钥:"
-    echo "   vim $WORKTREE_DIR/.env"
-    echo "   至少配置 DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY"
+    if [ -z "$DEEPSEEK_API_KEY" ]; then
+        echo "❌ 未配置 DEEPSEEK_API_KEY，发布环境必须提供 DeepSeek 密钥"
+        exit 1
+    fi
+
+    echo "✅ .env 已生成（JWT/CSRF/数据库密码/Webhook 密钥已随机化）"
     echo ""
 fi
 

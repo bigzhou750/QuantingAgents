@@ -409,6 +409,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '配置管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -419,6 +420,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '数据库管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -429,6 +431,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '操作日志',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -439,6 +442,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统日志',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -449,6 +453,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '多数据源同步',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -459,6 +464,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缓存管理',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -469,6 +475,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '使用统计',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },
@@ -490,6 +497,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '定时任务',
           requiresAuth: true,
+          requiresAdmin: true,
           transition: 'slide-left'
         }
       },

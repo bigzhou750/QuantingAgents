@@ -202,6 +202,7 @@
             <div class="config-content">
               <!-- AI模型配置组件 -->
               <ModelConfig
+                v-if="authStore.isAdmin"
                 v-model:quick-analysis-model="modelSettings.quickAnalysisModel"
                 v-model:deep-analysis-model="modelSettings.deepAnalysisModel"
                 :available-models="availableModels"
@@ -304,6 +305,7 @@ import { validateStockCode } from '@/utils/stockValidator'
 // 路由实例（必须在顶层调用）
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const submitting = ref(false)
 const stockInput = ref('')
@@ -313,8 +315,8 @@ const invalidCodes = ref<string[]>([])
 
 // 模型设置
 const modelSettings = ref({
-  quickAnalysisModel: 'qwen-turbo',
-  deepAnalysisModel: 'qwen-max'
+  quickAnalysisModel: 'deepseek-chat',
+  deepAnalysisModel: 'deepseek-reasoner'
 })
 
 // 可用的模型列表（从配置中获取）
@@ -393,16 +395,10 @@ const initializeModelSettings = async () => {
       llmConfigs.filter((config: any) => config.enabled)
     )
 
-    console.log('✅ 加载模型配置成功:', {
-      quick: modelSettings.value.quickAnalysisModel,
-      deep: modelSettings.value.deepAnalysisModel,
-      available: availableModels.value.length
-    })
   } catch (error) {
-    console.error('加载默认模型配置失败:', error)
     // 使用硬编码的默认值
-    modelSettings.value.quickAnalysisModel = 'qwen-plus'
-    modelSettings.value.deepAnalysisModel = 'qwen-max'
+    modelSettings.value.quickAnalysisModel = 'deepseek-chat'
+    modelSettings.value.deepAnalysisModel = 'deepseek-reasoner'
   }
 }
 
@@ -411,7 +407,6 @@ onMounted(async () => {
   await initializeModelSettings()
 
   // 🆕 从用户偏好加载默认设置
-  const authStore = useAuthStore()
   const userPrefs = authStore.user?.preferences
 
   if (userPrefs) {

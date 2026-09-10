@@ -54,14 +54,7 @@
             </el-button>
           </el-form-item>
 
-          <el-form-item>
-            <div class="login-tip">
-              <el-text type="info" size="small">
-                开源版使用默认账号：admin / admin123
-              </el-text>
-            </div>
-          </el-form-item>
-          <el-form-item>
+          <el-form-item v-if="registrationEnabled">
             <el-button link style="width: 100%" @click="router.push('/register')">创建新账号</el-button>
           </el-form-item>
         </el-form>
@@ -78,16 +71,18 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loginFormRef = ref()
 const loginLoading = ref(false)
+const registrationEnabled = ref(true)
 
 const loginForm = reactive({
   username: '',
@@ -147,6 +142,15 @@ const handleLogin = async () => {
     loginLoading.value = false
   }
 }
+
+onMounted(async () => {
+  try {
+    const response = await authApi.registrationStatus()
+    registrationEnabled.value = response.data?.enabled ?? true
+  } catch {
+    registrationEnabled.value = true
+  }
+})
 
 
 </script>

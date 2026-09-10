@@ -84,8 +84,8 @@ async def process_task(task_id: str) -> None:
         research_depth = params.get("research_depth", 2)
         from tradingagents.llm_clients.provider_keys import normalize_provider_key
 
-        llm_provider = normalize_provider_key(params.get("llm_provider", "dashscope"))
-        llm_model = params.get("llm_model", "qwen-plus")
+        llm_provider = normalize_provider_key(params.get("llm_provider", "deepseek"))
+        llm_model = params.get("llm_model", "deepseek-chat")
         market_type = params.get("market_type", "美股")
         analysis_date = params.get("analysis_date", datetime.now().strftime("%Y-%m-%d"))
 

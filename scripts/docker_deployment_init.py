@@ -181,29 +181,32 @@ async def create_default_admin_user(db):
         from app.services.user_service import user_service
 
         # 读取当前管理员密码配置
-        admin_password = "admin123"  # 默认密码
+        admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
         config_file = project_root / "config" / "admin_password.json"
 
         if config_file.exists():
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    admin_password = config.get("password", "admin123")
+                    admin_password = admin_password or config.get("password", "")
                 logger.info(f"✓ 从配置文件读取管理员密码")
             except Exception as e:
-                logger.warning(f"⚠️ 读取密码配置失败，使用默认密码: {e}")
+                logger.warning(f"⚠️ 读取密码配置失败: {e}")
+
+        if not admin_password:
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过管理员创建")
+            return False
 
         # 使用用户服务创建管理员用户
         admin_user = await user_service.create_admin_user(
             username="admin",
             password=admin_password,
-            email="admin@tradingagents.cn"
+            email="zh75067197@gmail.com"
         )
 
         if admin_user:
             logger.info("✅ 创建管理员用户成功")
             logger.info(f"   用户名: admin")
-            logger.info(f"   密码: {admin_password}")
             logger.info("   ⚠️  请在首次登录后立即修改密码！")
         else:
             logger.info("✓ 管理员用户已存在")
@@ -298,15 +301,12 @@ async def setup_admin_password():
         
         # 如果配置文件不存在，创建默认配置
         if not config_file.exists():
-            default_config = {"password": "admin123"}
-            with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(default_config, f, ensure_ascii=False, indent=2)
-            logger.info("✅ 创建默认管理员密码配置: admin123")
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过管理员密码配置")
         else:
             with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
-                current_password = config.get("password", "admin123")
-            logger.info(f"✅ 当前管理员密码: {current_password}")
+                if not config.get("password"):
+                    logger.warning("管理员密码配置为空，请通过 INITIAL_ADMIN_PASSWORD 提供")
         
         return True
         
@@ -376,18 +376,17 @@ async def main():
         
         # 读取当前管理员密码
         config_file = project_root / "config" / "admin_password.json"
-        admin_password = "admin123"
+        admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
         if config_file.exists():
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    admin_password = config.get("password", "admin123")
+                    admin_password = admin_password or config.get("password", "")
             except:
                 pass
         
         logger.info(f"\n🔐 登录信息:")
         logger.info(f"- 用户名: admin")
-        logger.info(f"- 密码: {admin_password}")
         logger.info("\n⚠️  重要提醒:")
         logger.info("1. 请立即登录系统并修改管理员密码")
         logger.info("2. 配置必要的 API 密钥（如 DASHSCOPE_API_KEY）")

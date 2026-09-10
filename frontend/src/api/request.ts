@@ -104,19 +104,6 @@ const createAxiosInstance = (): AxiosInstance => {
         if (token) {
           config.headers = config.headers || {}
           config.headers.Authorization = `Bearer ${token}`
-          console.log('🔐 已设置Authorization头:', {
-            hasToken: !!token,
-            tokenLength: token?.length || 0,
-            tokenPrefix: token?.substring(0, 20) || 'None',
-            authHeader: config.headers.Authorization?.substring(0, 30) || 'None'
-          })
-        } else {
-          console.log('⚠️ 未设置Authorization头:', {
-            skipAuth: config.skipAuth,
-            hasToken: !!authStore.token,
-            localStored: !!localStorage.getItem('auth-token'),
-            url: config.url
-          })
         }
       }
 
@@ -154,15 +141,6 @@ const createAxiosInstance = (): AxiosInstance => {
         console.warn('端点兼容检查异常', e)
       }
 
-      console.log(`🚀 API请求: ${config.method?.toUpperCase()} ${config.url}`, {
-        baseURL: config.baseURL,
-        fullURL: `${config.baseURL}${config.url}`,
-        params: config.params,
-        data: config.data,
-        headers: config.headers,
-        timeout: config.timeout
-      })
-
       return config
     },
     (error) => {
@@ -182,8 +160,6 @@ const createAxiosInstance = (): AxiosInstance => {
       if (config.showLoading) {
         appStore.setLoading(false)
       }
-
-      console.log(`✅ API响应: ${response.status} ${response.config.url}`, response.data)
 
       // 检查业务状态码
       const data = response.data as ApiResponse
@@ -221,15 +197,7 @@ const createAxiosInstance = (): AxiosInstance => {
         appStore.setLoading(false)
       }
 
-      console.error(`❌ API错误: ${error.response?.status} ${error.config?.url}`, {
-        error: error,
-        message: error.message,
-        code: error.code,
-        response: error.response,
-        request: error.request,
-        config: error.config,
-        stack: error.stack
-      })
+      console.error(`❌ API错误: ${error.response?.status} ${error.config?.url}`, error.message)
 
       // 处理HTTP状态码错误
       if (error.response) {

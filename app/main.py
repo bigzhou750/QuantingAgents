@@ -250,24 +250,31 @@ async def lifespan(app: FastAPI):
 
     await init_db()
 
-    # 自动创建默认管理员账号（首次部署时）
+    # 受控管理员初始化：只有显式提供强初始密码时才创建管理员
     try:
         from app.services.user_service import user_service
         existing_admin = await user_service.get_user_by_username("admin")
-        if not existing_admin:
-            admin_user = await user_service.create_admin_user(
-                username="admin",
-                password="admin123",
-                email="zh75067197@gmail.com"
-            )
-            if admin_user:
-                logger.info("✅ 已创建默认管理员账号: admin / admin123")
+        initial_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
+        if existing_admin:
+            logger.info("ℹ️ 管理员账号已存在，跳过初始化")
+        elif initial_admin_password:
+            password_error = user_service.validate_password(initial_admin_password)
+            if password_error:
+                logger.warning("管理员初始化失败：初始密码不符合策略，请通过受控渠道重试")
             else:
-                logger.warning("⚠️ 默认管理员账号创建失败")
+                admin_user = await user_service.create_admin_user(
+                    username="admin",
+                    password=initial_admin_password,
+                    email="zh75067197@gmail.com"
+                )
+                if admin_user:
+                    logger.info("✅ 管理员账号初始化完成")
+                else:
+                    logger.warning("⚠️ 管理员账号初始化失败")
         else:
-            logger.info("ℹ️ 管理员账号已存在，跳过创建")
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过自动创建管理员；请使用 scripts/create_default_admin.py 受控初始化")
     except Exception as e:
-        logger.warning(f"⚠️ 默认管理员初始化失败（非阻塞）: {e}")
+        logger.warning(f"⚠️ 管理员初始化检查失败（非阻塞）: {e}")
 
     try:
         from app.services.personal_investment.profile_service import profile_service

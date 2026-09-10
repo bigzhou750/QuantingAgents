@@ -17,7 +17,7 @@ class ErrorCategory(str, Enum):
     LLM_CONTENT_FILTER = "llm_content_filter"  # 大模型内容审核失败
     LLM_OTHER = "llm_other"  # 大模型其他错误
 
-    DATA_SOURCE_API_KEY = "data_source_api_key"  # 数据源 API Key 错误
+    DATA_SOURCE_API_KEY = "data_source_key"  # 数据源 API Key 错误
     DATA_SOURCE_NETWORK = "data_source_network"  # 数据源网络错误
     DATA_SOURCE_NOT_FOUND = "data_source_not_found"  # 数据源找不到数据
     DATA_SOURCE_OTHER = "data_source_other"  # 数据源其他错误
@@ -410,4 +410,3 @@ class ErrorFormatter:
                 ),
                 "technical_detail": original_error
             }
-

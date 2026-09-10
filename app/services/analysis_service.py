@@ -361,7 +361,7 @@ class AnalysisService:
                 task_id=task.task_id,
                 analysts=task.parameters.selected_analysts or ["market", "fundamentals"],
                 research_depth=task.parameters.research_depth or "标准",
-                llm_provider="dashscope"
+                llm_provider="deepseek"
             )
 
             # 缓存进度跟踪器
@@ -397,7 +397,7 @@ class AnalysisService:
                 deep_model = getattr(task.parameters, 'deep_analysis_model', None)
 
                 # 优先使用深度分析模型，如果没有则使用快速分析模型
-                model_name = deep_model or quick_model or "qwen-plus"
+                model_name = deep_model or quick_model or "deepseek-chat"
 
                 # 根据模型名称确定供应商
                 from app.services.simple_analysis_service import get_provider_by_model_name

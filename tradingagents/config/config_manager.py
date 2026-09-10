@@ -297,8 +297,8 @@ class ConfigManager:
             default_data_dir = os.path.join(os.path.expanduser("~"), "Documents", "zhitouagent", "data")
             
             default_settings = {
-                "default_provider": "dashscope",
-                "default_model": "qwen-turbo",
+                "default_provider": "deepseek",
+                "default_model": "deepseek-chat",
                 "enable_cost_tracking": True,
                 "cost_alert_threshold": 100.0,  # 成本警告阈值
                 "currency_preference": "CNY",
@@ -484,8 +484,8 @@ class ConfigManager:
             else:
                 # 如果设置文件不存在，创建默认设置
                 settings = {
-                    "default_provider": "dashscope",
-                    "default_model": "qwen-turbo",
+                    "default_provider": "deepseek",
+                    "default_model": "deepseek-chat",
                     "enable_cost_tracking": True,
                     "cost_alert_threshold": 100.0,
                     "currency_preference": "CNY",

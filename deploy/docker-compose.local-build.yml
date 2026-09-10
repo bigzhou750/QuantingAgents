@@ -18,7 +18,7 @@ services:
       - zhitouagent_mongodb_data:/data/db
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-zhitouagent123}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
       MONGO_INITDB_DATABASE: zhitouagent
       TZ: "Asia/Shanghai"
     networks:
@@ -41,11 +41,11 @@ services:
       - zhitouagent_redis_data:/data
     environment:
       TZ: "Asia/Shanghai"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-zhitouagent123}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     networks:
       - zhitouagent-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-zhitouagent123}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -78,43 +78,28 @@ services:
       MONGODB_HOST: "mongodb"
       MONGODB_PORT: "27017"
       MONGODB_USERNAME: "admin"
-      MONGODB_PASSWORD: "${MONGODB_PASSWORD:-zhitouagent123}"
+      MONGODB_PASSWORD: "${MONGODB_PASSWORD}"
       MONGODB_DATABASE: "zhitouagent"
       MONGODB_AUTH_SOURCE: "admin"
-      MONGODB_URL: "mongodb://admin:${MONGODB_PASSWORD:-zhitouagent123}@mongodb:27017/zhitouagent?authSource=admin"
-      MONGODB_CONNECTION_STRING: "mongodb://admin:${MONGODB_PASSWORD:-zhitouagent123}@mongodb:27017/zhitouagent?authSource=admin"
+      MONGODB_URL: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
+      MONGODB_CONNECTION_STRING: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
       # Redis
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:-zhitouagent123}"
-      REDIS_URL: "redis://:${REDIS_PASSWORD:-zhitouagent123}@redis:6379/0"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
       DOCKER_CONTAINER: "true"
       # 安全配置（JWT_SECRET/CSRF_SECRET 已在上方声明）
       JWT_ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "480"
       REFRESH_TOKEN_EXPIRE_DAYS: "30"
       BCRYPT_ROUNDS: "12"
-      CORS_ORIGINS: "*"
-      # AI 模型 API 密钥
-      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:-}"
-      DASHSCOPE_ENABLED: "${DASHSCOPE_ENABLED:-false}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS}"
+      AUTH_REGISTRATION_ENABLED: "${AUTH_REGISTRATION_ENABLED:-true}"
+      # AI 模型 API 密钥：生产默认仅 DeepSeek
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
-      DEEPSEEK_ENABLED: "${DEEPSEEK_ENABLED:-false}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      OPENAI_ENABLED: "${OPENAI_ENABLED:-false}"
-      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
-      GOOGLE_ENABLED: "${GOOGLE_ENABLED:-false}"
-      BAIDU_API_KEY: "${BAIDU_API_KEY:-}"
-      BAIDU_SECRET_KEY: "${BAIDU_SECRET_KEY:-}"
-      BAIDU_ENABLED: "${BAIDU_ENABLED:-false}"
-      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
-      OPENROUTER_ENABLED: "${OPENROUTER_ENABLED:-false}"
-      AIHUBMIX_API_KEY: "${AIHUBMIX_API_KEY:-}"
-      AIHUBMIX_ENABLED: "${AIHUBMIX_ENABLED:-false}"
-      SILICONFLOW_API_KEY: "${SILICONFLOW_API_KEY:-}"
-      SILICONFLOW_ENABLED: "${SILICONFLOW_ENABLED:-false}"
-      VOLCENGINE_API_KEY: "${VOLCENGINE_API_KEY:-}"
-      VOLCENGINE_BASE_URL: "${VOLCENGINE_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}"
+      DEEPSEEK_ENABLED: "${DEEPSEEK_ENABLED:-true}"
       # 数据源
       TUSHARE_TOKEN: "${TUSHARE_TOKEN:-}"
       TUSHARE_ENABLED: "${TUSHARE_ENABLED:-false}"

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tradingagents"
 version = "1.0.0-preview"
-description = "Add your description here"
+description = "智能投研助手 zhitouagent 核心运行库"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -96,8 +96,8 @@ dependencies = [
 qianfan = ["qianfan>=0.4.0"]
 
 [project.scripts]
-tradingagents = "main:main"
+zhitouagent = "cli.main:main"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*"]
+include = ["tradingagents*", "cli*"]
 exclude = ["tests*", "docs*", "scripts*", "data*", "logs*", "reports*", "results*", "eval_results*", "upstream_contribution*"]

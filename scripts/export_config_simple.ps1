@@ -10,7 +10,7 @@ Write-Host "====================================================================
 $containerName = "tradingagents-mongodb"
 $dbName = "tradingagents"
 $username = "admin"
-$password = "tradingagents123"
+$password = $env:MONGODB_PASSWORD
 $authDb = "admin"
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $exportDir = "mongodb_config_export_$timestamp"
@@ -90,10 +90,10 @@ Write-Host "导入 MongoDB 配置数据" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 # 配置（根据新服务器环境修改）
-$containerName = "tradingagents-mongodb"
-$dbName = "tradingagents"
+$containerName = "zhitouagent-mongodb"
+$dbName = "zhitouagent"
 $username = "admin"
-$password = "tradingagents123"
+$password = $env:MONGODB_PASSWORD
 $authDb = "admin"
 
 Write-Host "`n[1] 检查 MongoDB 容器..." -ForegroundColor Yellow
@@ -195,10 +195,10 @@ $readme = @"
 
 ``````powershell
 # 检查系统配置
-docker exec tradingagents-mongodb mongo tradingagents -u admin -p tradingagents123 --authenticationDatabase admin --eval "db.system_configs.countDocuments()"
+docker exec zhitouagent-mongodb mongo zhitouagent -u admin -p $password --authenticationDatabase admin --eval "db.system_configs.countDocuments()"
 
 # 检查用户数量
-docker exec tradingagents-mongodb mongo tradingagents -u admin -p tradingagents123 --authenticationDatabase admin --eval "db.users.countDocuments()"
+docker exec zhitouagent-mongodb mongo zhitouagent -u admin -p $password --authenticationDatabase admin --eval "db.users.countDocuments()"
 ``````
 "@
 

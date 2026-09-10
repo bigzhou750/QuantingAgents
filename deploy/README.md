@@ -67,14 +67,11 @@ GIT_TOKEN=你的令牌 sudo -E bash deploy/setup.sh <private-repository-url> fea
 ```bash
 vim /opt/zhitouagent/worktree/.env
 
-# 至少填写以下一项:
 DEEPSEEK_API_KEY=sk-xxxxx
 DEEPSEEK_ENABLED=true
-
-# 或
-DASHSCOPE_API_KEY=sk-xxxxx
-DASHSCOPE_ENABLED=true
 ```
+
+生产环境只允许使用 DeepSeek 作为默认运行模型。`setup.sh` 未提供 `DEEPSEEK_API_KEY` 时会直接中止部署。
 
 修改后重启后端：
 
@@ -93,6 +90,13 @@ docker compose -f docker-compose.hub.nginx.yml restart backend
 | 9000 | TCP | Gitee IP 段 | Webhook（可选） |
 
 > ⚠️ **不要开放** 27017、6379、8000 端口到公网
+
+### 生产安全清单
+
+- 将 `ALLOWED_ORIGINS` 和 `ALLOWED_HOSTS` 配置为正式域名，禁止通配符。
+- 禁止把 `.env`、真实 API Key、数据库密码、JWT/CSRF 密钥提交到 Git 或发布包。
+- 本地 `.env` 或历史构建中出现过的 DeepSeek Key 必须在上线前轮换。
+- 管理员初始化必须通过 `INITIAL_ADMIN_PASSWORD` 或 `scripts/create_default_admin.py` 显式设置强密码，禁止使用公开默认账号。
 
 ### 6. 验证部署
 

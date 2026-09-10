@@ -1,4 +1,4 @@
-# TradingAgents-CN Docker构建忽略文件
+# zhitouagent Docker构建忽略文件
 # 用于减小Docker镜像大小和加快构建速度
 #
 # 注意：此文件同时用于后端和前端镜像构建
@@ -50,7 +50,21 @@ env/
 # 环境变量文件（敏感信息，不应打包到镜像）
 .env
 .env.local
+.env.docker
 .env.*.local
+
+# 非交付入口与历史应用
+web/
+reports/
+docs/release/
+install/*.json
+scripts/debug/
+scripts/archived/
+scripts/deployment/
+scripts/maintenance/
+scripts/development/
+scripts/setup/
+scripts/startup/
 
 # Node.js相关
 node_modules/
@@ -134,4 +148,3 @@ scripts/full_redeploy_*.sh
 .editorconfig
 .prettierrc
 # 注意：不排除 tsconfig.json、vite.config.js 等，因为前端构建需要这些文件
-

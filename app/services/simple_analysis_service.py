@@ -426,7 +426,7 @@ def _get_default_provider_by_model(model_name: str) -> str:
         'chatglm3-6b': 'glm'
     }
 
-    provider = model_provider_map.get(model_name, 'qwen')  # 默认使用阿里百炼
+    provider = model_provider_map.get(model_name, 'deepseek')  # 默认使用 DeepSeek
     logger.info(f"🔧 使用默认映射: {model_name} -> {provider}")
     return provider
 

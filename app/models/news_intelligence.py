@@ -115,7 +115,7 @@ class NewsAnalysisRecord:
     news_ids: List[str] = field(default_factory=list)
     prompt_version: str = "v1"
     schema_version: str = "v1"
-    model_config: str = "qwen-plus"
+    model_config: str = "deepseek-chat"
     result: Dict[str, Any] = field(default_factory=dict)
     degraded: bool = False
     failure_reason: Optional[str] = None

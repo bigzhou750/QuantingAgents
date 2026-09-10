@@ -430,7 +430,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.OPENAI,
                     model_name="gpt-3.5-turbo",
-                    api_key="your-openai-api-key",
+                    api_key="",
                     api_base="https://api.openai.com/v1",
                     max_tokens=4000,
                     temperature=0.7,
@@ -440,7 +440,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.ZHIPU,
                     model_name="glm-4",
-                    api_key="your-zhipu-api-key",
+                    api_key="",
                     api_base="https://open.bigmodel.cn/api/paas/v4",
                     max_tokens=4000,
                     temperature=0.7,
@@ -450,7 +450,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.QWEN,
                     model_name="qwen-turbo",
-                    api_key="your-qwen-api-key",
+                    api_key="",
                     api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
                     max_tokens=4000,
                     temperature=0.7,
@@ -473,7 +473,7 @@ class ConfigService:
                 DataSourceConfig(
                     name="Tushare",
                     type=DataSourceType.TUSHARE,
-                    api_key="your-tushare-token",
+                    api_key="",
                     endpoint="http://api.tushare.pro",
                     timeout=30,
                     rate_limit=200,
