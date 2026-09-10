@@ -266,8 +266,9 @@ async def waffo_webhook(request: Request):
     """
     from app.services.waffo_service import WaffoWebhookError
 
-    # ⚠️ 必须用 text() 读取原始 body，不能用 json()
-    body_text = await request.text()
+    # ⚠️ 必须读取原始 body，不能先解析 JSON（会破坏签名验证）
+    body_bytes = await request.body()
+    body_text = body_bytes.decode("utf-8")
     signature = request.headers.get("x-waffo-signature", "")
 
     # 验签
