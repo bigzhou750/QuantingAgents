@@ -97,6 +97,10 @@
       <div class="particle particle--5"></div>
       <div class="particle particle--6"></div>
     </div>
+    <!-- CI/CD 部署版本标记 -->
+    <div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,0.4);z-index:9999;">
+      Build: {{ new Date().toISOString().slice(0, 16) }}
+    </div>
   </div>
 </template>
 
