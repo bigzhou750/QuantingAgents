@@ -62,6 +62,11 @@
         <!-- Footer -->
         <div class="login-footer">
           <p>&copy; 2026 智能投研助手 · zhitouagent</p>
+          <p class="legal-links">
+            <router-link to="/terms">服务条款</router-link>
+            <router-link to="/privacy">隐私政策</router-link>
+            <a href="mailto:zh75067197@gmail.com">支持邮箱</a>
+          </p>
           <p class="disclaimer">
             本平台AI分析结果仅供学习研究参考，不构成投资建议。市场有风险，投资需谨慎。
           </p>
@@ -399,6 +404,22 @@ onMounted(async () => {
     margin-top: 4px;
     font-size: 11px;
     color: #d0d0d0;
+  }
+
+  .legal-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 8px;
+
+    a {
+      color: #888;
+      text-decoration: none;
+
+      &:hover {
+        color: #0a0a0a;
+      }
+    }
   }
 }
 

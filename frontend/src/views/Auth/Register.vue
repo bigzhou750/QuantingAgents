@@ -66,7 +66,13 @@
 
             <el-form-item prop="agreement" class="agreement-item">
               <el-checkbox v-model="form.agreement">
-                我同意用户协议并确认提供的信息真实有效
+                <span class="agreement-text">
+                  我同意
+                  <a href="javascript:void(0)" @click.stop="router.push('/terms')">服务条款</a>
+                  和
+                  <a href="javascript:void(0)" @click.stop="router.push('/privacy')">隐私政策</a>
+                  ，并确认提供的信息真实有效
+                </span>
               </el-checkbox>
             </el-form-item>
 
@@ -91,6 +97,11 @@
         <!-- Footer -->
         <div class="register-footer">
           <p>&copy; 2026 智能投研助手 · zhitouagent</p>
+          <p class="legal-links">
+            <router-link to="/terms">服务条款</router-link>
+            <router-link to="/privacy">隐私政策</router-link>
+            <a href="mailto:zh75067197@gmail.com">支持邮箱</a>
+          </p>
         </div>
       </div>
     </div>
@@ -314,6 +325,12 @@ onMounted(async () => {
       background-color: #0a0a0a;
       border-color: #0a0a0a;
     }
+
+    .agreement-text a {
+      color: #0a0a0a;
+      font-weight: 600;
+      text-decoration: underline;
+    }
   }
 }
 
@@ -385,6 +402,22 @@ onMounted(async () => {
     font-size: 12px;
     color: #c0c0c0;
     line-height: 1.6;
+  }
+
+  .legal-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 8px;
+
+    a {
+      color: #888;
+      text-decoration: none;
+
+      &:hover {
+        color: #0a0a0a;
+      }
+    }
   }
 }
 

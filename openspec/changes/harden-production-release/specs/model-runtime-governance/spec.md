@@ -53,3 +53,17 @@
 #### Scenario: 分析网络请求检查
 - **WHEN** 前端发起分析任务
 - **THEN** 请求体不得包含模型 API Key、供应商密钥或自定义模型端点凭据
+
+### Requirement: 所有新闻 Agent 路径遵循同一模型配置
+
+新闻结构化分析 SHALL 使用后端配置的 DeepSeek 模型和密钥，不得绕过统一模型配置直接调用其他供应商。模型不可用时 SHALL 返回可识别的规则降级结果，不得因缺少其他供应商密钥直接返回 500。
+
+#### Scenario: 新闻分析使用 DeepSeek
+- **WHEN** 用户提交新闻分析请求且 DeepSeek 配置有效
+- **THEN** 新闻 Agent 使用 `deepseek-chat` 调用后端模型
+- **AND** 请求不读取或要求 DashScope API Key
+
+#### Scenario: 新闻分析缺少 DeepSeek 密钥
+- **WHEN** 用户提交新闻分析请求但 DeepSeek 密钥不可用
+- **THEN** 系统返回结构化的规则降级结果
+- **AND** 不因 DashScope 或其他供应商缺少密钥而返回内部 500 错误

@@ -125,6 +125,16 @@
           </el-descriptions-item>
           <el-descriptions-item label="支付方式">微信支付</el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+          class="refund-notice"
+          title="退款说明"
+        >
+          额度为即时到账数字服务，除重复扣款、平台原因或法律要求外不支持无理由退款。订单问题请联系
+          <a href="mailto:zh75067197@gmail.com">zh75067197@gmail.com</a>。
+        </el-alert>
       </div>
 
       <template #footer>
@@ -164,6 +174,7 @@
           <el-icon :size="64" color="#67C23A"><CircleCheckFilled /></el-icon>
           <h3>充值成功！</h3>
           <p>到账额度: {{ confirmQuota.toFixed(3) }}</p>
+          <p class="support-line">订单问题请联系 <a href="mailto:zh75067197@gmail.com">zh75067197@gmail.com</a></p>
         </div>
 
         <!-- 支付失败 -->
@@ -537,6 +548,16 @@ onUnmounted(() => {
 
     p {
       color: var(--el-text-color-secondary);
+    }
+
+    .support-line {
+      margin-top: 10px;
+      font-size: 13px;
+
+      a {
+        color: var(--el-color-primary);
+        text-decoration: none;
+      }
     }
   }
 }

@@ -377,6 +377,9 @@ async def export_transactions(
             item.created_at,
         ])
 
+    writer.writerow([])
+    writer.writerow(["支持邮箱", "zh75067197@gmail.com"])
+
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),

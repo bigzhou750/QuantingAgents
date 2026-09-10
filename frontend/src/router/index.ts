@@ -27,12 +27,13 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '注册', hideInMenu: true, transition: 'fade' }
   },
   {
-    path: '/about',
-    name: 'About',
+    path: '/',
+    name: 'Home',
     component: () => import('@/views/About/index.vue'),
+    alias: '/about',
     meta: {
-      title: '关于',
-      icon: 'InfoFilled',
+      title: '智能投研助手',
+      hideInMenu: true,
       requiresAuth: false,
       transition: 'fade'
     }

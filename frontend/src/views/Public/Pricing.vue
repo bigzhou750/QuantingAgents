@@ -1,8 +1,8 @@
 <template>
   <main class="public-page">
     <header class="public-header">
-      <router-link class="brand" to="/about">智能投研助手</router-link>
-      <nav><router-link to="/login">登录</router-link><router-link to="/register">注册</router-link></nav>
+      <router-link class="brand" to="/">智能投研助手</router-link>
+      <nav><router-link to="/privacy">隐私政策</router-link><router-link to="/terms">服务条款</router-link><router-link to="/login">登录</router-link><router-link to="/register">注册</router-link></nav>
     </header>
     <section class="content">
       <p class="eyebrow">zhitouagent</p>
@@ -23,7 +23,7 @@
       </div>
       <div class="section">
         <h2>退款与支持</h2>
-        <p>支付、退款和订单异常请保留订单信息联系 <a href="mailto:zh75067197@gmail.com">zh75067197@gmail.com</a>，我们会按实际订单状态处理。</p>
+        <p>额度充值属于即时到账的数字服务，除重复扣款、平台确认的服务中断或适用法律另有规定外，一般不提供无理由退款。支付、退款和订单异常请保留订单号或流水号联系 <a href="mailto:zh75067197@gmail.com">zh75067197@gmail.com</a>，我们会按实际订单状态处理。</p>
       </div>
       <p class="notice">AI 分析结果仅供研究和信息整理参考，不构成投资、证券、交易或收益承诺。</p>
     </section>
@@ -33,13 +33,24 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-const packages = ref<Array<{ package_id: string; amount_cny: number; quota_to_credit: number; gift_amount: number }>>([])
+const DEFAULT_PACKAGES = [
+  { package_id: 'pkg_20', name: '20元套餐', amount_cny: 20, quota_to_credit: 22, gift_amount: 2, tags: [] },
+  { package_id: 'pkg_50', name: '50元套餐', amount_cny: 50, quota_to_credit: 55, gift_amount: 5, tags: [] },
+  { package_id: 'pkg_100', name: '100元套餐', amount_cny: 100, quota_to_credit: 110, gift_amount: 10, tags: ['hot'] },
+  { package_id: 'pkg_200', name: '200元套餐', amount_cny: 200, quota_to_credit: 220, gift_amount: 20, tags: [] },
+  { package_id: 'pkg_500', name: '500元套餐', amount_cny: 500, quota_to_credit: 550, gift_amount: 50, tags: ['recommended'] }
+]
+
+const packages = ref<Array<{ package_id: string; name: string; amount_cny: number; quota_to_credit: number; gift_amount: number; tags: string[] }>>(DEFAULT_PACKAGES)
 onMounted(async () => {
   try {
     const response = await fetch('/api/token-billing/public-packages')
-    if (response.ok) packages.value = (await response.json()).data?.items || []
+    if (response.ok) {
+      const items = (await response.json()).data?.items || []
+      if (items.length) packages.value = items
+    }
   } catch {
-    packages.value = []
+    // 保留默认公开套餐，确保审核和未登录访客始终能看到价格
   }
 })
 </script>
