@@ -36,12 +36,17 @@ def assert_owner(document: dict[str, Any] | None, user_id: str) -> dict[str, Any
 
 async def ensure_owner_indexes(db: Any) -> None:
     """Create owner query/uniqueness indexes without making startup brittle."""
+    from pymongo.errors import OperationFailure
     for collection_name, specs in OWNER_INDEXES.items():
         collection = db[collection_name]
         for fields, unique in specs:
             try:
                 await collection.create_index(fields, unique=unique)
+            except OperationFailure as exc:
+                # IndexOptionsConflict (code 85): 同字段组合的索引已存在但名字不同，安全忽略
+                if exc.code == 85:
+                    logger.debug("owner index already exists for %s (different name), skipping", collection_name)
+                else:
+                    logger.warning("owner index unavailable for %s: %s", collection_name, type(exc).__name__)
             except Exception as exc:
-                # Existing legacy duplicates are reported and remain hidden by
-                # owner filters; migration must resolve them before uniqueness.
                 logger.warning("owner index unavailable for %s: %s", collection_name, type(exc).__name__)

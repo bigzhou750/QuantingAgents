@@ -75,6 +75,7 @@ services:
       ZHITOUAGENT_LOG_DIR: "/app/logs"
       ZHITOUAGENT_LOG_FILE: "/app/logs/zhitouagent.log"
       # MongoDB
+      MONGODB_ENABLED: "true"
       MONGODB_HOST: "mongodb"
       MONGODB_PORT: "27017"
       MONGODB_USERNAME: "admin"
@@ -84,6 +85,7 @@ services:
       MONGODB_URL: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
       MONGODB_CONNECTION_STRING: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
       # Redis
+      REDIS_ENABLED: "true"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
@@ -94,8 +96,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: "480"
       REFRESH_TOKEN_EXPIRE_DAYS: "30"
       BCRYPT_ROUNDS: "12"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS}"
-      ALLOWED_HOSTS: "${ALLOWED_HOSTS}"
+      # ALLOWED_ORIGINS / ALLOWED_HOSTS 由 env_file 直接注入（含 JSON 数组格式，不能在此用 ${} 展开）
       AUTH_REGISTRATION_ENABLED: "${AUTH_REGISTRATION_ENABLED:-true}"
       # AI 模型 API 密钥：生产默认仅 DeepSeek
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"

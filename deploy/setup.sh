@@ -212,8 +212,10 @@ else
     WEBHOOK_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
     MONGODB_PASSWORD="${MONGODB_PASSWORD:-$(openssl rand -hex 16)}"
     REDIS_PASSWORD="${REDIS_PASSWORD:-$(openssl rand -hex 16)}"
-    ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://localhost}"
-    ALLOWED_HOSTS="${ALLOWED_HOSTS:-localhost}"
+    # 获取服务器公网 IP 作为默认允许来源
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://${SERVER_IP}}"
+    ALLOWED_HOSTS="${ALLOWED_HOSTS:-${SERVER_IP}}"
     DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
 
     # 复制模板并替换安全密钥占位符
