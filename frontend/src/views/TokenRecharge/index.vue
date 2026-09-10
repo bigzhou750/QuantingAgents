@@ -113,8 +113,8 @@
           show-icon
           class="safety-endorsement"
         >
-          <template #title>微信支付 · 平台担保</template>
-          您的支付由微信支付提供安全保障，充值即时到账
+          <template #title>Waffo 安全支付 · 平台担保</template>
+          您的支付由 Waffo Pancake 提供安全保障，充值即时到账
         </el-alert>
 
         <el-descriptions :column="1" border class="order-summary">
@@ -123,7 +123,7 @@
           <el-descriptions-item label="赠送额度" v-if="confirmGift > 0">
             <span class="gift-text">+{{ confirmGift.toFixed(3) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="支付方式">微信支付</el-descriptions-item>
+          <el-descriptions-item label="支付方式">Waffo 安全支付</el-descriptions-item>
         </el-descriptions>
       </div>
 
@@ -144,7 +144,18 @@
       :show-close="payStatus !== 'polling'"
     >
       <div class="pay-status-content">
-        <!-- 扫码支付 -->
+        <!-- Waffo Checkout 跳转 -->
+        <div v-if="payType === 'WAFFO' && payStatus === 'polling'" class="waffo-section">
+          <el-icon :size="48" color="#409EFF"><Wallet /></el-icon>
+          <h3>正在跳转到支付页面...</h3>
+          <p class="waffo-tip">若未自动跳转，请点击下方按钮</p>
+          <el-button type="primary" size="large" @click="openWaffoCheckout">
+            前往支付
+          </el-button>
+          <p class="waffo-expire">支付页面有效期 {{ expireMinutes }} 分钟</p>
+        </div>
+
+        <!-- 扫码支付（兼容旧版） -->
         <div v-if="payType === 'NATIVE' && payStatus === 'polling'" class="qr-section">
           <div class="qr-placeholder">
             <el-icon :size="48"><Monitor /></el-icon>
@@ -153,7 +164,7 @@
           <p class="qr-tip">二维码有效期 {{ expireMinutes }} 分钟</p>
         </div>
 
-        <!-- MWEB跳转 -->
+        <!-- MWEB跳转（兼容旧版） -->
         <div v-if="payType === 'MWEB' && payStatus === 'polling'" class="mweb-section">
           <el-button type="primary" @click="openMwebPay">打开微信支付</el-button>
           <p class="mweb-tip">若未自动跳转，请手动点击按钮</p>
@@ -185,10 +196,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Wallet, Monitor, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { useTokenBillingStore } from '@/stores/tokenBilling'
 import { tokenBillingApi } from '@/api/tokenBilling'
+
+const route = useRoute()
 
 const billingStore = useTokenBillingStore()
 
@@ -203,6 +217,7 @@ const payFailMessage = ref('')
 const currentOrderId = ref('')
 const mwebUrl = ref('')
 const codeUrl = ref('')
+const checkoutUrl = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // 计算属性
@@ -267,7 +282,9 @@ async function confirmPay() {
       payType.value = order.pay_type
       expireMinutes.value = Math.round(new Date(order.expire_at).getTime() - Date.now()) / 60000
 
-      if (order.pay_type === 'NATIVE') {
+      if (order.pay_type === 'WAFFO') {
+        checkoutUrl.value = order.pay_params?.checkout_url || ''
+      } else if (order.pay_type === 'NATIVE') {
         codeUrl.value = order.pay_params?.code_url || ''
       } else if (order.pay_type === 'MWEB') {
         mwebUrl.value = order.pay_params?.mweb_url || ''
@@ -282,6 +299,15 @@ async function confirmPay() {
           payStatusDialogVisible.value = false
           ElMessage.success('模拟充值成功！额度已到账')
         }, 2000)
+      } else if (order.pay_type === 'WAFFO' && checkoutUrl.value) {
+        // Waffo 支付：跳转到 Checkout 页面，同时启动轮询检测支付结果
+        payStatus.value = 'polling'
+        payStatusDialogVisible.value = true
+        startPolling()
+        // 延迟 1.5 秒后自动在新标签页打开支付页面
+        setTimeout(() => {
+          window.open(checkoutUrl.value, '_blank', 'noopener,noreferrer')
+        }, 1500)
       } else {
         payStatus.value = 'polling'
         payStatusDialogVisible.value = true
@@ -331,6 +357,12 @@ function stopPolling() {
   }
 }
 
+function openWaffoCheckout() {
+  if (checkoutUrl.value) {
+    window.open(checkoutUrl.value, '_blank', 'noopener,noreferrer')
+  }
+}
+
 function openMwebPay() {
   if (mwebUrl.value) {
     window.location.href = mwebUrl.value
@@ -354,6 +386,17 @@ function retryPay() {
 
 onMounted(() => {
   billingStore.init()
+
+  // 检测 Waffo 支付回调参数
+  const orderId = route.query.order as string
+  const status = route.query.status as string
+  if (orderId && status === 'success') {
+    currentOrderId.value = orderId
+    payType.value = 'WAFFO'
+    payStatus.value = 'polling'
+    payStatusDialogVisible.value = true
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
@@ -516,6 +559,25 @@ onUnmounted(() => {
     }
 
     .qr-tip {
+      font-size: 13px;
+      color: var(--el-text-color-secondary);
+    }
+  }
+
+  .waffo-section {
+    h3 {
+      margin: 16px 0 8px;
+      color: var(--el-text-color-primary);
+    }
+
+    .waffo-tip {
+      font-size: 14px;
+      color: var(--el-text-color-secondary);
+      margin-bottom: 16px;
+    }
+
+    .waffo-expire {
+      margin-top: 12px;
       font-size: 13px;
       color: var(--el-text-color-secondary);
     }

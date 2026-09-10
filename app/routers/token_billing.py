@@ -19,7 +19,7 @@ from app.services.token_billing_service import (
     InsufficientBalanceError,
     DuplicateOrderError,
 )
-from app.services.wxpay_service import wxpay_service, WxPayApiError
+from app.services.waffo_service import waffo_service, WaffoApiError, WaffoConfigError
 from app.models.token_billing import (
     RechargeOrderCreate,
     RechargeOrderResponse,
@@ -90,12 +90,11 @@ async def create_order(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """创建充值订单 + 获取支付参数（R3/R4）"""
-    user_id = current_user["id"]
+    """创建充值订单 + 获取 Waffo Checkout URL（R3/R4）"""
+    import os as _os
 
-    # 检测支付类型
-    user_agent = request.headers.get("user-agent", "")
-    pay_type = wxpay_service.detect_pay_type(user_agent)
+    user_id = current_user["id"]
+    pay_type = "WAFFO"
 
     try:
         order_doc = await token_billing_service.create_order(
@@ -113,17 +112,14 @@ async def create_order(
             detail={"code": 40901, "message": str(e), "order_id": e.existing_order_id},
         )
 
-    # 模拟支付模式：通过环境变量 WXPAY_MOCK=true 显式开启
-    # 本地开发设置 WXPAY_MOCK=true 可跳过微信API直接入账
-    # 生产环境必须为 false 或不设置，强制走微信支付
-    import os as _os
-    is_mock_mode = _os.environ.get("WXPAY_MOCK", "").lower() in ("true", "1", "yes")
+    # 模拟支付模式：通过环境变量 PAYMENT_MOCK=true 显式开启
+    is_mock_mode = _os.environ.get("PAYMENT_MOCK", "").lower() in ("true", "1", "yes")
     if is_mock_mode:
-        logger.warning("⚠️ 模拟支付模式已启用（WXPAY_MOCK=true），请勿在生产环境使用")
+        logger.warning("⚠️ 模拟支付模式已启用（PAYMENT_MOCK=true），请勿在生产环境使用")
 
     if is_mock_mode:
-        # 模拟支付：跳过微信API，直接标记订单为已支付并入账
-        logger.info("🧪 模拟支付模式：跳过微信API，直接入账 (order=%s)", order_doc["order_id"])
+        # 模拟支付：跳过支付网关，直接标记订单为已支付并入账
+        logger.info("🧪 模拟支付模式：跳过支付网关，直接入账 (order=%s)", order_doc["order_id"])
         credited = await token_billing_service.mark_order_credited(
             order_doc["order_id"], "MOCK_TXN_" + order_doc["order_id"], {"mock": True}
         )
@@ -137,27 +133,43 @@ async def create_order(
             )
         pay_params = {"mock": True, "message": "模拟支付模式，无需真实付款"}
     else:
-        # 正式支付：调用微信支付API
-        amount_cents = round(order_doc["amount_mq"] / 10)  # 毫额度→分（÷10，四舍五入避免精度损失）
-        description = f"算力充值-{mq_to_yuan(order_doc['amount_mq']):.0f}元"
+        # 正式支付：调用 Waffo Pancake API 创建 Checkout Session
+        amount_yuan = mq_to_yuan(order_doc["amount_mq"])
+        currency = _os.environ.get("WAFFO_CURRENCY", "CNY")
+
+        # 构建成功回调 URL
+        origin = request.headers.get("origin", "")
+        if not origin:
+            server_ip = _os.environ.get("SERVER_IP", "localhost")
+            origin = f"http://{server_ip}"
+        success_url = f"{origin}/token-recharge?order={order_doc['order_id']}&status=success"
 
         try:
-            if pay_type == "NATIVE":
-                pay_params = await wxpay_service.create_native_order(
-                    order_doc["order_id"], amount_cents, description
-                )
-            elif pay_type == "JSAPI":
-                # JSAPI需要openid，v1先返回提示
-                pay_params = {"message": "JSAPI支付需要openid，请先完成微信授权"}
-            elif pay_type == "MWEB":
-                client_ip = request.client.host if request.client else ""
-                pay_params = await wxpay_service.create_mweb_order(
-                    order_doc["order_id"], amount_cents, description, client_ip
-                )
-            else:
-                pay_params = {}
-        except WxPayApiError as e:
-            logger.error("微信支付下单失败: %s", e)
+            checkout_result = await waffo_service.create_dynamic_checkout(
+                amount=amount_yuan,
+                currency=currency,
+                product_name=f"算力充值-{amount_yuan:.0f}元",
+                buyer_identity=user_id,
+                success_url=success_url,
+                metadata={
+                    "order_id": order_doc["order_id"],
+                    "user_id": user_id,
+                    "package_id": payload.package_id or "custom",
+                },
+            )
+            pay_params = {
+                "checkout_url": checkout_result["checkout_url"],
+                "session_id": checkout_result["session_id"],
+                "expires_at": checkout_result["expires_at"],
+            }
+        except WaffoConfigError as e:
+            logger.error("Waffo 支付配置错误: %s", e)
+            raise HTTPException(
+                status_code=500,
+                detail={"code": 50002, "message": f"支付服务未配置: {e}"},
+            )
+        except WaffoApiError as e:
+            logger.error("Waffo 支付下单失败: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail={"code": 50001, "message": f"支付服务暂时不可用: {e}"},
@@ -242,80 +254,96 @@ async def query_wx_order(
         raise HTTPException(status_code=500, detail=f"查询微信订单失败: {e}")
 
 
-# ==================== 微信支付回调（无auth） ====================
+# ==================== Waffo Webhook 回调（无auth） ====================
 
-@router.post("/wxpay/notify")
-async def wxpay_notify(request: Request):
+@router.post("/waffo/webhook")
+async def waffo_webhook(request: Request):
     """
-    微信支付异步回调通知
+    Waffo Pancake 异步回调通知
 
     注意：此端点不需要JWT认证，通过签名验证安全性
+    Webhook body 必须以原始文本读取，不能先解析 JSON
     """
-    body = await request.body()
-    headers = dict(request.headers)
+    from app.services.waffo_service import WaffoWebhookError
+
+    # ⚠️ 必须用 text() 读取原始 body，不能用 json()
+    body_text = await request.text()
+    signature = request.headers.get("x-waffo-signature", "")
 
     # 验签
-    if not wxpay_service.verify_callback_signature(headers, body):
-        logger.warning("微信支付回调验签失败")
+    try:
+        event = waffo_service.verify_webhook_signature(body_text, signature)
+    except WaffoWebhookError as e:
+        logger.warning("Waffo webhook 验签失败: %s", e)
         return {"code": "FAIL", "message": "签名验证失败"}
 
-    # 解析回调
-    try:
-        callback_data = wxpay_service.parse_callback(body)
-    except ValueError as e:
-        logger.error("回调解析失败: %s", e)
-        return {"code": "FAIL", "message": str(e)}
-
-    payment = callback_data.get("payment", {})
-    out_trade_no = payment.get("out_trade_no", "")
-    trade_state = payment.get("trade_state", "")
-    transaction_id = payment.get("transaction_id", "")
-
-    if not out_trade_no:
-        logger.warning("回调缺少out_trade_no")
-        return {"code": "FAIL", "message": "缺少订单号"}
+    event_type = event.get("eventType", "")
+    event_id = event.get("id", "")
+    event_data = event.get("data", {})
+    mode = event.get("mode", "test")
 
     logger.info(
-        "收到微信支付回调: order=%s, state=%s, txn=%s",
-        out_trade_no, trade_state, transaction_id
+        "收到 Waffo webhook: type=%s, id=%s, mode=%s, data=%s",
+        event_type, event_id, mode, event_data,
     )
 
-    if trade_state == "SUCCESS":
-        # 获取订单信息
-        from app.core.database import get_mongo_db
-        db = get_mongo_db()
-        order = await db["token_recharge_orders"].find_one({"order_id": out_trade_no})
+    # 只处理订单完成事件
+    if event_type != "order.completed":
+        logger.debug("忽略非 order.completed 事件: %s", event_type)
+        return {"code": "SUCCESS", "message": "OK"}
 
-        if not order:
-            logger.error("回调对应的订单不存在: %s", out_trade_no)
-            return {"code": "FAIL", "message": "订单不存在"}
+    # 从 metadata 中获取内部订单号
+    metadata = event_data.get("metadata", {})
+    internal_order_id = metadata.get("order_id", "")
+    waffo_order_id = event_data.get("orderId", "")
+    buyer_email = event_data.get("buyerEmail", "")
+    amount = event_data.get("amount", 0)
+    currency = event_data.get("currency", "")
 
-        if order["status"] == "credited":
-            # 幂等：已入账
-            logger.info("订单已入账（幂等跳过）: %s", out_trade_no)
-            return {"code": "SUCCESS", "message": "OK"}
+    if not internal_order_id:
+        logger.warning("Waffo webhook 缺少内部 order_id (metadata.order_id)")
+        return {"code": "SUCCESS", "message": "OK"}
 
-        # 标记订单为已支付
-        credited = await token_billing_service.mark_order_credited(
-            out_trade_no, transaction_id, callback_data.get("raw", {})
+    logger.info(
+        "Waffo 支付成功: internal_order=%s, waffo_order=%s, amount=%s %s, email=%s",
+        internal_order_id, waffo_order_id, amount, currency, buyer_email,
+    )
+
+    # 获取订单信息
+    from app.core.database import get_mongo_db
+    db = get_mongo_db()
+    order = await db["token_recharge_orders"].find_one({"order_id": internal_order_id})
+
+    if not order:
+        logger.error("Waffo webhook 对应的订单不存在: %s", internal_order_id)
+        return {"code": "SUCCESS", "message": "OK"}
+
+    if order["status"] == "credited":
+        # 幂等：已入账
+        logger.info("订单已入账（幂等跳过）: %s", internal_order_id)
+        return {"code": "SUCCESS", "message": "OK"}
+
+    # 标记订单为已支付
+    credited = await token_billing_service.mark_order_credited(
+        internal_order_id, waffo_order_id, event
+    )
+
+    if credited:
+        # 入账
+        success = await token_billing_service.credit_quota(
+            user_id=order["user_id"],
+            quota_mq=order["quota_to_credit_mq"],
+            gift_mq=order["gift_amount_mq"],
+            order_id=internal_order_id,
+            amount_cny_mq=order["amount_mq"],
         )
 
-        if credited:
-            # 入账
-            success = await token_billing_service.credit_quota(
-                user_id=order["user_id"],
-                quota_mq=order["quota_to_credit_mq"],
-                gift_mq=order["gift_amount_mq"],
-                order_id=out_trade_no,
-                amount_cny_mq=order["amount_mq"],
-            )
-
-            if success:
-                logger.info("✅ 充值入账成功: order=%s, user=%s", out_trade_no, order["user_id"])
-            else:
-                logger.error("❌ 充值入账失败: order=%s（需人工介入）", out_trade_no)
+        if success:
+            logger.info("✅ Waffo 充值入账成功: order=%s, user=%s", internal_order_id, order["user_id"])
         else:
-            logger.warning("标记入账返回False: order=%s", out_trade_no)
+            logger.error("❌ Waffo 充值入账失败: order=%s（需人工介入）", internal_order_id)
+    else:
+        logger.warning("标记入账返回False: order=%s", internal_order_id)
 
     return {"code": "SUCCESS", "message": "OK"}
 

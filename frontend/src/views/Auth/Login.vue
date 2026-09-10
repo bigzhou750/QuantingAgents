@@ -99,7 +99,7 @@
     </div>
     <!-- CI/CD 部署版本标记 -->
     <div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,0.4);z-index:9999;">
-      Build: {{ new Date().toISOString().slice(0, 16) }}
+      Build: {{ (() => { const d = new Date(); const pad = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear().toString().slice(2)}${pad(d.getMonth()+1)}${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; })() }}
     </div>
   </div>
 </template>
