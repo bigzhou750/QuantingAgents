@@ -14,12 +14,22 @@ from datetime import datetime
 from app.core.database import get_mongo_db
 from app.core.config import settings
 from app.models.eval import (
-    EvalRun, EvalTrial, RunStatus, TrialStatus, EvalRunConfig, RunSnapshot,
+    EvalRun,
+    EvalTrial,
+    RunStatus,
+    RunFailureStage,
+    TrialStatus,
+    EvalRunConfig,
+    RunSnapshot,
 )
 from app.services.eval.dataset_service import dataset_service
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
+
+
+class CaseSnapshotValidationError(ValueError):
+    """Case snapshot 缺少必要字段时抛出的结构化错误。"""
 
 
 def _make_trace_sink(trial_id: str):
@@ -186,6 +196,7 @@ class EvalRunnerService:
         case_contents = {}
         for c in cases:
             case_contents[c["case_id"]] = {
+                "case_id": c["case_id"],
                 "name": c.get("name", ""),
                 "input": c.get("input", {}),
                 "expected_output": c.get("expected_output"),
@@ -248,7 +259,7 @@ class EvalRunnerService:
         logger.info(f"Created eval run {run_id} for dataset {dataset_id} v{version} with snapshot")
         return {"run_id": run_id, "total_cases": len(cases), "num_trials_per_case": num_trials}
 
-    async def start_run(self, run_id: str) -> bool:
+    async def start_run(self, run_id: str) -> Dict[str, Any]:
         """启动评测运行"""
         db = get_mongo_db()
 
@@ -258,6 +269,31 @@ class EvalRunnerService:
 
         if run_doc["status"] != RunStatus.PENDING.value:
             raise ValueError(f"Run {run_id} is already {run_doc['status']}")
+
+        preflight = await self._preflight_run(run_doc)
+        if preflight["status"] != "passed":
+            await db[self.COLLECTION_RUNS].update_one(
+                {"run_id": run_id},
+                {
+                    "$set": {
+                        "status": RunStatus.FAILED.value,
+                        "error_message": "; ".join(preflight["errors"]),
+                        "failure_stage": preflight["failure_stage"],
+                        "error_code": preflight["error_code"],
+                        "preflight": preflight,
+                        "trial_count": 0,
+                        "completed_trials": 0,
+                        "failed_trials": 0,
+                        "completed_at": now_tz(),
+                    }
+                },
+            )
+            return {
+                "run_id": run_id,
+                "started": False,
+                "status": RunStatus.FAILED.value,
+                "preflight": preflight,
+            }
 
         # 更新状态为 running
         await db[self.COLLECTION_RUNS].update_one(
@@ -270,7 +306,103 @@ class EvalRunnerService:
         self._running_tasks[run_id] = task
 
         logger.info(f"Started eval run {run_id}")
-        return True
+        return {
+            "run_id": run_id,
+            "started": True,
+            "status": RunStatus.RUNNING.value,
+            "preflight": preflight,
+        }
+
+    @staticmethod
+    async def _preflight_run(run_doc: Dict[str, Any]) -> Dict[str, Any]:
+        """运行前校验 snapshot、case 和执行配置。"""
+        errors: List[str] = []
+        warnings: List[str] = []
+        snapshot = run_doc.get("snapshot") or {}
+        case_contents = snapshot.get("case_contents") or {}
+        dataset_id = run_doc.get("dataset_id", "")
+        dataset_version = run_doc.get("dataset_version", "")
+        total_cases = int(run_doc.get("total_cases") or 0)
+        run_config = run_doc.get("config") or {}
+
+        if not case_contents:
+            return {
+                "status": "failed",
+                "checked_cases": 0,
+                "errors": ["run snapshot missing case_contents"],
+                "warnings": warnings,
+                "failure_stage": RunFailureStage.SNAPSHOT_VALIDATION.value,
+                "error_code": "RUN_SNAPSHOT_MISSING",
+            }
+
+        try:
+            cases = await EvalRunnerService._resolve_run_cases(
+                run_doc,
+                dataset_id,
+                dataset_version,
+            )
+        except CaseSnapshotValidationError as exc:
+            return {
+                "status": "failed",
+                "checked_cases": 0,
+                "errors": [str(exc)],
+                "warnings": warnings,
+                "failure_stage": RunFailureStage.SNAPSHOT_VALIDATION.value,
+                "error_code": "CASE_SNAPSHOT_MISSING_FIELD",
+            }
+
+        checked_cases = 0
+        seen_ids = set()
+        for case in cases:
+            checked_cases += 1
+            case_id = str(case.get("case_id") or "")
+            if not case_id:
+                errors.append(f"case {checked_cases} has empty case_id")
+            elif case_id in seen_ids:
+                errors.append(f"duplicate case_id: {case_id}")
+            seen_ids.add(case_id)
+            case_input = case.get("input")
+            if not isinstance(case_input, dict) or not case_input.get("prompt"):
+                errors.append(f"case {case_id or checked_cases} missing input.prompt")
+
+        if checked_cases != total_cases:
+            errors.append(
+                f"case count mismatch: snapshot={checked_cases}, run.total_cases={total_cases}"
+            )
+
+        timeout_seconds = int(run_config.get("timeout_seconds") or 600)
+        if timeout_seconds > settings.EVAL_TRIAL_TIMEOUT_SECONDS:
+            errors.append(
+                f"timeout_seconds {timeout_seconds} exceeds "
+                f"EVAL_TRIAL_TIMEOUT_SECONDS {settings.EVAL_TRIAL_TIMEOUT_SECONDS}"
+            )
+
+        judge_model = run_config.get("judge_model") or (snapshot.get("judge_config") or {}).get("model")
+        if judge_model:
+            try:
+                from app.services.eval.judge_config import validate_judge_model
+
+                validate_judge_model(str(judge_model))
+            except ValueError as exc:
+                errors.append(str(exc))
+
+        if errors:
+            return {
+                "status": "failed",
+                "checked_cases": checked_cases,
+                "errors": errors,
+                "warnings": warnings,
+                "failure_stage": RunFailureStage.CASE_VALIDATION.value,
+                "error_code": "RUN_PREFLIGHT_FAILED",
+            }
+        return {
+            "status": "passed",
+            "checked_cases": checked_cases,
+            "errors": errors,
+            "warnings": warnings,
+            "failure_stage": RunFailureStage.NONE.value,
+            "error_code": "",
+        }
 
     async def _execute_run(self, run_id: str):
         """执行评测运行（内部方法）"""
@@ -280,6 +412,26 @@ class EvalRunnerService:
             run_doc = await db[self.COLLECTION_RUNS].find_one({"run_id": run_id})
             if not run_doc:
                 logger.error(f"Run {run_id} not found during execution")
+                return
+
+            preflight = await self._preflight_run(run_doc)
+            if preflight["status"] != "passed":
+                await db[self.COLLECTION_RUNS].update_one(
+                    {"run_id": run_id},
+                    {
+                        "$set": {
+                            "status": RunStatus.FAILED.value,
+                            "error_message": "; ".join(preflight["errors"]),
+                            "failure_stage": preflight["failure_stage"],
+                            "error_code": preflight["error_code"],
+                            "preflight": preflight,
+                            "trial_count": 0,
+                            "completed_trials": 0,
+                            "failed_trials": 0,
+                            "completed_at": now_tz(),
+                        }
+                    },
+                )
                 return
 
             dataset_id = run_doc["dataset_id"]
@@ -325,6 +477,10 @@ class EvalRunnerService:
 
                     trial_doc = trial.model_dump(by_alias=True, exclude={"id"})
                     await db[self.COLLECTION_TRIALS].insert_one(trial_doc)
+                    await db[self.COLLECTION_RUNS].update_one(
+                        {"run_id": run_id},
+                        {"$inc": {"trial_count": 1}},
+                    )
 
                     # 执行 trial
                     await self._execute_trial(
@@ -353,6 +509,7 @@ class EvalRunnerService:
                         "completed_at": now_tz(),
                         "completed_trials": completed_count,
                         "failed_trials": failed_count,
+                        "failure_stage": RunFailureStage.NONE.value,
                     }
                 }
             )
@@ -376,7 +533,15 @@ class EvalRunnerService:
             logger.exception(f"Eval run {run_id} failed: {e}")
             await db[self.COLLECTION_RUNS].update_one(
                 {"run_id": run_id},
-                {"$set": {"status": RunStatus.FAILED.value, "error_message": str(e), "completed_at": now_tz()}}
+                {
+                    "$set": {
+                        "status": RunStatus.FAILED.value,
+                        "error_message": str(e),
+                        "failure_stage": RunFailureStage.RUNTIME.value,
+                        "error_code": "RUN_EXECUTION_ERROR",
+                        "completed_at": now_tz(),
+                    }
+                }
             )
         finally:
             self._running_tasks.pop(run_id, None)
@@ -705,10 +870,26 @@ class EvalRunnerService:
         """优先使用创建时锁定的 snapshot，确保 case 后续修改/删除不影响该 run。"""
         snapshot_case_contents = (run_doc.get("snapshot") or {}).get("case_contents") or {}
         if snapshot_case_contents:
-            return list(snapshot_case_contents.values())
-        return await dataset_service.list_cases(
+            normalized = []
+            for key, value in snapshot_case_contents.items():
+                case = dict(value or {})
+                case_id = case.get("case_id") or (key if key else "")
+                if not case_id:
+                    raise CaseSnapshotValidationError(
+                        f"snapshot case_contents[{key or '<missing>'}] has no case_id"
+                    )
+                case["case_id"] = case_id
+                normalized.append(case)
+            return normalized
+        cases = await dataset_service.list_cases(
             dataset_id, limit=1000, version=dataset_version
         )
+        for case in cases:
+            if not case.get("case_id"):
+                raise CaseSnapshotValidationError(
+                    f"dataset case entry has no case_id"
+                )
+        return cases
 
     async def list_runs(
         self,

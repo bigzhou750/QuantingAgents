@@ -139,7 +139,7 @@ def test_judge_context_builder_includes_evidence_and_expected_output():
 async def test_llm_judge_missing_sdk_fails_closed():
     from app.services.eval.scorers.llm_judge_scorer import LLMJudgeScorer
 
-    scorer = LLMJudgeScorer()
+    scorer = LLMJudgeScorer(judge_model="qwen-plus")
     with patch.dict(sys.modules, {"dashscope": None}):
         with pytest.raises(RuntimeError):
             await scorer._call_judge("prompt")

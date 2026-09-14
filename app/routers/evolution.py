@@ -63,6 +63,21 @@ class PostReleaseObservationRequest(BaseModel):
     metrics: dict
 
 
+class OnlineBadcaseConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    enable_judge: Optional[bool] = None
+    soft_sample_rate: Optional[float] = None
+    confidence_threshold: Optional[float] = None
+    judge_threshold: Optional[float] = None
+    evidence_threshold: Optional[float] = None
+    max_content_length: Optional[int] = None
+    change_reason: str = ""
+
+
+class OnlineBadcaseConfigPublishRequest(BaseModel):
+    change_reason: str = ""
+
+
 class EvolutionConfigUpdate(BaseModel):
     automation_mode: Optional[str] = None
     trigger_regression_threshold: Optional[float] = None
@@ -143,6 +158,104 @@ async def update_config(update: EvolutionConfigUpdate):
         from app.services.evolution.governance_service import governance_service
         updated["governance"] = await governance_service.update_config(governance_values)
     return ApiResponse(success=True, data=updated, message="配置已更新")
+
+
+# ==================== 线上 Bad Case 配置 ====================
+
+@router.get("/online-badcase-config", dependencies=[Depends(verify_evolution_access)])
+async def get_online_badcase_config():
+    """查看当前生效配置和历史版本。"""
+    from app.services.eval.online_badcase_config_service import (
+        online_badcase_config_service,
+    )
+
+    effective = await online_badcase_config_service.get_effective_config()
+    history = await online_badcase_config_service.list_configs()
+    return ApiResponse(
+        success=True,
+        data={"effective": effective, "history": history},
+        message="线上 Bad Case 配置已返回",
+    )
+
+
+@router.post("/online-badcase-config/drafts", dependencies=[Depends(verify_evolution_access)])
+async def create_online_badcase_draft(
+    payload: OnlineBadcaseConfigUpdate,
+    user: dict = Depends(verify_evolution_access),
+):
+    """创建未发布配置草稿。"""
+    from app.services.eval.online_badcase_config_service import (
+        online_badcase_config_service,
+    )
+
+    try:
+        data = {
+            "enabled": payload.enabled if payload.enabled is not None else False,
+            "enable_judge": payload.enable_judge if payload.enable_judge is not None else False,
+            "soft_sample_rate": payload.soft_sample_rate if payload.soft_sample_rate is not None else 0.1,
+            "confidence_threshold": payload.confidence_threshold if payload.confidence_threshold is not None else 0.8,
+            "judge_threshold": payload.judge_threshold if payload.judge_threshold is not None else 0.6,
+            "evidence_threshold": payload.evidence_threshold if payload.evidence_threshold is not None else 0.6,
+            "max_content_length": payload.max_content_length if payload.max_content_length is not None else 5000,
+            "change_reason": payload.change_reason,
+        }
+        draft = await online_badcase_config_service.create_draft(
+            data,
+            updated_by=str(user.get("username") or user.get("id") or "admin"),
+        )
+        return ApiResponse(success=True, data=draft, message="草稿已创建")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/online-badcase-config/{config_id}/publish",
+    dependencies=[Depends(verify_evolution_access)],
+)
+async def publish_online_badcase_config(
+    config_id: str,
+    payload: OnlineBadcaseConfigPublishRequest,
+    user: dict = Depends(verify_evolution_access),
+):
+    """发布配置并让运行时读取。"""
+    from app.services.eval.online_badcase_config_service import (
+        online_badcase_config_service,
+    )
+
+    try:
+        published = await online_badcase_config_service.publish(
+            config_id,
+            updated_by=str(user.get("username") or user.get("id") or "admin"),
+            change_reason=payload.change_reason,
+        )
+        return ApiResponse(success=True, data=published, message="配置已发布")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/online-badcase-config/{config_id}/rollback",
+    dependencies=[Depends(verify_evolution_access)],
+)
+async def rollback_online_badcase_config(
+    config_id: str,
+    payload: OnlineBadcaseConfigPublishRequest,
+    user: dict = Depends(verify_evolution_access),
+):
+    """回滚到指定历史有效配置。"""
+    from app.services.eval.online_badcase_config_service import (
+        online_badcase_config_service,
+    )
+
+    try:
+        rolled_back = await online_badcase_config_service.rollback(
+            config_id,
+            updated_by=str(user.get("username") or user.get("id") or "admin"),
+            change_reason=payload.change_reason,
+        )
+        return ApiResponse(success=True, data=rolled_back, message="配置已回滚")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ==================== Artifact Registry ====================

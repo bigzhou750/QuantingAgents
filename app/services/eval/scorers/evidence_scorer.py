@@ -10,10 +10,10 @@
 
 import logging
 import re
-import uuid
 from typing import Optional, List, Dict, Any
 
 from app.models.eval import ScoreSource, ScoreStatus, ClaimEvidence, ClaimVerdict
+from app.services.eval.claim_extraction import extract_claims
 from app.services.eval.scorers.base import BaseScorer, ScoreResult
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,8 @@ class EvidenceQualityScorer(BaseScorer):
             )
 
         if not evidence_events:
-            claims = self._extract_claims(output_text, evidence_events)
+            extraction = extract_claims(output_text)
+            claims = extraction.claims
             for claim in claims:
                 claim.verdict = ClaimVerdict.UNSCORABLE
                 claim.confidence = 0.0
@@ -83,11 +84,15 @@ class EvidenceQualityScorer(BaseScorer):
                 version=self.version,
                 status=ScoreStatus.UNSCORABLE,
                 claims=claims,
-                raw_output={"claim_count": len(claims), "unscorable_claims": len(claims)},
+                raw_output={
+                    **extraction.to_raw_output(),
+                    "unscorable_claims": len(claims),
+                },
             )
 
         # ===== Claim 抽取 (5.1) =====
-        claims = self._extract_claims(output_text, evidence_events)
+        extraction = extract_claims(output_text)
+        claims = extraction.claims
 
         # ===== Claim -> Evidence 映射 (5.2) =====
         claims = self._map_claims_to_evidence(claims, evidence_events, trace_events)
@@ -192,36 +197,17 @@ class EvidenceQualityScorer(BaseScorer):
             status=score_status,
             claims=claims,
             evidence_refs=[e.get("event_id", "") for e in evidence_events[:10]],
-            raw_output={"dimensions": dimensions, "claim_count": len(claims), "contradicted_count": contradicted_count},
+            raw_output={
+                "dimensions": dimensions,
+                "claim_count": len(claims),
+                "contradicted_count": contradicted_count,
+                **extraction.to_raw_output(),
+            },
         )
 
     def _extract_claims(self, output_text: str, evidence_events: List[Dict[str, Any]]) -> List[ClaimEvidence]:
-        """从输出文本中提取可验证的 claim (5.1)
-
-        使用基于句子的启发式方法：
-        - 按句号/感叹号分割句子
-        - 过滤掉过短或纯数字的句子
-        - 每个有效句子作为一个 claim
-        """
-        if not output_text:
-            return []
-
-        # 按中文/英文句号、感叹号、问号分割
-        sentences = re.split(r'[。！？.!?\n]', output_text)
-        sentences = [s.strip() for s in sentences if len(s.strip()) >= 8]
-
-        claims = []
-        for i, sentence in enumerate(sentences[:20]):  # 限制最多20条claim
-            claim = ClaimEvidence(
-                claim_id=f"claim_{uuid.uuid4().hex[:8]}",
-                claim_text=sentence,
-                verdict=ClaimVerdict.UNSUPPORTED,  # 默认未支撑，后续映射时更新
-                confidence=0.0,
-                reason="待证据映射",
-            )
-            claims.append(claim)
-
-        return claims
+        """从输出文本中提取可验证的 claim (5.1)。"""
+        return extract_claims(output_text).claims
 
     @staticmethod
     def _tokenize_chinese(text: str) -> set:
@@ -277,6 +263,10 @@ class EvidenceQualityScorer(BaseScorer):
         evidence_numbers = self._extract_numeric_facts(evidence_text)
         for claim_fact in claim_numbers:
             for evidence_fact in evidence_numbers:
+                claim_unit = re.sub(r"^[\d.\-]+", "", claim_fact["value"])
+                evidence_unit = re.sub(r"^[\d.\-]+", "", evidence_fact["value"])
+                if claim_unit != evidence_unit:
+                    continue
                 shared_context = claim_fact["context_tokens"] & evidence_fact["context_tokens"]
                 if not shared_context:
                     continue
@@ -289,6 +279,10 @@ class EvidenceQualityScorer(BaseScorer):
 
         for claim_fact in claim_numbers:
             for evidence_fact in evidence_numbers:
+                claim_unit = re.sub(r"^[\d.\-]+", "", claim_fact["value"])
+                evidence_unit = re.sub(r"^[\d.\-]+", "", evidence_fact["value"])
+                if claim_unit != evidence_unit:
+                    continue
                 shared_context = claim_fact["context_tokens"] & evidence_fact["context_tokens"]
                 if shared_context and claim_fact["value"] == evidence_fact["value"]:
                     return {

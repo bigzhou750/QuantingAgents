@@ -323,7 +323,8 @@ class TestDecisionAuditService:
                 {"id": "user_1", "is_admin": True},
             )
 
-        assert audit["audit_status"] == "unavailable"
+        assert audit["audit_status"] == "empty"
+        assert audit["legacy_audit_status"] == "unavailable"
         assert audit["task_id"] == "task_missing"
 
     @pytest.mark.asyncio

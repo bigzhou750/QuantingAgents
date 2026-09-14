@@ -87,6 +87,17 @@ class BadCaseService:
         await db[self.COLLECTION].create_index("review_status")
         self._initialized = True
 
+    async def _get_effective_max_length(self) -> int:
+        from app.services.eval.online_badcase_config_service import (
+            online_badcase_config_service,
+        )
+
+        try:
+            config = await online_badcase_config_service.get_effective_config()
+            return int(config.get("max_content_length") or settings.ONLINE_BADCASE_MAX_CONTENT_LENGTH)
+        except Exception:
+            return settings.ONLINE_BADCASE_MAX_CONTENT_LENGTH
+
     async def create_bad_case(
         self,
         source: str,
@@ -120,7 +131,7 @@ class BadCaseService:
     ) -> Dict[str, Any]:
         """创建 Bad Case"""
         db = get_mongo_db()
-        max_length = settings.ONLINE_BADCASE_MAX_CONTENT_LENGTH
+        max_length = await self._get_effective_max_length()
         safe_input = _sanitize_payload(input_data, max_length)
         safe_output = _sanitize_payload(output_data, max_length) if output_data else None
 
@@ -290,7 +301,10 @@ class BadCaseService:
             "$inc": {"occurrence_count": 1},
             "$set": {
                 "updated_at": now_tz(),
-                "failure_reason": _sanitize_text(failure_reason or existing.get("failure_reason", ""), settings.ONLINE_BADCASE_MAX_CONTENT_LENGTH),
+                "failure_reason": _sanitize_text(
+                    failure_reason or existing.get("failure_reason", ""),
+                    await self._get_effective_max_length(),
+                ),
                 "risk_level": risk_level or existing.get("risk_level", "medium"),
                 "detection_signals": merged_signals,
                 "detection_status": DetectionStatus(detection_status).value,

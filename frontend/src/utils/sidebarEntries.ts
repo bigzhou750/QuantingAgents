@@ -28,7 +28,9 @@ export const evaluationPlatformEntries: SidebarEntry[] = [
 export const selfEvolutionEntries: SidebarEntry[] = [
   { path: '/evolution', label: '自进化' },
   { path: '/evolution/proposals', label: '候选提案' },
+  { path: '/evolution/observation', label: '发布后观测' },
   { path: '/evolution/artifacts', label: 'Artifact 管理' },
+  { path: '/evolution/online-badcase-config', label: '线上 Bad Case 配置' },
   { path: '/evolution/receipts', label: '进化回执' },
 ]
 

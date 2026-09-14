@@ -23,6 +23,9 @@ from app.services.eval.badcase_fingerprint import (
     compute_dedup_key,
     hash_user_id,
 )
+from app.services.eval.online_badcase_config_service import (
+    online_badcase_config_service,
+)
 from app.utils.timezone import now_tz
 
 logger = logging.getLogger(__name__)
@@ -197,12 +200,15 @@ def detect_hard_signals(
 async def collect_soft_signals(
     pseudo_trial: Dict[str, Any],
     trace_events: List[Dict[str, Any]],
+    config: Optional[Dict[str, Any]] = None,
 ) -> List[DetectionSignal]:
     """复用现有 scorer 生成软质量信号，任何单个 scorer 失败都不阻断线上流程。"""
+    if config is None:
+        config = await online_badcase_config_service.get_effective_config()
     signals: List[DetectionSignal] = []
     scorer_configs = [
-        ("output_completeness", FailureFamily.OUTPUT_QUALITY, settings.ONLINE_BADCASE_JUDGE_THRESHOLD),
-        ("evidence_quality", FailureFamily.EVIDENCE_HALLUCINATION, settings.ONLINE_BADCASE_EVIDENCE_THRESHOLD),
+        ("output_completeness", FailureFamily.OUTPUT_QUALITY, float(config.get("judge_threshold", settings.ONLINE_BADCASE_JUDGE_THRESHOLD))),
+        ("evidence_quality", FailureFamily.EVIDENCE_HALLUCINATION, float(config.get("evidence_threshold", settings.ONLINE_BADCASE_EVIDENCE_THRESHOLD))),
         ("safety", FailureFamily.SAFETY_COMPLIANCE, 0.8),
         ("trajectory", FailureFamily.TOOL_TRAJECTORY, 0.6),
     ]
@@ -241,14 +247,17 @@ async def collect_soft_signals(
         except Exception as exc:
             logger.warning("[OnlineBadcase] scorer %s failed: %s", scorer_name, exc)
 
-    if settings.ONLINE_BADCASE_ENABLE_JUDGE and settings.EVAL_JUDGE_MODEL:
+    if config.get("enable_judge") and (settings.EVAL_JUDGE_MODEL or settings.EVAL_JUDGE_MODEL_DEFAULT):
         try:
             from app.services.eval.scorers.llm_judge_scorer import LLMJudgeScorer
 
-            judge = LLMJudgeScorer(judge_model=settings.EVAL_JUDGE_MODEL)
+            judge = LLMJudgeScorer(
+                judge_model=settings.EVAL_JUDGE_MODEL or settings.EVAL_JUDGE_MODEL_DEFAULT
+            )
             result = await judge.score(pseudo_trial, trace_events, {})
             if result.confidence > 0 and (
-                not result.passed or result.score < settings.ONLINE_BADCASE_JUDGE_THRESHOLD
+                not result.passed
+                or result.score < float(config.get("judge_threshold", settings.ONLINE_BADCASE_JUDGE_THRESHOLD))
             ):
                 signals.append(
                     DetectionSignal(
@@ -275,6 +284,7 @@ class OnlineBadcaseAdjudicator:
     def adjudicate(
         signals: List[DetectionSignal],
         user_feedback: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None,
     ) -> AdjudicationDecision:
         hard_signals = [signal for signal in signals if signal.signal_type in HARD_SIGNAL_TYPES]
         safety_signals = [
@@ -338,7 +348,13 @@ class OnlineBadcaseAdjudicator:
                 risk_level=risk_level,
             )
 
-        if len(failed_soft) >= 2 and max_confidence >= settings.ONLINE_BADCASE_CONFIDENCE_THRESHOLD:
+        confidence_threshold = float(
+            (config or {}).get(
+                "confidence_threshold",
+                settings.ONLINE_BADCASE_CONFIDENCE_THRESHOLD,
+            )
+        )
+        if len(failed_soft) >= 2 and max_confidence >= confidence_threshold:
             return AdjudicationDecision(
                 route="auto_confirmed",
                 detection_status=DetectionStatus.CONFIRMED.value,
@@ -380,10 +396,15 @@ class OnlineBadcaseCollector:
         "attempt.cancelled",
     }
 
-    def should_sample_soft(self) -> bool:
-        if not settings.ONLINE_BADCASE_ENABLED:
+    async def should_sample_soft(
+        self,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        if config is None:
+            config = await online_badcase_config_service.get_effective_config()
+        if not config.get("enabled"):
             return False
-        return random.random() <= settings.ONLINE_BADCASE_SOFT_SAMPLE_RATE
+        return random.random() <= float(config.get("soft_sample_rate", settings.ONLINE_BADCASE_SOFT_SAMPLE_RATE))
 
     async def collect_from_online_event(
         self,
@@ -393,7 +414,8 @@ class OnlineBadcaseCollector:
         raw_type: str,
         payload: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        if not settings.ONLINE_BADCASE_ENABLED:
+        config = await online_badcase_config_service.get_effective_config()
+        if not config.get("enabled"):
             return None
         if raw_type not in self.TERMINAL_EVENT_TYPES:
             return None
@@ -440,8 +462,8 @@ class OnlineBadcaseCollector:
             pseudo_trial = build_pseudo_trial(prompt, output_data, status, error_message)
 
             signals = detect_hard_signals(status, output_text, error_message, events)
-            if output_text and self.should_sample_soft():
-                signals.extend(await collect_soft_signals(pseudo_trial, trace_events))
+            if output_text and await self.should_sample_soft(config):
+                signals.extend(await collect_soft_signals(pseudo_trial, trace_events, config))
 
             if not signals:
                 return None
@@ -449,6 +471,7 @@ class OnlineBadcaseCollector:
             decision = OnlineBadcaseAdjudicator.adjudicate(
                 signals,
                 user_feedback=payload.get("feedback"),
+                config=config,
             )
             dedup_key = compute_dedup_key(
                 input_data={"prompt": prompt},

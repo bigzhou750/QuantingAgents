@@ -30,8 +30,15 @@
         </el-form-item>
       </el-form>
       <el-alert
-        v-if="audit?.audit_status === 'legacy_unverified'"
-        title="该标识没有结构化决策链，已保留原始 trace 和日志"
+        v-if="audit?.audit_status === 'events_without_chain' || audit?.audit_status === 'legacy_unverified'"
+        title="本次对话存在运行事件，但尚未生成结构化决策链。以下内容为原始运行事件。"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+      <el-alert
+        v-if="audit?.audit_status === 'partial'"
+        title="已生成部分结构化决策链，部分关联数据或解释校验不完整"
         type="warning"
         :closable="false"
         show-icon
@@ -43,12 +50,20 @@
         <el-descriptions-item label="任务 ID">{{ audit.task_id || '会话内多任务' }}</el-descriptions-item>
       </el-descriptions>
       <el-alert
-        v-if="audit?.audit_status === 'unavailable'"
+        v-if="audit?.audit_status === 'empty' || audit?.audit_status === 'unavailable'"
         title="未找到决策链、trace 或日志"
         type="info"
         :closable="false"
         show-icon
       />
+      <el-descriptions v-if="audit?.audit_counts" :column="3" border size="small" style="margin-top: 12px">
+        <el-descriptions-item label="运行事件数">{{ audit.audit_counts.vibe_events || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="Trace 数">{{ audit.audit_counts.trace_events || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="决策记录数">{{ audit.audit_counts.decision_records || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="解释">{{ audit.audit_counts.explanations || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="校验">{{ audit.audit_counts.validations || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="复核">{{ audit.audit_counts.reviews || 0 }}</el-descriptions-item>
+      </el-descriptions>
     </el-card>
 
     <template v-if="audit">
@@ -109,11 +124,15 @@
         </div>
       </el-card>
 
-      <el-card v-if="(audit.vibe_events || []).length" shadow="never" style="margin-bottom: 24px">
+      <el-card v-if="events.length || eventsTotal" shadow="never" style="margin-bottom: 24px">
         <template #header><span>运行事件</span></template>
-        <el-table :data="audit.vibe_events" size="small" stripe>
-          <el-table-column prop="sequence" label="#" width="70" />
-          <el-table-column prop="event_type" label="事件" width="150" />
+        <el-table :data="events" v-loading="eventsLoading" size="small" stripe>
+          <el-table-column label="#" width="70">
+            <template #default="{ $index }">{{ eventRowNumber($index) }}</template>
+          </el-table-column>
+          <el-table-column label="事件" width="150">
+            <template #default="{ row }">{{ eventDisplayName(row) }}</template>
+          </el-table-column>
           <el-table-column label="内容" min-width="420">
             <template #default="{ row }">
               <pre class="event-content">{{ formatEventPayload(row.payload) }}</pre>
@@ -123,6 +142,15 @@
             <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
           </el-table-column>
         </el-table>
+        <el-pagination
+          v-if="eventsTotal > eventsPageSize"
+          style="margin-top: 12px; justify-content: flex-end"
+          layout="prev, pager, next"
+          :total="eventsTotal"
+          :page-size="eventsPageSize"
+          :current-page="eventsPage"
+          @current-change="loadEvents"
+        />
       </el-card>
 
       <el-card shadow="never" style="margin-bottom: 24px">
@@ -201,6 +229,11 @@ const scope = ref<'auto' | 'session' | 'task'>('auto')
 const audit = ref<any>(null)
 const metrics = ref<any[]>([])
 const loading = ref(false)
+const events = ref<any[]>([])
+const eventsPage = ref(1)
+const eventsPageSize = ref(20)
+const eventsTotal = ref(0)
+const eventsLoading = ref(false)
 
 const loadAudit = async () => {
   const value = identifier.value.trim()
@@ -212,10 +245,35 @@ const loadAudit = async () => {
   try {
     const res = await request.get(`/api/decision-audit/chains/${encodeURIComponent(value)}`, { params: { scope: scope.value } })
     audit.value = unwrapApiData(res)
+    eventsPage.value = 1
+    void loadEvents(1)
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.detail || '查询决策审计链失败')
   } finally {
     loading.value = false
+  }
+}
+
+const loadEvents = async (page = eventsPage.value) => {
+  const value = identifier.value.trim()
+  if (!value) return
+  eventsPage.value = Math.max(1, Number(page) || 1)
+  eventsLoading.value = true
+  try {
+    const res = await request.get(`/api/decision-audit/chains/${encodeURIComponent(value)}/events`, {
+      params: {
+        scope: scope.value,
+        page: eventsPage.value,
+        page_size: eventsPageSize.value,
+      }
+    })
+    const data = unwrapApiData(res)
+    events.value = (data?.items || []).filter((item: any) => item?.event_type !== 'token')
+    eventsTotal.value = data?.total || 0
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '加载运行事件失败')
+  } finally {
+    eventsLoading.value = false
   }
 }
 
@@ -230,6 +288,42 @@ const loadMetrics = async () => {
 }
 
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN') : '-'
+const EVENT_LABELS: Record<string, string> = {
+  task_created: '创建任务',
+  session_created: '创建会话',
+  task_queued: '任务排队',
+  task_started: '开始任务',
+  task_status: '任务状态变更',
+  message_created: '生成消息',
+  'message.received': '接收消息',
+  tool_call: '调用工具',
+  tool_result: '工具返回',
+  decision: '形成决策',
+  evidence: '获取证据',
+  retrieval: '检索信息',
+  citation: '添加引用',
+  message: '生成消息',
+  skill_route: '路由技能',
+  skill_execute: '执行技能',
+  react_summary: '生成分析总结',
+  swarm_status: '协同分析状态',
+  'attempt.created': '创建执行尝试',
+  'attempt.started': '开始执行尝试',
+  'attempt.completed': '完成执行尝试',
+  'attempt.failed': '执行尝试失败',
+  'attempt.cancelled': '取消执行尝试',
+  llm_call: '调用模型',
+  llm_usage: '模型用量',
+  error: '执行异常'
+}
+const eventDisplayName = (row: any) => {
+  if (row.event_name) return row.event_name
+  const phase = row.payload?.phase || row.payload?._meta?.original_type
+  if (row.event_type === 'worker_status' && phase) return EVENT_LABELS[phase] || '运行状态变更'
+  if (row.event_type === 'tool_call' && row.payload?.phase === 'tool_result') return '工具返回'
+  return EVENT_LABELS[row.event_type || ''] || '运行事件'
+}
+const eventRowNumber = (index: number) => (eventsPage.value - 1) * eventsPageSize.value + index + 1
 const formatEventPayload = (payload: unknown) => {
   if (payload == null) return '-'
   if (typeof payload === 'string') return payload

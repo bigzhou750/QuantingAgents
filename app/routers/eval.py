@@ -13,7 +13,7 @@ import uuid
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.database import get_mongo_db
 from app.routers.auth_db import get_current_user
@@ -90,6 +90,14 @@ class RunCreateRequest(BaseModel):
     low_confidence_threshold: Optional[float] = None
     review_strategy: Optional[str] = None
     data_window: Optional[dict] = None
+
+    @field_validator("judge_model")
+    @classmethod
+    def validate_judge_model(cls, value: Optional[str]) -> Optional[str]:
+        from app.services.eval.judge_config import validate_judge_model
+
+        validate_judge_model(value or "")
+        return value
 
 
 class SkillRegressionCreateRequest(BaseModel):
@@ -604,10 +612,14 @@ async def create_run(request: RunCreateRequest):
 async def start_run(run_id: str):
     """启动评测运行"""
     try:
-        success = await runner_service.start_run(run_id)
-        if not success:
+        result = await runner_service.start_run(run_id)
+        if not result:
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-        return ApiResponse(success=True, message="评测运行已启动")
+        return ApiResponse(
+            success=bool(result.get("started", False)),
+            data=result,
+            message="评测运行已启动" if result.get("started") else "评测运行初始化失败",
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:

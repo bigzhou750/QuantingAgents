@@ -63,6 +63,22 @@
       </el-col>
     </el-row>
 
+    <el-alert
+      v-if="run.status === 'failed'"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 24px"
+    >
+      <template #title>运行状态：失败</template>
+      <div style="display: grid; gap: 4px; margin-top: 6px">
+        <div>失败阶段：{{ failureStageLabel }}</div>
+        <div>错误代码：{{ run.error_code || '-' }}</div>
+        <div v-if="run.error_message">错误原因：{{ run.error_message }}</div>
+        <div>Trial 已创建：{{ run.trial_count || 0 }}</div>
+      </div>
+    </el-alert>
+
     <!-- 指标摘要 (3.1) -->
     <el-card v-if="metrics" shadow="never" style="margin-bottom: 24px">
       <template #header>
@@ -461,6 +477,19 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const totalTrials = computed(() => {
   return (run.value.total_cases || 0) * (run.value.num_trials_per_case || 1)
+})
+
+const failureStageLabel = computed(() => {
+  const labels: Record<string, string> = {
+    snapshot_validation: '快照校验',
+    case_validation: '用例校验',
+    runtime: '运行阶段',
+    scoring: '评分阶段',
+    aggregation: '聚合阶段',
+    storage: '存储阶段',
+    none: '无'
+  }
+  return labels[run.value.failure_stage || 'runtime'] || run.value.failure_stage || 'runtime'
 })
 
 const progress = computed(() => {

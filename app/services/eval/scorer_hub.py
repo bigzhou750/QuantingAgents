@@ -255,10 +255,13 @@ class ScorerHub:
             active_scorer = scorer
             if scorer.name == "llm_judge" and run_config:
                 try:
+                    from app.services.eval.judge_config import resolve_default_judge_model
                     from app.services.eval.scorers.llm_judge_scorer import LLMJudgeScorer
 
                     active_scorer = LLMJudgeScorer(
-                        judge_model=run_config.get("judge_model") or getattr(scorer, "_judge_model", "qwen-plus"),
+                        judge_model=run_config.get("judge_model")
+                        or getattr(scorer, "_judge_model", None)
+                        or resolve_default_judge_model(),
                         rubric=run_config.get("rubric") or getattr(scorer, "_rubric", None),
                         version=run_config.get("rubric_version") or getattr(scorer, "_version", "1.0.0"),
                     )

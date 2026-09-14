@@ -83,4 +83,21 @@ export const evolutionApi = {
   async getFollowUpActions(params?: Record<string, any>) {
     return { data: await ApiClient.get('/api/evolution/follow-up-actions', params) }
   },
+  async observePostRelease(data: Record<string, any>) {
+    return { data: await ApiClient.post('/api/evolution/post-release/observe', data) }
+  },
+
+  // Online Bad Case config
+  async getOnlineBadcaseConfig() {
+    return { data: await ApiClient.get('/api/evolution/online-badcase-config') }
+  },
+  async createOnlineBadcaseDraft(data: Record<string, any>) {
+    return { data: await ApiClient.post('/api/evolution/online-badcase-config/drafts', data) }
+  },
+  async publishOnlineBadcaseConfig(configId: string, data: Record<string, any>) {
+    return { data: await ApiClient.post(`/api/evolution/online-badcase-config/${configId}/publish`, data) }
+  },
+  async rollbackOnlineBadcaseConfig(configId: string, data: Record<string, any>) {
+    return { data: await ApiClient.post(`/api/evolution/online-badcase-config/${configId}/rollback`, data) }
+  },
 }

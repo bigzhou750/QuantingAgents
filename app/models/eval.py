@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Annotated
 from enum import Enum
 
-from pydantic import BaseModel, Field, BeforeValidator, PlainSerializer
+from pydantic import BaseModel, Field, BeforeValidator, PlainSerializer, field_validator
 from bson import ObjectId
 
 from app.utils.timezone import now_tz
@@ -63,6 +63,17 @@ class RunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class RunFailureStage(str, Enum):
+    """运行失败所处阶段"""
+    NONE = "none"
+    SNAPSHOT_VALIDATION = "snapshot_validation"
+    CASE_VALIDATION = "case_validation"
+    RUNTIME = "runtime"
+    SCORING = "scoring"
+    AGGREGATION = "aggregation"
+    STORAGE = "storage"
 
 
 class TrialStatus(str, Enum):
@@ -167,6 +178,9 @@ class ClaimEvidence(BaseModel):
     label_version: Optional[str] = Field(default=None, description="标注版本")
     verification_method: Optional[str] = Field(default=None, description="判定方法，如 structured_numeric_check / lexical_only / entailment_judge")
     annotation_history: List[ClaimAnnotation] = Field(default_factory=list, description="人工标注历史记录")
+    source_start: Optional[int] = Field(default=None, description="Claim 在原始输出中的起始位置")
+    source_end: Optional[int] = Field(default=None, description="Claim 在原始输出中的结束位置")
+    original_text: Optional[str] = Field(default=None, description="清洗前对应的原始片段")
 
 
 # ==================== 运行快照结构 ====================
@@ -298,6 +312,14 @@ class EvalRunConfig(BaseModel):
     skill_eval: Dict[str, Any] = Field(default_factory=dict, description="Skill 评测运行配置")
     extra: Dict[str, Any] = Field(default_factory=dict, description="额外配置")
 
+    @field_validator("judge_model")
+    @classmethod
+    def validate_judge_model(cls, value: str) -> str:
+        from app.services.eval.judge_config import validate_judge_model
+
+        validate_judge_model(value)
+        return value
+
 
 class EvalRun(BaseModel):
     """评测运行"""
@@ -309,6 +331,7 @@ class EvalRun(BaseModel):
     config: EvalRunConfig = Field(default_factory=EvalRunConfig)
     num_trials_per_case: int = Field(default=1, description="每个 case 的 trial 次数")
     total_cases: int = Field(default=0, description="总 case 数")
+    trial_count: int = Field(default=0, description="已创建的 trial 数")
     completed_trials: int = Field(default=0, description="已完成的 trial 数")
     failed_trials: int = Field(default=0, description="失败的 trial 数")
     started_at: Optional[datetime] = Field(default=None)
@@ -319,6 +342,9 @@ class EvalRun(BaseModel):
     created_at: datetime = Field(default_factory=now_tz)
     updated_at: datetime = Field(default_factory=now_tz)
     error_message: Optional[str] = Field(default=None)
+    failure_stage: str = Field(default=RunFailureStage.NONE.value, description="运行失败阶段")
+    error_code: str = Field(default="", description="稳定错误码")
+    preflight: Optional[Dict[str, Any]] = Field(default=None, description="运行前校验结果")
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
@@ -498,6 +524,13 @@ class DetectionStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class OnlineBadcaseConfigStatus(str, Enum):
+    """线上 Bad Case 配置版本状态"""
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
 class ReviewStatus(str, Enum):
     """Bad Case 人工复核状态"""
     PENDING = "pending"
@@ -518,6 +551,29 @@ class DetectionSignal(BaseModel):
     evidence_refs: List[str] = Field(default_factory=list, description="trace/score/session 引用")
     detector_name: str = Field(default="", description="检测器名称")
     detector_version: str = Field(default="1.0.0", description="检测器版本")
+
+
+class OnlineBadcaseConfig(BaseModel):
+    """线上 Bad Case 自动发现配置版本。"""
+
+    config_id: str = Field(..., description="配置版本唯一标识")
+    config_key: str = Field(default="default", description="配置作用域 key")
+    version: int = Field(default=1, description="版本号")
+    enabled: bool = Field(default=False, description="是否启用线上自动发现")
+    enable_judge: bool = Field(default=False, description="是否启用 LLM Judge 软信号")
+    soft_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0, description="软信号采样率")
+    confidence_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="自动确认置信度阈值")
+    judge_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="LLM Judge 低分阈值")
+    evidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="证据评分低分阈值")
+    max_content_length: int = Field(default=5000, ge=1000, le=200000, description="内容截断上限")
+    status: OnlineBadcaseConfigStatus = Field(default=OnlineBadcaseConfigStatus.DRAFT)
+    source: str = Field(default="db", description="配置来源: env/db")
+    updated_by: str = Field(default="system", description="更新人")
+    updated_at: datetime = Field(default_factory=now_tz)
+    change_reason: str = Field(default="", description="变更原因")
+    created_at: datetime = Field(default_factory=now_tz)
+
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
 
 class BadCaseSourceContext(BaseModel):

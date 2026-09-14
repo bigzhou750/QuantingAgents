@@ -85,7 +85,9 @@
         <span>自进化</span>
       </template>
       <el-menu-item index="/evolution/proposals">候选提案</el-menu-item>
+      <el-menu-item index="/evolution/observation">发布后观测</el-menu-item>
       <el-menu-item index="/evolution/artifacts">Artifact 管理</el-menu-item>
+      <el-menu-item index="/evolution/online-badcase-config">线上 Bad Case 配置</el-menu-item>
       <el-menu-item index="/evolution/receipts">进化回执</el-menu-item>
     </el-sub-menu>
 

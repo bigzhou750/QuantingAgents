@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from app.core.database import get_mongo_db
 from app.models.decision import ReviewStatus
+from app.services.explainability.event_names import event_display_name
 from app.services.explainability.record_service import decision_record_store
 from app.utils.timezone import now_tz
 
@@ -37,6 +38,42 @@ class DecisionAuditService:
         if task:
             return task
         return None
+
+    @staticmethod
+    def _compute_audit_status(
+        records: List[Dict[str, Any]],
+        trace_events: List[Dict[str, Any]],
+        vibe_events: List[Dict[str, Any]],
+        operation_logs: List[Dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        task_docs: List[Dict[str, Any]],
+        explanations: List[Dict[str, Any]],
+        validations: List[Dict[str, Any]],
+        final_output: str,
+    ) -> str:
+        """区分空数据、有事件但无决策链以及完整/部分决策链。"""
+        has_events = bool(
+            trace_events
+            or vibe_events
+            or operation_logs
+            or messages
+        )
+        if not records and not has_events:
+            return "empty"
+        if not records:
+            return "events_without_chain"
+        missing_context = []
+        if not trace_events:
+            missing_context.append("trace_events")
+        if not final_output:
+            missing_context.append("final_output")
+        if not explanations:
+            missing_context.append("explanations")
+        if not validations:
+            missing_context.append("validations")
+        if missing_context:
+            return "partial"
+        return "complete"
 
     async def _assert_authorized(
         self,
@@ -112,6 +149,7 @@ class DecisionAuditService:
             event_query = {"session_id": session_id}
         else:
             event_query = {"task_id": task_id}
+        event_query["event_type"] = {"$ne": "token"}
         vibe_events: List[Dict[str, Any]] = []
         if event_query:
             event_cursor = db["vibe_agent_events"].find(event_query).sort("sequence", 1).limit(1000)
@@ -187,12 +225,34 @@ class DecisionAuditService:
             event for event in trace_events
             if event.get("event_type") in {"evidence", "retrieval", "citation"}
         ]
-        if not records and (trace_events or vibe_events or operation_logs):
-            audit_status = "legacy_unverified"
-        elif not records and not trace_events and not vibe_events:
-            audit_status = "unavailable"
-        else:
-            audit_status = "complete"
+        audit_status = self._compute_audit_status(
+            records,
+            trace_events,
+            vibe_events,
+            operation_logs,
+            messages,
+            task_docs,
+            explanations,
+            validations,
+            final_output,
+        )
+        legacy_audit_status = {
+            "events_without_chain": "legacy_unverified",
+            "empty": "unavailable",
+        }.get(audit_status, audit_status)
+        audit_counts = {
+            "tasks": len(task_docs),
+            "vibe_events": len(vibe_events),
+            "trace_events": len(trace_events),
+            "evidence_events": len(evidence_events),
+            "decision_records": len(records),
+            "explanations": len(explanations),
+            "validations": len(validations),
+            "reviews": len(reviews),
+            "operation_logs": len(operation_logs),
+            "messages": len(messages),
+            "scope": scope,
+        }
 
         return {
             "business_id": identifier,
@@ -200,6 +260,8 @@ class DecisionAuditService:
             "task_id": task_id,
             "session_id": session_id,
             "audit_status": audit_status,
+            "legacy_audit_status": legacy_audit_status,
+            "audit_counts": audit_counts,
             "tasks": task_docs,
             "messages": messages,
             "decision_chain": records,
@@ -212,6 +274,69 @@ class DecisionAuditService:
             "validations": validations,
             "reviews": reviews,
             "query_latency_ms": latency_ms,
+        }
+
+    async def list_events(
+        self,
+        identifier: str,
+        user: Dict[str, Any],
+        scope: str = "auto",
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        """分页返回运行事件，并附带中文事件名称。"""
+        db = get_mongo_db()
+        scope = scope if scope in {"session", "task"} else "auto"
+        task = await self._resolve_task(identifier) if scope != "session" else None
+        if scope == "auto":
+            scope = "task" if task and str(task.get("task_id")) == identifier else "session"
+
+        task_id: Optional[str] = None
+        session_id = identifier
+        if scope == "session":
+            records = await self.store.list_decision_records(
+                session_id=session_id,
+                limit=20,
+            )
+        else:
+            task_id = str(task.get("task_id") or identifier) if task else identifier
+            session_id = str(task.get("session_id") or "") if task else ""
+            records = await self.store.list_decision_records(
+                task_id=task_id,
+                limit=20,
+            )
+
+        await self._assert_authorized(identifier, task, user, records)
+
+        query: Dict[str, Any] = {}
+        if scope == "session":
+            query["session_id"] = session_id
+        else:
+            query["task_id"] = task_id
+        query["event_type"] = {"$ne": "token"}
+
+        page = max(1, int(page))
+        page_size = min(200, max(1, int(page_size)))
+        skip = (page - 1) * page_size
+        total = await db["vibe_agent_events"].count_documents(query)
+        cursor = (
+            db["vibe_agent_events"]
+            .find(query)
+            .sort([("sequence", 1), ("created_at", 1)])
+            .skip(skip)
+            .limit(page_size)
+        )
+        items: List[Dict[str, Any]] = []
+        async for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))
+            doc["event_name"] = event_display_name(doc)
+            items.append(doc)
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "has_more": skip + len(items) < total,
         }
 
     async def update_review_status(

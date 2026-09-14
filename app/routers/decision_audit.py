@@ -55,6 +55,36 @@ async def get_decision_audit_chain(
         raise HTTPException(status_code=500, detail=f"构建决策审计链失败: {exc}")
 
 
+@router.get(
+    "/chains/{identifier}/events",
+    dependencies=[Depends(verify_decision_audit_enabled)],
+)
+async def get_decision_audit_events(
+    identifier: str,
+    scope: str = "auto",
+    page: int = 1,
+    page_size: int = 20,
+    user: dict = Depends(get_current_user),
+):
+    """分页查看审计运行事件。"""
+    if scope not in {"auto", "session", "task"}:
+        raise HTTPException(status_code=400, detail="scope 必须是 auto、session 或 task")
+    try:
+        events = await decision_audit_service.list_events(
+            identifier,
+            user,
+            scope=scope,
+            page=page,
+            page_size=page_size,
+        )
+        return ApiResponse(data=events, message="运行事件已返回")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("failed to list decision audit events")
+        raise HTTPException(status_code=500, detail=f"分页查询事件失败: {exc}")
+
+
 @router.get("/metrics", dependencies=[Depends(get_current_admin)])
 async def list_decision_metrics(
     limit: int = 30,

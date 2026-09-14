@@ -9,9 +9,15 @@ LLM-as-Judge 评分器
 
 import json
 import logging
+import time
 from typing import Optional, List, Dict, Any
 
 from app.models.eval import ScoreSource, ScoreStatus
+from app.services.eval.judge_adapters import (
+    JudgeLLMClient,
+    create_judge_client,
+)
+from app.services.eval.judge_config import resolve_default_judge_model
 from app.services.eval.scorers.base import BaseScorer, ScoreResult
 
 logger = logging.getLogger(__name__)
@@ -137,15 +143,27 @@ class LLMJudgeScorer(BaseScorer):
 
     def __init__(
         self,
-        judge_model: str = "qwen-plus",
+        judge_model: Optional[str] = None,
         rubric: Optional[Dict[str, Any]] = None,
         prompt_template: Optional[str] = None,
         version: str = "1.0.0",
+        provider: Optional[str] = None,
+        adapter: Optional[JudgeLLMClient] = None,
     ):
-        self._judge_model = judge_model
+        self._judge_model = judge_model or resolve_default_judge_model()
         self._rubric = rubric or DEFAULT_FINANCIAL_RUBRIC
         self._prompt_template = prompt_template or DEFAULT_JUDGE_PROMPT_TEMPLATE
         self._version = version
+        self._adapter = create_judge_client(
+            self._judge_model,
+            provider=provider,
+            adapter=adapter,
+        )
+        self._adapter_name = getattr(
+            self._adapter,
+            "name",
+            type(self._adapter).__name__,
+        )
 
     @property
     def name(self) -> str:
@@ -161,12 +179,17 @@ class LLMJudgeScorer(BaseScorer):
 
     @property
     def is_available(self) -> bool:
-        """Judge 依赖不是可选 mock，缺失时必须失败关闭。"""
         try:
-            import dashscope  # noqa: F401
-            return True
-        except ImportError:
+            return bool(self._adapter.is_available())
+        except Exception:
             return False
+
+    @property
+    def availability_reason(self) -> str:
+        try:
+            return str(self._adapter.availability_reason())
+        except Exception:
+            return "Judge adapter unavailable"
 
     async def score(
         self,
@@ -214,11 +237,16 @@ class LLMJudgeScorer(BaseScorer):
                 score_name=self.name,
                 score=0.0,
                 passed=False,
-                reason="dashscope SDK 未安装，LLM Judge 不可用",
+                reason=f"{self._adapter_name} 不可用：{self.availability_reason}",
                 confidence=0.0,
                 source=self.source,
                 version=self.version,
                 status=ScoreStatus.NOT_CONFIGURED,
+                raw_output={
+                    "judge_model": self._judge_model,
+                    "adapter": self._adapter_name,
+                    "error": self.availability_reason,
+                },
             )
 
         # 构建 prompt
@@ -232,8 +260,10 @@ class LLMJudgeScorer(BaseScorer):
         )
 
         # 调用 LLM
+        started_at = time.monotonic()
         try:
             judge_output = await self._call_judge(prompt)
+            elapsed_ms = int((time.monotonic() - started_at) * 1000)
             parsed = self._parse_judge_output(judge_output)
 
             overall_score = parsed.get("overall_score", 0.0)
@@ -249,6 +279,8 @@ class LLMJudgeScorer(BaseScorer):
                 version=self.version,
                 raw_output={
                     "judge_model": self._judge_model,
+                    "adapter": self._adapter_name,
+                    "elapsed_ms": elapsed_ms,
                     "raw_response": judge_output,
                     "parsed": parsed,
                     "rubric_version": self._version,
@@ -259,6 +291,7 @@ class LLMJudgeScorer(BaseScorer):
             )
         except Exception as e:
             logger.error(f"LLM Judge scoring failed: {e}")
+            elapsed_ms = int((time.monotonic() - started_at) * 1000)
             return ScoreResult(
                 score_name=self.name,
                 score=0.0,
@@ -268,6 +301,12 @@ class LLMJudgeScorer(BaseScorer):
                 source=self.source,
                 version=self.version,
                 status=ScoreStatus.ERROR,
+                raw_output={
+                    "judge_model": self._judge_model,
+                    "adapter": self._adapter_name,
+                    "elapsed_ms": elapsed_ms,
+                    "error": str(e),
+                },
             )
 
     def _format_rubric(self) -> str:
@@ -278,24 +317,8 @@ class LLMJudgeScorer(BaseScorer):
         return "\n".join(lines)
 
     async def _call_judge(self, prompt: str) -> str:
-        """调用 judge LLM"""
-        try:
-            from dashscope import Generation
-
-            response = Generation.call(
-                model=self._judge_model,
-                messages=[{"role": "user", "content": prompt}],
-                result_format="message",
-                temperature=0.1,
-            )
-
-            if response.status_code == 200:
-                return response.output.choices[0].message.content
-            else:
-                raise RuntimeError(f"DashScope API error: {response.code} - {response.message}")
-
-        except ImportError:
-            raise RuntimeError("dashscope SDK not available, judge scoring is not configured")
+        """调用 judge LLM。"""
+        return await self._adapter.generate(prompt)
 
     def _parse_judge_output(self, raw_output: str) -> Dict[str, Any]:
         """解析 judge 输出的 JSON"""

@@ -709,11 +709,33 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'evolution/observation',
+        name: 'EvolutionPostReleaseObservation',
+        component: () => import('@/views/Evolution/PostReleaseObservation.vue'),
+        meta: {
+          title: '发布后观测',
+          requiresAuth: true,
+          requiresAdmin: true,
+          transition: 'fade'
+        }
+      },
+      {
         path: 'evolution/artifacts',
         name: 'EvolutionArtifacts',
         component: () => import('@/views/Evolution/Artifacts.vue'),
         meta: {
           title: 'Artifact 管理',
+          requiresAuth: true,
+          requiresAdmin: true,
+          transition: 'fade'
+        }
+      },
+      {
+        path: 'evolution/online-badcase-config',
+        name: 'EvolutionOnlineBadcaseConfig',
+        component: () => import('@/views/Evolution/OnlineBadcaseConfig.vue'),
+        meta: {
+          title: '线上 Bad Case 配置',
           requiresAuth: true,
           requiresAdmin: true,
           transition: 'fade'
