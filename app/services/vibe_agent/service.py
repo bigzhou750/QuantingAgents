@@ -1011,8 +1011,8 @@ class VibeAgentService:
                 session_id,
                 task_id,
             )
-        except Exception:
-            logger.warning("failed to persist decision record", exc_info=True)
+        except Exception as exc:
+            logger.warning("failed to persist decision record: %s", exc)
 
     async def _finalize_task_explainability(
         self,

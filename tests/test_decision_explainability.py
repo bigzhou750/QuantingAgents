@@ -89,6 +89,30 @@ class TestDecisionRecordModels:
         assert record.selection_reason == "candidates_unavailable"
         assert record.status.value == "unverified"
 
+    @pytest.mark.asyncio
+    async def test_save_decision_record_upsert_does_not_conflict_on_created_at(self):
+        from app.services.explainability.record_service import (
+            decision_record_store,
+            normalize_event_to_decision,
+        )
+
+        fake_db = _FakeDb()
+        with patch(
+            "app.services.explainability.record_service.get_mongo_db",
+            return_value=fake_db,
+        ):
+            record = normalize_event_to_decision(
+                "tool_call",
+                {"name": "get_market_data"},
+                task_id="task_store",
+            )
+            await decision_record_store.save_decision_record(record)
+
+        collection = fake_db["agent_decision_records"]
+        update = collection.update_one.call_args[0][1]
+        assert "created_at" not in update["$set"]
+        assert update["$setOnInsert"]["created_at"] == record.created_at
+
 
 class TestExplanationAndValidation:
     """分层解释与一致性校验测试"""

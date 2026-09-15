@@ -178,6 +178,10 @@ class DecisionRecordStore:
     async def save_decision_record(self, record: DecisionRecordDoc) -> Dict[str, Any]:
         db = get_mongo_db()
         doc = record.model_dump(by_alias=True, exclude={"id"})
+        # `created_at` is set only on first insert; putting it in both `$set`
+        # and `$setOnInsert` makes Mongo reject every new upsert with a
+        # path-conflict WriteError.
+        doc.pop("created_at", None)
         await db[self.DECISIONS].update_one(
             {"decision_id": record.decision_id},
             {"$set": doc, "$setOnInsert": {"created_at": record.created_at}},

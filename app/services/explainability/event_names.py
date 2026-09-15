@@ -47,4 +47,4 @@ def event_display_name(event: Dict[str, Any]) -> str:
         return "工具返回"
     if phase in {"tool_result", "attempt.completed", "attempt.failed", "attempt.started"}:
         return EVENT_NAME_MAP.get(phase, "运行状态变更")
-    return EVENT_NAME_MAP.get(event_type, "运行事件")
+    return EVENT_NAME_MAP.get(event_type, event_type)
