@@ -257,17 +257,22 @@ async def create_order(
         success_url = f"{origin}/token-recharge?order={order_doc['order_id']}&status=success"
 
         try:
+            # 使用匿名模式（不传 buyer_identity）
+            # 认证模式的 token 通过 URL fragment 传递，依赖 Waffo 前端 JS
+            # 从 localStorage 读取并通过 Next.js Server Action 验证，
+            # 跨域 window.open 场景下容易失败。
+            # 匿名模式下买家在结账页手动填写信息，订单通过 metadata.order_id 关联。
             checkout_result = await waffo_service.create_dynamic_checkout(
                 amount=amount_yuan,
                 currency=currency,
                 product_name=f"算力充值-{amount_yuan:.0f}元",
-                buyer_identity=user_id,
                 success_url=success_url,
                 metadata={
                     "order_id": order_doc["order_id"],
                     "user_id": user_id,
                     "package_id": payload.package_id or "custom",
                 },
+                order_id=order_doc["order_id"],
             )
             pay_params = {
                 "checkout_url": checkout_result["checkout_url"],
