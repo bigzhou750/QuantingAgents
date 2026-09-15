@@ -27,7 +27,7 @@ def _make_app(role: str):
     return app
 
 
-def _user_response(username: str = "bob"):
+def _user_response(username: str = "bob", balance: float = 0.0):
     return UserResponse(
         id="u1",
         username=username,
@@ -44,10 +44,11 @@ def _user_response(username: str = "bob"):
         total_analyses=0,
         successful_analyses=0,
         failed_analyses=0,
+        balance=balance,
     )
 
 
-def _admin_detail(username: str = "bob", email: str = None, is_active: bool = True, is_admin: bool = False, is_archived: bool = False):
+def _admin_detail(username: str = "bob", email: str = None, is_active: bool = True, is_admin: bool = False, is_archived: bool = False, balance: float = 0.0):
     return UserAdminResponse(
         id="u1",
         username=username,
@@ -65,6 +66,7 @@ def _admin_detail(username: str = "bob", email: str = None, is_active: bool = Tr
         total_analyses=1,
         successful_analyses=1,
         failed_analyses=0,
+        balance=balance,
     )
 
 
@@ -72,7 +74,7 @@ def test_admin_can_list_search_and_view_users(monkeypatch):
     monkeypatch.setattr(
         auth_db.user_service,
         "list_users",
-        _async_return(UserListResult(users=[_user_response()], total=1)),
+        _async_return(UserListResult(users=[_user_response(balance=12.5)], total=1)),
     )
     monkeypatch.setattr(auth_db.user_service, "get_user_admin_detail", _async_return(_admin_detail()))
 
@@ -84,12 +86,14 @@ def test_admin_can_list_search_and_view_users(monkeypatch):
     assert payload["users"][0]["username"] == "bob"
     assert payload["users"][0]["is_admin"] is False
     assert payload["users"][0]["is_archived"] is False
+    assert payload["users"][0]["balance"] == 12.5
 
     assert client.get("/api/auth/users", params={"status": "bad"}).status_code == 400
 
     detail_resp = client.get("/api/auth/users/bob")
     assert detail_resp.status_code == 200
     assert detail_resp.json()["data"]["username"] == "bob"
+    assert detail_resp.json()["data"]["balance"] == 0.0
     assert "hashed_password" not in detail_resp.json()["data"]
 
 
@@ -173,6 +177,11 @@ def test_admin_create_user_never_accepts_client_role_without_audit(monkeypatch):
     async def capture(**kwargs):
         captured.update(kwargs)
 
+    monkeypatch.setattr(
+        auth_db,
+        "token_billing_service",
+        SimpleNamespace(grant_registration_bonus=_async_return({"txn_id": "GFT_001"})),
+    )
     monkeypatch.setattr(auth_db, "log_operation", capture)
     monkeypatch.setattr(
         auth_db.user_service,
@@ -189,6 +198,45 @@ def test_admin_create_user_never_accepts_client_role_without_audit(monkeypatch):
     assert resp.status_code == 200
     assert captured["action_type"] == auth_db.ActionType.USER_MANAGEMENT
     assert captured["details"]["target_username"] == "bob"
+    assert captured["details"]["bonus_yuan"] == 5.0
+    assert resp.json()["data"]["bonus"]["txn_id"] == "GFT_001"
+
+
+def test_public_register_grants_registration_bonus_and_logs(monkeypatch):
+    captured = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        auth_db.user_service,
+        "create_user",
+        _async_return(SimpleNamespace(id="new-2", username="carol", email="carol@example.com")),
+    )
+    monkeypatch.setattr(
+        auth_db,
+        "token_billing_service",
+        SimpleNamespace(grant_registration_bonus=_async_return({"txn_id": "GFT_002"})),
+    )
+    monkeypatch.setattr(auth_db, "log_operation", capture)
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/auth")
+    client = TestClient(app)
+    resp = client.post("/api/auth/register", json={
+        "username": "carol",
+        "email": "carol@example.com",
+        "password": "StrongPass1",
+        "confirm_password": "StrongPass1",
+        "agreement": True,
+    })
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["bonus"]["amount_yuan"] == 5.0
+    assert data["bonus"]["txn_id"] == "GFT_002"
+    assert captured["action_type"] == auth_db.ActionType.USER_REGISTER
+    assert captured["details"]["bonus_yuan"] == 5.0
 
 
 def test_archived_accounts_are_rejected_by_auth(monkeypatch):

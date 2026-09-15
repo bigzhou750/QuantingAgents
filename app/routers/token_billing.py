@@ -9,6 +9,7 @@ import io
 import logging
 from typing import Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, Depends, Query, Request, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -26,7 +27,9 @@ from app.models.token_billing import (
     OrderStatusResponse,
     BillingConfigUpdateRequest,
     PackageUpdateRequest,
+    AdminRechargeRequest,
     mq_to_yuan,
+    yuan_to_mq,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +53,115 @@ async def get_account(current_user: dict = Depends(get_current_user)):
     """获取用户额度账户信息（R9）"""
     account = await token_billing_service.get_account_response(current_user["id"])
     return ok(account.model_dump())
+
+
+# ==================== 管理员运营接口 ====================
+
+@router.get("/admin/users/{target}/account")
+async def admin_get_user_account(
+    target: str,
+    admin: dict = Depends(require_admin),
+):
+    """管理员查询单个用户的算力账户（用户名或用户ID）。"""
+    from app.services.user_service import user_service
+
+    target_user = await user_service.get_user_by_username(target)
+    if not target_user and ObjectId.is_valid(target):
+        target_user = await user_service.get_user_by_id(target)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    account = await token_billing_service.get_account_response(str(target_user.id))
+    return ok(account.model_dump())
+
+
+@router.post("/admin/recharge")
+async def admin_recharge(
+    payload: AdminRechargeRequest,
+    admin: dict = Depends(require_admin),
+):
+    """管理员后台手工充值算力。"""
+    from app.services.user_service import user_service
+
+    if payload.username:
+        target_user = await user_service.get_user_admin_detail(payload.username)
+    else:
+        target_user = await user_service.get_user_by_id(payload.user_id)
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if getattr(target_user, "is_archived", False):
+        raise HTTPException(status_code=400, detail="归档账号不能充值")
+
+    amount_mq = yuan_to_mq(payload.amount)
+    if amount_mq <= 0:
+        raise HTTPException(status_code=400, detail="充值金额必须大于0")
+
+    result = await token_billing_service.admin_recharge(
+        user_id=str(target_user.id),
+        amount_mq=amount_mq,
+        username=target_user.username,
+        email=target_user.email,
+        operator_user_id=admin.get("id", ""),
+        operator_username=admin.get("username", ""),
+        reason=payload.reason,
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail="充值失败，请稍后重试")
+
+    try:
+        from app.services.operation_log_service import log_operation
+        from app.models.operation_log import ActionType
+        await log_operation(
+            user_id=admin.get("id", ""),
+            username=admin.get("username", ""),
+            action_type=ActionType.USER_MANAGEMENT,
+            action="管理员充值算力",
+            details={
+                "target_username": target_user.username,
+                "target_user_id": str(target_user.id),
+                "amount_yuan": payload.amount,
+                "txn_id": result["txn_id"],
+                "reason": payload.reason,
+            },
+            success=True,
+        )
+    except Exception as le:
+        logger.warning("⚠️ 管理员充值审计日志写入失败: %s", le)
+
+    account = await token_billing_service.get_account_response(str(target_user.id))
+    return ok({
+        "account": account.model_dump(),
+        "transaction": {
+            "txn_id": result["txn_id"],
+            "amount": mq_to_yuan(result["amount_mq"]),
+            "balance_after": mq_to_yuan(result["balance_after_mq"]),
+        },
+    })
+
+
+@router.get("/admin/transactions")
+async def admin_get_transactions(
+    user_id: Optional[str] = Query(None, description="目标用户ID"),
+    type: Optional[str] = Query(None, description="类型过滤: recharge/gift/admin_recharge/all"),
+    keyword: Optional[str] = Query(None, max_length=200, description="用户名/邮箱/用户ID/流水号/订单号"),
+    start_date: Optional[str] = Query(None, description="开始日期 ISO格式"),
+    end_date: Optional[str] = Query(None, description="结束日期 ISO格式"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页条数"),
+    admin: dict = Depends(require_admin),
+):
+    """管理员分页查询充值记录。"""
+    result = await token_billing_service.get_admin_transactions(
+        user_id=user_id,
+        type_filter=type,
+        keyword=keyword,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        page_size=page_size,
+    )
+    return ok(result.model_dump())
 
 
 # ==================== 套餐接口 ====================

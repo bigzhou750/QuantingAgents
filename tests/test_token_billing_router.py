@@ -12,6 +12,8 @@ Token 计费路由 — API 集成测试。
 
 import asyncio
 import json
+import re
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -57,8 +59,24 @@ def _eval_expr(expr, doc):
 
 def _match_filter(doc: dict, filt: dict) -> bool:
     """Very small subset of MongoDB query matching used by the tests."""
+    def _get_value(key: str):
+        if "." not in key:
+            return doc.get(key)
+        current = doc
+        for part in key.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        return current
+
+    if "$or" in filt:
+        or_filters = filt["$or"]
+        if not any(_match_filter(doc, sub_filter) for sub_filter in or_filters):
+            return False
+        filt = {k: v for k, v in filt.items() if k != "$or"}
+
     for key, val in filt.items():
-        doc_val = doc.get(key)
+        doc_val = _get_value(key)
         if isinstance(val, dict):
             for op, operand in val.items():
                 if op == "$gte":
@@ -73,6 +91,19 @@ def _match_filter(doc: dict, filt: dict) -> bool:
                 elif op == "$lte":
                     if not (doc_val is not None and doc_val <= operand):
                         return False
+                elif op == "$ne":
+                    if doc_val == operand:
+                        return False
+                elif op == "$in":
+                    if doc_val not in operand:
+                        return False
+                elif op == "$regex":
+                    options = str(val.get("$options", ""))
+                    flags = re.IGNORECASE if "i" in options else 0
+                    if not re.search(operand, str(doc_val or ""), flags=flags):
+                        return False
+                elif op == "$options":
+                    continue
                 else:
                     return False
         else:
@@ -439,10 +470,14 @@ def test_create_order_happy_path():
     client = _make_client(user=NORMAL_USER, fake_db=fake_db)
 
     mock_cs = _mock_config_service()
-    mock_wxpay = AsyncMock(return_value={"code_url": "weixin://wxpay/bizpayurl?pr=test"})
+    mock_checkout = AsyncMock(return_value={
+        "checkout_url": "https://checkout.test/session/1",
+        "session_id": "session_1",
+        "expires_at": "2026-09-14T01:00:00+08:00",
+    })
 
     with patch("app.services.config_service.config_service", mock_cs), \
-         patch("app.services.wxpay_service.wxpay_service.create_native_order", mock_wxpay):
+         patch("app.routers.token_billing.waffo_service.create_dynamic_checkout", mock_checkout):
         resp = client.post("/api/token-billing/orders", json={
             "package_id": "pkg_100",
             "idempotency_key": "idem_test_001",
@@ -452,7 +487,8 @@ def test_create_order_happy_path():
     data = resp.json()["data"]
     assert data["order_id"].startswith("RC")
     assert data["status"] == "pending"
-    assert data["pay_type"] == "NATIVE"
+    assert data["pay_type"] == "WAFFO"
+    assert data["pay_params"]["checkout_url"] == "https://checkout.test/session/1"
     assert data["amount"] == 100.0
     assert data["quota_to_credit"] == 110.0
     assert data["gift_amount"] == 10.0
@@ -474,88 +510,79 @@ def test_create_order_invalid_package_400():
 
 
 # ===========================================================================
-# 微信支付回调：验证签名校验失败、正常入账、幂等防重（Bug B3）、缺失字段处理
+# Waffo Webhook：验证签名校验失败、正常入账、幂等防重和缺失订单号处理
 # ===========================================================================
 
-def test_wxpay_notify_signature_fail():
-    """Missing wechatpay-* headers → {code: FAIL}."""
+def _waffo_event(order_id="RC_NOTIFY_001"):
+    return {
+        "eventType": "order.completed",
+        "id": "evt_001",
+        "mode": "live",
+        "data": {
+            "metadata": {"order_id": order_id},
+            "orderId": "WF_001",
+            "amount": 100,
+            "currency": "CNY",
+        },
+    }
+
+
+def test_waffo_webhook_signature_fail():
+    """Invalid webhook signature → {code: FAIL}."""
+    from app.services.waffo_service import WaffoWebhookError
+
     fake_db = _FakeDB()
     client = _make_client(user=None, fake_db=fake_db)
-
-    resp = client.post(
-        "/api/token-billing/wxpay/notify",
-        content=b'{"event_type":"TRANSACTION.SUCCESS"}',
-        headers={"Content-Type": "application/json"},
-    )
+    with patch(
+        "app.routers.token_billing.waffo_service.verify_webhook_signature",
+        side_effect=WaffoWebhookError("bad signature"),
+    ):
+        resp = client.post(
+            "/api/token-billing/waffo/webhook",
+            content=b'{"eventType":"order.completed"}',
+            headers={"x-waffo-signature": "invalid"},
+        )
 
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["code"] == "FAIL"
+    assert resp.json()["code"] == "FAIL"
 
 
-def test_wxpay_notify_success_credits():
-    """SUCCESS callback → credits quota (full E2E)."""
+def test_waffo_webhook_success_credits():
+    """order.completed callback → credits quota."""
     fake_db = _FakeDB()
     _seed_order(fake_db, order_id="RC_NOTIFY_001", user_id="user1",
                 status="pending", amount_mq=100000, quota_mq=110000, gift_mq=10000)
     client = _make_client(user=None, fake_db=fake_db)
 
-    callback_body = json.dumps({
-        "event_type": "TRANSACTION.SUCCESS",
-        "resource": {
-            "plaintext": {
-                "out_trade_no": "RC_NOTIFY_001",
-                "trade_state": "SUCCESS",
-                "transaction_id": "WX_TXN_999",
-            }
-        },
-    }).encode()
-
     mock_cs = _mock_config_service()
     with patch("app.services.config_service.config_service", mock_cs), \
-         patch("app.services.wxpay_service.wxpay_service.verify_callback_signature", return_value=True), \
-         patch("app.services.wxpay_service.wxpay_service.parse_callback", return_value={
-             "event_type": "TRANSACTION.SUCCESS",
-             "payment": {
-                 "out_trade_no": "RC_NOTIFY_001",
-                 "trade_state": "SUCCESS",
-                 "transaction_id": "WX_TXN_999",
-             },
-             "raw": {},
-         }):
+         patch(
+             "app.routers.token_billing.waffo_service.verify_webhook_signature",
+             return_value=_waffo_event(),
+         ):
         resp = client.post(
-            "/api/token-billing/wxpay/notify",
-            content=callback_body,
-            headers={
-                "Content-Type": "application/json",
-                "wechatpay-timestamp": "1234567890",
-                "wechatpay-nonce": "abc123",
-                "wechatpay-signature": "sig",
-                "wechatpay-serial": "serial",
-            },
+            "/api/token-billing/waffo/webhook",
+            content=json.dumps(_waffo_event()),
+            headers={"x-waffo-signature": "sig"},
         )
 
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["code"] == "SUCCESS"
+    assert resp.json()["code"] == "SUCCESS"
 
-    # Verify account was credited
     acct = fake_db["token_accounts"].docs[0]
     assert acct["balance_mq"] == 110000
     assert acct["total_recharged_mq"] == 100000
     assert acct["total_gifted_mq"] == 10000
 
-    # Verify order status changed
     order = fake_db["token_recharge_orders"].docs[0]
     assert order["status"] == "credited"
 
 
-def test_wxpay_notify_idempotent_no_double_credit():
-    """Second callback for same order doesn't double credit (Bug B3)."""
+def test_waffo_webhook_idempotent_no_double_credit():
+    """Second callback for same order doesn't double credit."""
     fake_db = _FakeDB()
     _seed_order(fake_db, order_id="RC_IDEM_001", user_id="user1",
                 status="credited", amount_mq=100000, quota_mq=110000, gift_mq=10000)
-    # Pre-create account with existing balance
     fake_db["token_accounts"].docs.append({
         "user_id": "user1",
         "balance_mq": 110000,
@@ -568,77 +595,41 @@ def test_wxpay_notify_idempotent_no_double_credit():
     })
     client = _make_client(user=None, fake_db=fake_db)
 
-    callback_body = json.dumps({
-        "event_type": "TRANSACTION.SUCCESS",
-        "resource": {
-            "plaintext": {
-                "out_trade_no": "RC_IDEM_001",
-                "trade_state": "SUCCESS",
-                "transaction_id": "WX_TXN_DUP",
-            }
-        },
-    }).encode()
-
-    with patch("app.services.wxpay_service.wxpay_service.verify_callback_signature", return_value=True), \
-         patch("app.services.wxpay_service.wxpay_service.parse_callback", return_value={
-             "event_type": "TRANSACTION.SUCCESS",
-             "payment": {
-                 "out_trade_no": "RC_IDEM_001",
-                 "trade_state": "SUCCESS",
-                 "transaction_id": "WX_TXN_DUP",
-             },
-             "raw": {},
-         }):
+    with patch(
+        "app.routers.token_billing.waffo_service.verify_webhook_signature",
+        return_value=_waffo_event("RC_IDEM_001"),
+    ):
         resp = client.post(
-            "/api/token-billing/wxpay/notify",
-            content=callback_body,
-            headers={
-                "Content-Type": "application/json",
-                "wechatpay-timestamp": "1234567890",
-                "wechatpay-nonce": "abc123",
-                "wechatpay-signature": "sig",
-                "wechatpay-serial": "serial",
-            },
+            "/api/token-billing/waffo/webhook",
+            content=json.dumps(_waffo_event("RC_IDEM_001")),
+            headers={"x-waffo-signature": "sig"},
         )
 
     assert resp.status_code == 200
     assert resp.json()["code"] == "SUCCESS"
-
-    # Balance should NOT have doubled
-    acct = fake_db["token_accounts"].docs[0]
-    assert acct["balance_mq"] == 110000  # unchanged
+    assert fake_db["token_accounts"].docs[0]["balance_mq"] == 110000
 
 
-def test_wxpay_notify_missing_trade_no():
-    """Empty out_trade_no → FAIL."""
+def test_waffo_webhook_missing_order_id():
+    """Missing metadata.order_id → acknowledged, no credit."""
     fake_db = _FakeDB()
     client = _make_client(user=None, fake_db=fake_db)
+    event = _waffo_event()
+    event["data"]["metadata"] = {}
 
-    callback_body = json.dumps({
-        "event_type": "TRANSACTION.SUCCESS",
-        "resource": {"plaintext": {"trade_state": "SUCCESS"}},
-    }).encode()
-
-    with patch("app.services.wxpay_service.wxpay_service.verify_callback_signature", return_value=True), \
-         patch("app.services.wxpay_service.wxpay_service.parse_callback", return_value={
-             "event_type": "TRANSACTION.SUCCESS",
-             "payment": {"trade_state": "SUCCESS"},  # no out_trade_no
-             "raw": {},
-         }):
+    with patch(
+        "app.routers.token_billing.waffo_service.verify_webhook_signature",
+        return_value=event,
+    ):
         resp = client.post(
-            "/api/token-billing/wxpay/notify",
-            content=callback_body,
-            headers={
-                "Content-Type": "application/json",
-                "wechatpay-timestamp": "1234567890",
-                "wechatpay-nonce": "abc123",
-                "wechatpay-signature": "sig",
-                "wechatpay-serial": "serial",
-            },
+            "/api/token-billing/waffo/webhook",
+            content=json.dumps(event),
+            headers={"x-waffo-signature": "sig"},
         )
 
     assert resp.status_code == 200
-    assert resp.json()["code"] == "FAIL"
+    assert resp.json()["code"] == "SUCCESS"
+    assert fake_db["token_accounts"].docs == []
 
 
 # ===========================================================================
@@ -763,7 +754,132 @@ def test_reconcile_admin():
 
 
 # ===========================================================================
-# 完整生命周期 E2E：从创建账户 → 下单 → 微信回调 → 验证余额和交易记录的全链路测试
+# 管理员运营接口：验证后台充值、账户查询、权限和充值记录搜索
+# ===========================================================================
+
+def _target_user(username="bob", is_archived=False):
+    return SimpleNamespace(
+        id="u1",
+        username=username,
+        email=f"{username}@example.com",
+        is_archived=is_archived,
+    )
+
+
+def test_admin_recharge_success(monkeypatch):
+    fake_db = _FakeDB()
+    client = _make_client(user=ADMIN_USER, fake_db=fake_db)
+    monkeypatch.setattr(
+        "app.services.user_service.user_service.get_user_admin_detail",
+        AsyncMock(return_value=_target_user()),
+    )
+    captured_logs = []
+
+    async def capture_log(**kwargs):
+        captured_logs.append(kwargs)
+
+    monkeypatch.setattr("app.services.operation_log_service.log_operation", capture_log)
+
+    resp = client.post("/api/token-billing/admin/recharge", json={
+        "username": "bob",
+        "amount": 12.34,
+        "reason": "运营补偿",
+    })
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["transaction"]["amount"] == 12.34
+    assert data["account"]["balance"] == 12.34
+    assert len(fake_db["token_transactions"].docs) == 1
+    assert fake_db["token_transactions"].docs[0]["type"] == "admin_recharge"
+    assert fake_db["token_transactions"].docs[0]["metadata"]["operator_username"] == "admin"
+    assert len(captured_logs) == 1
+    assert captured_logs[0]["action"] == "管理员充值算力"
+
+
+def test_admin_recharge_rejects_missing_archived_and_bad_amount(monkeypatch):
+    fake_db = _FakeDB()
+    client = _make_client(user=ADMIN_USER, fake_db=fake_db)
+
+    monkeypatch.setattr(
+        "app.services.user_service.user_service.get_user_admin_detail",
+        AsyncMock(return_value=None),
+    )
+    assert client.post("/api/token-billing/admin/recharge", json={
+        "username": "missing",
+        "amount": 5,
+    }).status_code == 404
+
+    monkeypatch.setattr(
+        "app.services.user_service.user_service.get_user_admin_detail",
+        AsyncMock(return_value=_target_user(is_archived=True)),
+    )
+    assert client.post("/api/token-billing/admin/recharge", json={
+        "username": "bob",
+        "amount": 5,
+    }).status_code == 400
+
+    assert client.post("/api/token-billing/admin/recharge", json={
+        "username": "bob",
+        "amount": 0,
+    }).status_code == 422
+    assert len(fake_db["token_transactions"].docs) == 0
+
+
+def test_admin_recharge_requires_admin():
+    fake_db = _FakeDB()
+    client = _make_client(user=NORMAL_USER, fake_db=fake_db)
+    assert client.post("/api/token-billing/admin/recharge", json={
+        "username": "bob",
+        "amount": 5,
+    }).status_code == 403
+
+
+def test_admin_get_user_account_and_transactions_requires_admin(monkeypatch):
+    fake_db = _FakeDB()
+    client = _make_client(user=NORMAL_USER, fake_db=fake_db)
+    monkeypatch.setattr(
+        "app.services.user_service.user_service.get_user_by_username",
+        AsyncMock(return_value=_target_user()),
+    )
+
+    assert client.get("/api/token-billing/admin/users/bob/account").status_code == 403
+    assert client.get("/api/token-billing/admin/transactions", params={"keyword": "bob"}).status_code == 403
+
+
+def test_admin_transactions_search_and_user_join():
+    fake_db = _FakeDB()
+    fake_db["users"].docs.append({
+        "_id": "u1",
+        "username": "bob",
+        "email": "bob@example.com",
+    })
+    fake_db["token_transactions"].docs.append({
+        "txn_id": "ADM_001",
+        "user_id": "u1",
+        "order_id": None,
+        "type": "admin_recharge",
+        "direction": "in",
+        "amount_mq": 5000,
+        "balance_before_mq": 0,
+        "balance_after_mq": 5000,
+        "metadata": {"source": "admin_recharge", "operator_username": "admin"},
+        "status": "success",
+        "related_txn_id": None,
+        "created_at": "2026-09-14T00:00:00+08:00",
+    })
+    client = _make_client(user=ADMIN_USER, fake_db=fake_db)
+
+    resp = client.get("/api/token-billing/admin/transactions", params={"keyword": "bob"})
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total"] == 1
+    assert data["items"][0]["metadata"]["username"] == "bob"
+    assert data["items"][0]["type"] == "admin_recharge"
+
+
+# ===========================================================================
+# 完整生命周期 E2E：从创建账户 → 下单 → Waffo Webhook → 验证余额和交易记录的全链路测试
 # ===========================================================================
 
 def test_full_recharge_lifecycle():
@@ -773,7 +889,11 @@ def test_full_recharge_lifecycle():
     client = _make_client(user=NORMAL_USER, fake_db=fake_db)
 
     mock_cs = _mock_config_service()
-    mock_wxpay = AsyncMock(return_value={"code_url": "weixin://wxpay/bizpayurl?pr=lifecycle"})
+    mock_checkout = AsyncMock(return_value={
+        "checkout_url": "https://checkout.test/session/lifecycle",
+        "session_id": "session_lifecycle",
+        "expires_at": "2026-09-14T01:00:00+08:00",
+    })
 
     # Step 1: Get account (auto-creates)
     with patch("app.services.config_service.config_service", mock_cs):
@@ -783,7 +903,7 @@ def test_full_recharge_lifecycle():
 
     # Step 2: Create order
     with patch("app.services.config_service.config_service", mock_cs), \
-         patch("app.services.wxpay_service.wxpay_service.create_native_order", mock_wxpay):
+         patch("app.routers.token_billing.waffo_service.create_dynamic_checkout", mock_checkout):
         resp = client.post("/api/token-billing/orders", json={
             "package_id": "pkg_50",
             "idempotency_key": "lifecycle_idem_001",
@@ -794,38 +914,16 @@ def test_full_recharge_lifecycle():
     assert order_data["amount"] == 50.0
     assert order_data["quota_to_credit"] == 55.0
 
-    # Step 3: Simulate WeChat callback
-    callback_body = json.dumps({
-        "event_type": "TRANSACTION.SUCCESS",
-        "resource": {
-            "plaintext": {
-                "out_trade_no": order_id,
-                "trade_state": "SUCCESS",
-                "transaction_id": "WX_LIFECYCLE_TXN",
-            }
-        },
-    }).encode()
-
-    with patch("app.services.wxpay_service.wxpay_service.verify_callback_signature", return_value=True), \
-         patch("app.services.wxpay_service.wxpay_service.parse_callback", return_value={
-             "event_type": "TRANSACTION.SUCCESS",
-             "payment": {
-                 "out_trade_no": order_id,
-                 "trade_state": "SUCCESS",
-                 "transaction_id": "WX_LIFECYCLE_TXN",
-             },
-             "raw": {},
-         }):
+    # Step 3: Simulate Waffo webhook
+    event = _waffo_event(order_id)
+    with patch(
+        "app.routers.token_billing.waffo_service.verify_webhook_signature",
+        return_value=event,
+    ):
         resp = client.post(
-            "/api/token-billing/wxpay/notify",
-            content=callback_body,
-            headers={
-                "Content-Type": "application/json",
-                "wechatpay-timestamp": "1234567890",
-                "wechatpay-nonce": "abc123",
-                "wechatpay-signature": "sig",
-                "wechatpay-serial": "serial",
-            },
+            "/api/token-billing/waffo/webhook",
+            content=json.dumps(event),
+            headers={"x-waffo-signature": "sig"},
         )
     assert resp.status_code == 200
     assert resp.json()["code"] == "SUCCESS"

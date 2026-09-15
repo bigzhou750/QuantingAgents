@@ -25,6 +25,7 @@ const headerActionsSource = readFileSync(
 const managementPaths = [
   '/settings/config',
   '/settings/cache',
+  '/settings/recharges',
   '/evaluation/dashboard',
   '/evolution/proposals',
 ]

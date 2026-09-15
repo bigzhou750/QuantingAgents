@@ -127,9 +127,18 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="算力余额" width="120" align="center">
+          <template #default="{ row }">
+            ¥{{ (row.balance ?? 0).toFixed(3) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="viewDetail(row)">详情</el-button>
+            <el-button size="small" type="success" :disabled="row.is_archived" @click="openRechargeDialog(row)">
+              充值算力
+            </el-button>
             <el-button size="small" type="primary" :disabled="row.is_archived" @click="openEditDialog(row)">
               编辑
             </el-button>
@@ -202,6 +211,7 @@
         <el-descriptions-item label="最后登录">{{ formatDateTime(selectedUser.last_login) }}</el-descriptions-item>
         <el-descriptions-item label="每日配额">{{ selectedUser.daily_quota }}</el-descriptions-item>
         <el-descriptions-item label="并发限制">{{ selectedUser.concurrent_limit }}</el-descriptions-item>
+        <el-descriptions-item label="算力余额">¥{{ (selectedUser.balance ?? 0).toFixed(3) }}</el-descriptions-item>
         <el-descriptions-item label="分析次数">{{ selectedUser.total_analyses }}</el-descriptions-item>
         <el-descriptions-item label="成功 / 失败">
           {{ selectedUser.successful_analyses }} / {{ selectedUser.failed_analyses }}
@@ -266,6 +276,45 @@
         <el-button type="primary" :loading="submitLoading" @click="submitResetPassword">确认重置</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="rechargeVisible" title="充值算力" width="520px" :close-on-click-modal="false">
+      <el-form ref="rechargeFormRef" :model="rechargeForm" :rules="rechargeRules" label-width="100px">
+        <el-form-item label="目标用户">
+          <el-input :model-value="rechargeTarget?.username" disabled />
+        </el-form-item>
+        <el-form-item label="当前余额">
+          <span v-loading="rechargeBalanceLoading">
+            {{ rechargeBalance === null ? '-' : `¥${rechargeBalance.toFixed(3)}` }}
+          </span>
+        </el-form-item>
+        <el-form-item label="充值金额" prop="amount">
+          <el-input-number
+            v-model="rechargeForm.amount"
+            :min="0.01"
+            :max="1000000"
+            :precision="2"
+            :step="1"
+          />
+          <span class="unit-label">元</span>
+        </el-form-item>
+        <el-form-item label="充值备注" prop="reason">
+          <el-input
+            v-model="rechargeForm.reason"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="填写本次充值原因，便于后续审计"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rechargeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="rechargeSubmitting" @click="submitRecharge">
+          确认充值
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -274,6 +323,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Search, Refresh, Plus, ArrowDown } from '@element-plus/icons-vue'
 import { authApi } from '@/api/auth'
+import { tokenBillingApi } from '@/api/tokenBilling'
 import { useAuthStore } from '@/stores/auth'
 import type { AdminUserDetail, AdminUserSummary } from '@/types/auth'
 import {
@@ -305,8 +355,14 @@ const resetVisible = ref(false)
 const createFormRef = ref()
 const editFormRef = ref()
 const resetFormRef = ref()
+const rechargeFormRef = ref()
 const editTarget = ref<AdminUserSummary | null>(null)
 const resetTarget = ref<AdminUserSummary | null>(null)
+const rechargeTarget = ref<AdminUserSummary | null>(null)
+const rechargeVisible = ref(false)
+const rechargeBalance = ref<number | null>(null)
+const rechargeBalanceLoading = ref(false)
+const rechargeSubmitting = ref(false)
 
 const createForm = reactive({
   username: '',
@@ -324,6 +380,11 @@ const editForm = reactive({
 const resetForm = reactive({
   new_password: '',
   confirm_password: ''
+})
+
+const rechargeForm = reactive({
+  amount: 5,
+  reason: ''
 })
 
 const createRules: Record<string, any[]> = {
@@ -377,6 +438,15 @@ const resetRules: Record<string, any[]> = {
       },
       trigger: 'blur'
     }
+  ]
+}
+
+const rechargeRules: Record<string, any[]> = {
+  amount: [
+    { required: true, message: '请输入充值金额', trigger: 'blur' }
+  ],
+  reason: [
+    { max: 500, message: '备注不能超过 500 字', trigger: 'blur' }
   ]
 }
 
@@ -438,6 +508,47 @@ const openResetDialog = (row: AdminUserSummary) => {
   resetForm.new_password = ''
   resetForm.confirm_password = ''
   resetVisible.value = true
+}
+
+const openRechargeDialog = async (row: AdminUserSummary) => {
+  rechargeTarget.value = row
+  rechargeForm.amount = 5
+  rechargeForm.reason = ''
+  rechargeBalance.value = null
+  rechargeVisible.value = true
+  await loadRechargeBalance(row)
+}
+
+const loadRechargeBalance = async (row: AdminUserSummary) => {
+  rechargeBalanceLoading.value = true
+  try {
+    const response = await tokenBillingApi.adminGetUserAccount(row.username)
+    rechargeBalance.value = response.data?.balance ?? 0
+  } catch (error) {
+    rechargeBalance.value = null
+    console.error('获取用户算力余额失败:', error)
+  } finally {
+    rechargeBalanceLoading.value = false
+  }
+}
+
+const submitRecharge = async () => {
+  if (!rechargeTarget.value) return
+  await rechargeFormRef.value.validate()
+  rechargeSubmitting.value = true
+  try {
+    const response = await tokenBillingApi.adminRecharge({
+      username: rechargeTarget.value.username,
+      amount: rechargeForm.amount,
+      reason: rechargeForm.reason || '管理员充值'
+    })
+    ElMessage.success(`已为 ${rechargeTarget.value.username} 充值 ¥${response.data.transaction.amount.toFixed(2)}`)
+    rechargeVisible.value = false
+  } catch (error) {
+    console.error('充值算力失败:', error)
+  } finally {
+    rechargeSubmitting.value = false
+  }
 }
 
 const submitCreateUser = async () => {

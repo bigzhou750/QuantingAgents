@@ -99,6 +99,7 @@ export interface AdminUserSummary {
   total_analyses: number
   successful_analyses: number
   failed_analyses: number
+  balance: number
 }
 
 // 管理员用户详情

@@ -46,7 +46,8 @@ const USER: AdminUserSummary = {
   concurrent_limit: 3,
   total_analyses: 0,
   successful_analyses: 0,
-  failed_analyses: 0
+  failed_analyses: 0,
+  balance: 0
 }
 
 describe('UserManagement.vue', () => {

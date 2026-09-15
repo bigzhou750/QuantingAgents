@@ -17,6 +17,7 @@ from app.models.token_billing import (
     PackageInfo,
     TokenBillingSettings,
     RechargeOrderCreate,
+    AdminRechargeRequest,
     BillingConfigUpdateRequest,
 )
 from app.services.wxpay_service import WxPayService
@@ -251,6 +252,38 @@ def test_recharge_order_create_idempotency_key_too_long():
         assert False, "超长idempotency_key应被拒绝"
     except ValidationError:
         pass
+
+
+# ==================== AdminRechargeRequest 校验 ====================
+
+def test_admin_recharge_request_valid():
+    req = AdminRechargeRequest(username="bob", amount=5.0, reason="运营补偿")
+    assert req.username == "bob"
+    assert req.user_id is None
+    assert req.amount == 5.0
+
+
+def test_admin_recharge_request_user_id_valid():
+    req = AdminRechargeRequest(user_id="u1", amount=0.01)
+    assert req.user_id == "u1"
+    assert req.username is None
+
+
+def test_admin_recharge_request_requires_target():
+    try:
+        AdminRechargeRequest(amount=5.0)
+        assert False, "缺少目标用户应被拒绝"
+    except ValidationError:
+        pass
+
+
+def test_admin_recharge_request_rejects_non_positive_amount():
+    for amount in (0, -1):
+        try:
+            AdminRechargeRequest(username="bob", amount=amount)
+            assert False, f"金额 {amount} 应被拒绝"
+        except ValidationError:
+            pass
 
 
 # ==================== BillingConfigUpdateRequest 校验 ====================

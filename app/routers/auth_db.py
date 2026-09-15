@@ -18,6 +18,7 @@ from app.models.user import UserCreate, UserUpdate
 from app.services.operation_log_service import log_operation
 from app.models.operation_log import ActionType
 from app.core.auth_guard import AuthAttemptGuard, client_identity
+from app.services.token_billing_service import token_billing_service
 
 # 尝试导入日志管理器
 try:
@@ -312,10 +313,39 @@ async def register(payload: RegisterRequest, request: Request):
     ))
     if not new_user:
         raise HTTPException(status_code=409, detail="用户名或邮箱已存在")
+    try:
+        bonus = await token_billing_service.grant_registration_bonus(
+            str(new_user.id), new_user.username
+        )
+    except Exception as e:
+        logger.error("❌ 用户注册赠送失败: username=%s, error=%s", new_user.username, e)
+        raise HTTPException(status_code=500, detail="注册成功但赠送额度失败，请稍后重试")
+    if not bonus:
+        logger.warning("❌ 用户注册赠送未生效: username=%s", new_user.username)
+        raise HTTPException(status_code=500, detail="注册成功但赠送额度失败，请稍后重试")
+
+    await log_operation(
+        user_id=str(new_user.id),
+        username=new_user.username,
+        action_type=ActionType.USER_REGISTER,
+        action="用户注册赠送",
+        details={
+            "target_username": new_user.username,
+            "bonus_yuan": 5.0,
+            "txn_id": bonus.get("txn_id"),
+        },
+        success=True,
+        ip_address=ip_address,
+    )
     return {
         "success": True,
-        "data": {"id": str(new_user.id), "username": new_user.username, "email": new_user.email},
-        "message": "注册成功，请登录",
+        "data": {
+            "id": str(new_user.id),
+            "username": new_user.username,
+            "email": new_user.email,
+            "bonus": {"amount_yuan": 5.0, "txn_id": bonus.get("txn_id")},
+        },
+        "message": "注册成功，已赠送5元算力，请登录",
     }
 
 @router.post("/refresh")
@@ -578,12 +608,28 @@ async def create_user(
         if payload.is_admin:
             await user_service.set_admin_role(payload.username, True)
 
+        try:
+            bonus = await token_billing_service.grant_registration_bonus(
+                str(new_user.id), new_user.username
+            )
+        except Exception as e:
+            logger.error("❌ 管理员创建用户后赠送失败: username=%s, error=%s", new_user.username, e)
+            raise HTTPException(status_code=500, detail="用户创建成功但赠送额度失败，请稍后重试")
+        if not bonus:
+            logger.warning("❌ 管理员创建用户后赠送未生效: username=%s", new_user.username)
+            raise HTTPException(status_code=500, detail="用户创建成功但赠送额度失败，请稍后重试")
+
         await log_operation(
             user_id=user["id"],
             username=user["username"],
             action_type=ActionType.USER_MANAGEMENT,
             action="管理员创建用户",
-            details={"target_username": payload.username, "is_admin": payload.is_admin},
+            details={
+                "target_username": payload.username,
+                "is_admin": payload.is_admin,
+                "bonus_yuan": 5.0,
+                "txn_id": bonus.get("txn_id"),
+            },
             success=True,
         )
 
@@ -593,7 +639,8 @@ async def create_user(
                 "id": str(new_user.id),
                 "username": new_user.username,
                 "email": new_user.email,
-                "is_admin": payload.is_admin
+                "is_admin": payload.is_admin,
+                "bonus": {"amount_yuan": 5.0, "txn_id": bonus.get("txn_id")},
             },
             "message": f"用户 {payload.username} 创建成功"
         }

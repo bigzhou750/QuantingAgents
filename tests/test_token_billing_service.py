@@ -11,6 +11,7 @@ Token 计费服务层 — 综合单元测试。
 
 import asyncio
 import copy
+import re
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 
@@ -58,8 +59,24 @@ def _eval_expr(expr, doc):
 
 def _match_filter(doc: dict, filt: dict) -> bool:
     """Very small subset of MongoDB query matching used by the tests."""
+    def _get_value(key: str):
+        if "." not in key:
+            return doc.get(key)
+        current = doc
+        for part in key.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        return current
+
+    if "$or" in filt:
+        or_filters = filt["$or"]
+        if not any(_match_filter(doc, sub_filter) for sub_filter in or_filters):
+            return False
+        filt = {k: v for k, v in filt.items() if k != "$or"}
+
     for key, val in filt.items():
-        doc_val = doc.get(key)
+        doc_val = _get_value(key)
         if isinstance(val, dict):
             for op, operand in val.items():
                 if op == "$gte":
@@ -74,6 +91,19 @@ def _match_filter(doc: dict, filt: dict) -> bool:
                 elif op == "$lte":
                     if not (doc_val is not None and doc_val <= operand):
                         return False
+                elif op == "$ne":
+                    if doc_val == operand:
+                        return False
+                elif op == "$in":
+                    if doc_val not in operand:
+                        return False
+                elif op == "$regex":
+                    options = str(val.get("$options", ""))
+                    flags = re.IGNORECASE if "i" in options else 0
+                    if not re.search(operand, str(doc_val or ""), flags=flags):
+                        return False
+                elif op == "$options":
+                    continue
                 else:
                     return False
         else:
@@ -841,6 +871,141 @@ def test_credit_quota_clears_redis_exhausted(monkeypatch):
 
         # Flag should be cleared
         assert await fake_redis.get("token_balance_exhausted:user1") is None
+
+    asyncio.run(_run())
+
+
+# ===========================================================================
+# 注册赠送与管理员充值：验证统一 grant_quota 的余额、流水、幂等和 Redis 清理
+# ===========================================================================
+
+def test_grant_registration_bonus_is_idempotent(monkeypatch):
+    import app.services.token_billing_service as tbs
+    _reset_cache()
+    _mock_config_service(monkeypatch)
+
+    fake_db = _FakeDB()
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(tbs, "get_mongo_db", lambda: fake_db)
+    import app.core.database as db_mod
+    monkeypatch.setattr(db_mod, "get_redis_client", lambda: fake_redis)
+
+    async def _run():
+        svc = tbs.TokenBillingService()
+        first = await svc.grant_registration_bonus("user1", "bob")
+        assert first is not None
+
+        account = fake_db["token_accounts"].docs[0]
+        assert account["balance_mq"] == 5000
+        assert account["total_gifted_mq"] == 5000
+        assert account["registration_bonus_granted"] is True
+
+        txns = fake_db["token_transactions"].docs
+        assert len(txns) == 1
+        assert txns[0]["type"] == "gift"
+        assert txns[0]["direction"] == "in"
+        assert txns[0]["metadata"]["source"] == "registration_bonus"
+        assert txns[0]["metadata"]["username"] == "bob"
+
+        second = await svc.grant_registration_bonus("user1", "bob")
+        assert second is None
+        assert len(fake_db["token_transactions"].docs) == 1
+        assert fake_db["token_accounts"].docs[0]["balance_mq"] == 5000
+
+    asyncio.run(_run())
+
+
+def test_admin_recharge_credits_balance_and_clears_redis(monkeypatch):
+    import app.services.token_billing_service as tbs
+    _reset_cache()
+    _mock_config_service(monkeypatch)
+
+    fake_db = _FakeDB()
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(tbs, "get_mongo_db", lambda: fake_db)
+    import app.core.database as db_mod
+    monkeypatch.setattr(db_mod, "get_redis_client", lambda: fake_redis)
+
+    async def _run():
+        await fake_redis.setex("token_balance_exhausted:user1", 300, "1")
+        svc = tbs.TokenBillingService()
+        result = await svc.admin_recharge(
+            user_id="user1",
+            amount_mq=12345,
+            username="bob",
+            email="bob@example.com",
+            operator_user_id="admin1",
+            operator_username="admin",
+            reason="运营补偿",
+        )
+        assert result is not None
+        assert result["amount_mq"] == 12345
+
+        account = fake_db["token_accounts"].docs[0]
+        assert account["balance_mq"] == 12345
+        assert account["total_recharged_mq"] == 12345
+        assert account["total_gifted_mq"] == 0
+
+        txn = fake_db["token_transactions"].docs[0]
+        assert txn["type"] == "admin_recharge"
+        assert txn["direction"] == "in"
+        assert txn["metadata"]["source"] == "admin_recharge"
+        assert txn["metadata"]["operator_username"] == "admin"
+        assert txn["metadata"]["reason"] == "运营补偿"
+        assert await fake_redis.get("token_balance_exhausted:user1") is None
+
+    asyncio.run(_run())
+
+
+def test_admin_get_transactions_searches_by_username_and_joins_user(monkeypatch):
+    import app.services.token_billing_service as tbs
+    _reset_cache()
+    _mock_config_service(monkeypatch)
+
+    fake_db = _FakeDB()
+    monkeypatch.setattr(tbs, "get_mongo_db", lambda: fake_db)
+    fake_db["users"].docs.append({
+        "_id": "u1",
+        "username": "bob",
+        "email": "bob@example.com",
+    })
+    fake_db["token_transactions"].docs.append({
+        "txn_id": "ADM_0001",
+        "user_id": "u1",
+        "order_id": None,
+        "type": "admin_recharge",
+        "direction": "in",
+        "amount_mq": 5000,
+        "balance_before_mq": 0,
+        "balance_after_mq": 5000,
+        "metadata": {"source": "admin_recharge", "operator_username": "admin"},
+        "status": "success",
+        "related_txn_id": None,
+        "created_at": "2026-09-14T00:00:00+08:00",
+    })
+    fake_db["token_transactions"].docs.append({
+        "txn_id": "RCH_0002",
+        "user_id": "u2",
+        "order_id": "RC0002",
+        "type": "recharge",
+        "direction": "in",
+        "amount_mq": 10000,
+        "balance_before_mq": 0,
+        "balance_after_mq": 10000,
+        "metadata": {},
+        "status": "success",
+        "related_txn_id": None,
+        "created_at": "2026-09-14T01:00:00+08:00",
+    })
+
+    async def _run():
+        svc = tbs.TokenBillingService()
+        result = await svc.get_admin_transactions(keyword="bob", page=1, page_size=20)
+        assert result.total == 1
+        item = result.items[0]
+        assert item.txn_id == "ADM_0001"
+        assert item.metadata["username"] == "bob"
+        assert item.metadata["email"] == "bob@example.com"
 
     asyncio.run(_run())
 

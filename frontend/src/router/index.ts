@@ -513,6 +513,17 @@ const routes: RouteRecordRaw[] = [
           transition: 'slide-left'
         }
       },
+      {
+        path: 'settings/recharges',
+        name: 'RechargeManagement',
+        component: () => import('@/views/System/RechargeManagement.vue'),
+        meta: {
+          title: '充值记录',
+          requiresAuth: true,
+          requiresAdmin: true,
+          transition: 'slide-left'
+        }
+      },
 
       // ---------- 算力充值 ----------
       {

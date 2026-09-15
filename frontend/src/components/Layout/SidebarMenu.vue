@@ -119,6 +119,7 @@
         <span>系统管理</span>
       </template>
       <el-menu-item index="/settings/users">用户管理</el-menu-item>
+      <el-menu-item index="/settings/recharges">充值记录</el-menu-item>
       <el-menu-item index="/settings/database">数据库管理</el-menu-item>
       <el-menu-item index="/settings/logs">操作日志</el-menu-item>
       <el-menu-item index="/settings/scheduler">定时任务</el-menu-item>

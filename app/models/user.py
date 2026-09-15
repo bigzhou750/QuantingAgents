@@ -133,6 +133,7 @@ class UserResponse(BaseModel):
     total_analyses: int
     successful_analyses: int
     failed_analyses: int
+    balance: float = Field(default=0.0, description="算力余额（元）")
 
     @field_serializer('created_at', 'last_login')
     def serialize_datetime(self, dt: Optional[datetime], _info) -> Optional[str]:
@@ -160,6 +161,7 @@ class UserAdminResponse(BaseModel):
     total_analyses: int
     successful_analyses: int
     failed_analyses: int
+    balance: float = Field(default=0.0, description="算力余额（元）")
 
     @field_serializer('created_at', 'updated_at', 'last_login')
     def serialize_datetime(self, dt: Optional[datetime], _info) -> Optional[str]:

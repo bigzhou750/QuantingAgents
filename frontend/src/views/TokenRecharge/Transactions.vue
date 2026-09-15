@@ -44,6 +44,7 @@
           <el-select v-model="filters.type" placeholder="交易类型" clearable @change="loadTransactions">
             <el-option label="全部" value="" />
             <el-option label="充值" value="recharge" />
+            <el-option label="管理员充值" value="admin_recharge" />
             <el-option label="消费" value="consume" />
             <el-option label="赠送" value="gift" />
             <el-option label="预占" value="preoccupy" />
@@ -119,6 +120,15 @@
             <span v-if="row.metadata?.prompt_tokens">
               {{ row.metadata.prompt_tokens }}+{{ row.metadata.completion_tokens }} tokens
               ({{ row.metadata.model || '' }})
+            </span>
+            <span v-else-if="row.type === 'admin_recharge'">
+              {{ row.metadata?.reason || '管理员充值' }}
+              <span v-if="row.metadata?.operator_username">
+                · {{ row.metadata.operator_username }}
+              </span>
+            </span>
+            <span v-else-if="row.metadata?.source === 'registration_bonus'">
+              {{ row.metadata.reason || '注册赠送' }}
             </span>
             <span v-else-if="row.metadata?.reason">
               {{ row.metadata.reason }}
@@ -239,6 +249,7 @@ function formatTime(isoStr: string): string {
 function getTypeLabel(type: string): string {
   const map: Record<string, string> = {
     recharge: '充值',
+    admin_recharge: '管理员充值',
     consume: '消费',
     gift: '赠送',
     preoccupy: '预占',
@@ -248,10 +259,11 @@ function getTypeLabel(type: string): string {
   return map[type] || type
 }
 
-type TagType = 'success' | 'warning' | 'info' | 'danger' | undefined
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 function getTypeTagType(type: string): TagType {
   const map: Record<string, TagType> = {
     recharge: 'success',
+    admin_recharge: 'primary',
     consume: 'danger',
     gift: 'warning',
     preoccupy: 'info',

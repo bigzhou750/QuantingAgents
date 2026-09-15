@@ -9,7 +9,7 @@
 
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, model_validator
 from app.utils.timezone import now_tz
 
 
@@ -86,6 +86,20 @@ class OrderStatusResponse(BaseModel):
     expire_at: str
 
 
+class AdminRechargeRequest(BaseModel):
+    """管理员后台充值请求"""
+    username: Optional[str] = Field(None, description="目标用户名（与user_id二选一）")
+    user_id: Optional[str] = Field(None, description="目标用户ID（与username二选一）")
+    amount: float = Field(..., gt=0, le=1000000, description="充值金额（元）")
+    reason: str = Field(default="管理员充值", min_length=1, max_length=500, description="充值备注")
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if not self.username and not self.user_id:
+            raise ValueError("必须提供用户名或用户ID")
+        return self
+
+
 # ==================== 交易流水模型 ====================
 
 class TokenTransactionRecord(BaseModel):
@@ -93,7 +107,7 @@ class TokenTransactionRecord(BaseModel):
     txn_id: str = Field(..., description="交易ID")
     user_id: str = Field(..., description="用户ID")
     order_id: Optional[str] = Field(None, description="关联订单ID")
-    type: str = Field(..., description="类型: recharge/consume/gift/preoccupy/settle/settle_refund")
+    type: str = Field(..., description="类型: recharge/consume/gift/admin_recharge/preoccupy/settle/settle_refund")
     direction: str = Field(..., description="方向: in/out")
     amount_mq: int = Field(..., description="变动金额（毫额度）")
     balance_before_mq: int = Field(..., description="变动前余额（毫额度）")

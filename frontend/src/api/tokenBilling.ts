@@ -69,6 +69,40 @@ export interface TransactionList {
   page_size: number
 }
 
+export interface AdminTransactionItem extends TransactionItem {
+  metadata: Record<string, any> & {
+    source?: string
+    reason?: string
+    username?: string
+    email?: string
+    operator_username?: string
+    operator_user_id?: string
+  }
+}
+
+export interface AdminTransactionList {
+  items: AdminTransactionItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminRechargePayload {
+  username?: string
+  user_id?: string
+  amount: number
+  reason?: string
+}
+
+export interface AdminRechargeResult {
+  account: AccountInfo
+  transaction: {
+    txn_id: string
+    amount: number
+    balance_after: number
+  }
+}
+
 export interface BillingConfig {
   consumption_ratio: number
   input_price: number
@@ -164,5 +198,36 @@ export const tokenBillingApi = {
   /** 手动触发对账 */
   async reconcile() {
     return ApiClient.post<{ data: any }>('/api/token-billing/reconcile')
+  },
+
+  /** 管理员充值算力 */
+  async adminRecharge(data: AdminRechargePayload) {
+    return ApiClient.post<AdminRechargeResult>(
+      '/api/token-billing/admin/recharge',
+      data
+    )
+  },
+
+  /** 管理员查询用户算力账户（用户名或用户ID） */
+  async adminGetUserAccount(target: string) {
+    return ApiClient.get<AccountInfo>(
+      `/api/token-billing/admin/users/${encodeURIComponent(target)}/account`
+    )
+  },
+
+  /** 管理员分页查询充值记录 */
+  async adminGetTransactions(params: {
+    user_id?: string
+    type?: string
+    keyword?: string
+    start_date?: string
+    end_date?: string
+    page?: number
+    page_size?: number
+  }) {
+    return ApiClient.get<AdminTransactionList>(
+      '/api/token-billing/admin/transactions',
+      params
+    )
   },
 }

@@ -493,6 +493,10 @@ class UserService:
                     failed_analyses=user.failed_analyses
                 ))
 
+            balance_map = self._get_token_balances([str(user.id) for user in users])
+            for user in users:
+                user.balance = balance_map.get(str(user.id), 0.0)
+
             return UserListResult(users=users, total=total)
 
         except Exception as e:
@@ -506,6 +510,7 @@ class UserService:
             if not user_doc:
                 return None
             user = User(**user_doc)
+            balance_map = self._get_token_balances([str(user.id)])
             return UserAdminResponse(
                 id=str(user.id),
                 username=user.username,
@@ -523,10 +528,31 @@ class UserService:
                 total_analyses=user.total_analyses,
                 successful_analyses=user.successful_analyses,
                 failed_analyses=user.failed_analyses,
+                balance=balance_map.get(str(user.id), 0.0),
             )
         except Exception as e:
             logger.error(f"❌ 获取用户管理详情失败: {e}")
             return None
+
+    def _get_token_balances(self, user_ids: list) -> Dict[str, float]:
+        """从 token_accounts 批量读取用户算力余额（元）。"""
+        if not user_ids:
+            return {}
+        try:
+            if not hasattr(self.db, "token_accounts"):
+                return {}
+            balance_map: Dict[str, float] = {}
+            for doc in self.db.token_accounts.find(
+                {"user_id": {"$in": user_ids}},
+                {"user_id": 1, "balance_mq": 1},
+            ):
+                user_id = doc.get("user_id")
+                if user_id:
+                    balance_map[str(user_id)] = doc.get("balance_mq", 0) / 1000
+            return balance_map
+        except Exception as exc:
+            logger.warning("读取用户算力余额失败: %s", exc)
+            return {}
 
     async def update_user_admin(self, username: str, user_data: UserUpdate) -> Optional[UserAdminResponse]:
         """管理员更新用户资料和配额，返回非敏感管理详情。"""

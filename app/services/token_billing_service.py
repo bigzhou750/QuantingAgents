@@ -14,6 +14,7 @@
 
 import time
 import logging
+import re
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 
@@ -41,6 +42,7 @@ COL_ACCOUNTS = "token_accounts"
 COL_ORDERS = "token_recharge_orders"
 COL_TRANSACTIONS = "token_transactions"
 COL_PACKAGES = "token_packages"
+REGISTRATION_BONUS_MQ = 5000
 
 # ==================== 计费配置缓存 ====================
 _billing_cache: Dict[str, Any] = {}
@@ -108,6 +110,7 @@ class TokenBillingService:
                     "total_recharged_mq": 0,
                     "total_consumed_mq": 0,
                     "total_gifted_mq": 0,
+                    "registration_bonus_granted": False,
                     "created_at": now_iso,
                 },
                 "$set": {"updated_at": now_iso},
@@ -121,6 +124,150 @@ class TokenBillingService:
         """获取账户响应（金额转为元）"""
         account = await self.get_or_create_account(user_id)
         return TokenAccountResponse.from_account(account)
+
+    async def grant_quota(
+        self,
+        user_id: str,
+        amount_mq: int,
+        *,
+        txn_type: str,
+        source: str,
+        reason: str = "",
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        operator_user_id: Optional[str] = None,
+        operator_username: Optional[str] = None,
+    ) -> Optional[dict]:
+        """
+        统一额度发放入口：注册赠送、管理员充值等收入型运营操作。
+
+        Returns:
+            入账结果字典；注册赠送已存在时返回 None。
+        """
+        if amount_mq <= 0:
+            raise ValueError("发放额度必须大于0")
+        if txn_type not in ("gift", "admin_recharge"):
+            raise ValueError(f"不支持的额度发放类型: {txn_type}")
+
+        db = get_mongo_db()
+        now_iso = now_tz().isoformat()
+        await self.get_or_create_account(user_id)
+
+        account_filter: Dict[str, Any] = {"user_id": user_id}
+        if source == "registration_bonus":
+            account_filter["registration_bonus_granted"] = {"$ne": True}
+
+        if txn_type == "admin_recharge":
+            inc = {"balance_mq": amount_mq, "total_recharged_mq": amount_mq}
+            txn_prefix = "ADM"
+        else:
+            inc = {"balance_mq": amount_mq, "total_gifted_mq": amount_mq}
+            txn_prefix = "GFT"
+
+        update: Dict[str, Any] = {
+            "$inc": inc,
+            "$set": {"updated_at": now_iso},
+        }
+        if source == "registration_bonus":
+            update["$set"]["registration_bonus_granted"] = True
+
+        result = await db[COL_ACCOUNTS].find_one_and_update(
+            account_filter,
+            update,
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if result is None:
+            if source == "registration_bonus":
+                logger.info("注册赠送已存在，跳过: user=%s", user_id)
+                return None
+            logger.error("额度发放失败: 账户不存在 user=%s", user_id)
+            return None
+
+        balance_before = result["balance_mq"] - amount_mq
+        txn_id = generate_txn_id(txn_prefix)
+        metadata: Dict[str, Any] = {
+            "source": source,
+            "reason": reason,
+        }
+        if username:
+            metadata["username"] = username
+        if email:
+            metadata["email"] = email
+        if operator_user_id:
+            metadata["operator_user_id"] = operator_user_id
+        if operator_username:
+            metadata["operator_username"] = operator_username
+
+        await db[COL_TRANSACTIONS].insert_one({
+            "txn_id": txn_id,
+            "user_id": user_id,
+            "order_id": None,
+            "type": txn_type,
+            "direction": "in",
+            "amount_mq": amount_mq,
+            "balance_before_mq": balance_before,
+            "balance_after_mq": result["balance_mq"],
+            "metadata": metadata,
+            "status": "success",
+            "related_txn_id": None,
+            "created_at": now_iso,
+        })
+
+        # 发放成功后清除余额耗尽标记
+        try:
+            from app.core.database import get_redis_client
+            redis = get_redis_client()
+            await redis.delete(f"token_balance_exhausted:{user_id}")
+        except Exception:
+            pass
+
+        logger.info(
+            "额度发放成功: user=%s, type=%s, amount=%d mq (%.3f元), txn=%s",
+            user_id, txn_type, amount_mq, mq_to_yuan(amount_mq), txn_id
+        )
+        return {
+            "txn_id": txn_id,
+            "amount_mq": amount_mq,
+            "balance_after_mq": result["balance_mq"],
+        }
+
+    async def grant_registration_bonus(self, user_id: str, username: str) -> Optional[dict]:
+        """新用户注册赠送 5 元算力（幂等）。"""
+        return await self.grant_quota(
+            user_id=user_id,
+            amount_mq=REGISTRATION_BONUS_MQ,
+            txn_type="gift",
+            source="registration_bonus",
+            reason="新用户注册赠送5元算力",
+            username=username,
+            operator_user_id="system",
+            operator_username="system",
+        )
+
+    async def admin_recharge(
+        self,
+        user_id: str,
+        amount_mq: int,
+        *,
+        username: str,
+        email: str,
+        operator_user_id: str,
+        operator_username: str,
+        reason: str,
+    ) -> Optional[dict]:
+        """管理员后台充值算力。"""
+        return await self.grant_quota(
+            user_id=user_id,
+            amount_mq=amount_mq,
+            txn_type="admin_recharge",
+            source="admin_recharge",
+            reason=reason,
+            username=username,
+            email=email,
+            operator_user_id=operator_user_id,
+            operator_username=operator_username,
+        )
 
     # ==================== 预占与结算 ====================
 
@@ -540,6 +687,107 @@ class TokenBillingService:
             page_size=page_size,
         )
 
+    async def get_admin_transactions(
+        self,
+        *,
+        user_id: Optional[str] = None,
+        type_filter: Optional[str] = None,
+        keyword: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> TransactionListResponse:
+        """管理员分页查询充值/赠送交易记录，支持关键字、类型和日期过滤。"""
+        db = get_mongo_db()
+
+        query: Dict[str, Any] = {}
+        if user_id:
+            query["user_id"] = user_id
+        if type_filter and type_filter != "all":
+            query["type"] = type_filter
+        if start_date or end_date:
+            date_query: Dict[str, str] = {}
+            if start_date:
+                date_query["$gte"] = start_date
+            if end_date:
+                date_query["$lte"] = end_date
+            query["created_at"] = date_query
+
+        if keyword and keyword.strip():
+            pattern = re.escape(keyword.strip())
+            or_conditions: List[Dict[str, Any]] = []
+            matched_user_ids: List[str] = []
+
+            user_cursor = db["users"].find({"$or": [
+                {"username": {"$regex": pattern, "$options": "i"}},
+                {"email": {"$regex": pattern, "$options": "i"}},
+            ]})
+            async for user_doc in user_cursor:
+                matched_user_ids.append(str(user_doc.get("_id")))
+
+            if ObjectId.is_valid(keyword.strip()):
+                matched_user_ids.append(keyword.strip())
+
+            if matched_user_ids:
+                or_conditions.append({"user_id": {"$in": matched_user_ids}})
+            or_conditions.extend([
+                {"txn_id": {"$regex": pattern, "$options": "i"}},
+                {"order_id": {"$regex": pattern, "$options": "i"}},
+                {"metadata.username": {"$regex": pattern, "$options": "i"}},
+                {"metadata.email": {"$regex": pattern, "$options": "i"}},
+                {"metadata.operator_username": {"$regex": pattern, "$options": "i"}},
+            ])
+            query["$or"] = or_conditions
+
+        total = await db[COL_TRANSACTIONS].count_documents(query)
+        skip = (page - 1) * page_size
+        cursor = (
+            db[COL_TRANSACTIONS]
+            .find(query)
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(page_size)
+        )
+        page_docs = []
+        async for doc in cursor:
+            page_docs.append(doc)
+
+        # 用 user_id 回查用户身份，兼容缺少 username/email 元数据的历史流水。
+        user_ids = {doc.get("user_id") for doc in page_docs if doc.get("user_id")}
+        user_map: Dict[str, Dict[str, str]] = {}
+        if user_ids:
+            id_conditions: List[Any] = []
+            for uid in user_ids:
+                if ObjectId.is_valid(uid):
+                    id_conditions.append(ObjectId(uid))
+                else:
+                    id_conditions.append(uid)
+            user_cursor = db["users"].find({"_id": {"$in": id_conditions}})
+            async for user_doc in user_cursor:
+                user_map[str(user_doc.get("_id"))] = {
+                    "username": user_doc.get("username", ""),
+                    "email": user_doc.get("email", ""),
+                }
+
+        items = []
+        for doc in page_docs:
+            record = dict(doc)
+            metadata = dict(record.get("metadata") or {})
+            info = user_map.get(record.get("user_id"))
+            if info:
+                metadata.setdefault("username", info["username"])
+                metadata.setdefault("email", info["email"])
+            record["metadata"] = metadata
+            items.append(TransactionResponse.from_record(record))
+
+        return TransactionListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
     # ==================== 套餐管理 ====================
 
     async def get_packages(self) -> List[PackageInfo]:
@@ -786,6 +1034,14 @@ async def init_token_billing():
     2. 默认计费配置写入system_settings
     """
     db = get_mongo_db()
+
+    # 后台充值记录查询常用索引
+    try:
+        await db[COL_TRANSACTIONS].create_index([("user_id", 1), ("created_at", -1)])
+        await db[COL_TRANSACTIONS].create_index([("type", 1), ("created_at", -1)])
+        await db[COL_TRANSACTIONS].create_index([("order_id", 1)])
+    except Exception as exc:
+        logger.warning("⚠️ 创建交易流水索引失败: %s", exc)
 
     # ---- 种子套餐数据 ----
     default_packages = [
