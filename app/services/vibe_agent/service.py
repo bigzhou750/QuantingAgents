@@ -1030,20 +1030,6 @@ class VibeAgentService:
             from app.services.explainability.validation_service import explanation_validator
 
             records = await decision_record_store.list_decision_records(task_id=task_id)
-            if not records:
-                await self._persist_decision_record(
-                    "attempt.completed",
-                    {
-                        "scenario": "任务完成结论",
-                        "conclusion": content,
-                        "risk_level": "low",
-                        "sequence": self._next_trace_sequence(task_id),
-                    },
-                    user_id,
-                    session_id,
-                    task_id,
-                )
-                records = await decision_record_store.list_decision_records(task_id=task_id)
 
             for record in records:
                 explanation = explanation_service.generate(record, output_text=content)
@@ -1102,6 +1088,7 @@ class VibeAgentService:
             "tool_call": VibeEventType.tool_call,
             "tool_result": VibeEventType.tool_call,
             "evidence": VibeEventType.evidence,
+            "decision.record": VibeEventType.decision,
             "react_summary": VibeEventType.react_summary,
             "swarm_status": VibeEventType.swarm_status,
             "goal.updated": VibeEventType.evidence,
@@ -1214,6 +1201,8 @@ class VibeAgentService:
             payload = {"status": status.value, **payload}
         elif raw_type in {"evidence", "react_summary", "swarm_status", "goal.updated"}:
             payload = {"phase": raw_type, **payload}
+        elif raw_type == "decision.record":
+            payload = {"phase": "decision", **payload}
         elif raw_type.startswith("attempt."):
             payload = {"phase": raw_type, **payload}
 
@@ -1226,16 +1215,7 @@ class VibeAgentService:
                 str(task_id),
             )
 
-        if task_id and raw_type in {
-            "tool_call",
-            "tool_result",
-            "evidence",
-            "react_summary",
-            "swarm_status",
-            "goal.updated",
-            "attempt.completed",
-            "attempt.failed",
-        }:
+        if task_id and raw_type in {"decision.record", "decision_node", "decision"}:
             await self._persist_decision_record(
                 raw_type,
                 payload,

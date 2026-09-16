@@ -30,6 +30,7 @@ class VibeEventType(str, Enum):
     token = "token"
     tool_call = "tool_call"
     evidence = "evidence"
+    decision = "decision"
     react_summary = "react_summary"
     swarm_status = "swarm_status"
     task_status = "task_status"
@@ -129,4 +130,3 @@ class VibeTaskList(BaseModel):
     total: int
     page: int
     page_size: int
-

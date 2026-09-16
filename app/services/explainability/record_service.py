@@ -49,7 +49,10 @@ def normalize_event_to_decision(
 ) -> DecisionRecordDoc:
     """把 Agent 事件归一为结构化决策记录，缺失信息显式标记而不是编造。"""
     payload = payload or {}
-    decision_type = "tool" if str(event_type).startswith("tool") else "agent"
+    decision_type = (
+        str(payload.get("decision_type") or "")
+        or ("tool" if str(event_type).startswith("tool") else "agent")
+    )
     candidates = _extract_candidates(payload)
     selected = (
         payload.get("selected_option")
@@ -87,9 +90,14 @@ def normalize_event_to_decision(
     elif candidates and not reason:
         reason = "reason_unavailable"
 
-    status = DecisionStatus.UNVERIFIED
-    if reason and conclusion and selected:
-        status = DecisionStatus.CONFIRMED
+    explicit_status = str(payload.get("status") or "").lower()
+    valid_statuses = {item.value for item in DecisionStatus}
+    if explicit_status in valid_statuses:
+        status = DecisionStatus(explicit_status)
+    else:
+        status = DecisionStatus.UNVERIFIED
+        if reason and conclusion and selected:
+            status = DecisionStatus.CONFIRMED
 
     evidence_ids = list(payload.get("evidence_ids") or [])
     if payload.get("evidence_id") and payload["evidence_id"] not in evidence_ids:

@@ -14,6 +14,8 @@ EVENT_NAME_MAP = {
     "tool_call": "调用工具",
     "tool_result": "工具返回",
     "decision": "形成决策",
+    "decision.record": "形成决策",
+    "decision_node": "形成决策",
     "evidence": "获取证据",
     "retrieval": "检索信息",
     "citation": "添加引用",

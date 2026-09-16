@@ -89,6 +89,24 @@ class TestDecisionRecordModels:
         assert record.selection_reason == "candidates_unavailable"
         assert record.status.value == "unverified"
 
+    def test_decision_record_preserves_explicit_status_and_type(self):
+        from app.services.explainability.record_service import normalize_event_to_decision
+
+        record = normalize_event_to_decision(
+            "decision.record",
+            {
+                "decision_type": "grounding",
+                "selected_option": "block",
+                "selection_reason": "identity 未锁定",
+                "conclusion": "阻止执行",
+                "status": "blocked",
+            },
+            task_id="task_3",
+        )
+
+        assert record.decision_type == "grounding"
+        assert record.status.value == "blocked"
+
     @pytest.mark.asyncio
     async def test_save_decision_record_upsert_does_not_conflict_on_created_at(self):
         from app.services.explainability.record_service import (
@@ -180,6 +198,7 @@ class TestTraceDecisionContract:
         from app.services.eval.trace_adapter import TraceEventType, VIBE_EVENT_TYPE_MAPPING
 
         assert VIBE_EVENT_TYPE_MAPPING["decision"] == TraceEventType.DECISION
+        assert VIBE_EVENT_TYPE_MAPPING["decision.record"] == TraceEventType.DECISION
         assert TraceEventType.DECISION.value == "decision"
 
     def test_adapt_vibe_event_keeps_business_reference(self):
@@ -230,6 +249,18 @@ class TestMetricsAndDegradation:
         assert summary["decision_nodes"] == 0
         assert summary["completeness_rate"] == 1.0
         assert summary["consistency_rate"] == 1.0
+
+    def test_legacy_unverified_records_do_not_count_as_complete(self):
+        from app.services.explainability.metrics_service import DecisionMetricsService
+
+        summary = DecisionMetricsService.compute(
+            [{"status": "unverified", "evidence_ids": []}],
+            [],
+        )
+
+        assert summary["decision_nodes"] == 1
+        assert summary["missing_decision_nodes"] == 1
+        assert summary["completeness_rate"] == 0.0
 
     def test_alert_threshold(self, monkeypatch):
         from app.services.explainability.metrics_service import DecisionMetricsService

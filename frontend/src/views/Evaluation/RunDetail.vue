@@ -372,7 +372,12 @@
             <el-table :data="trialExplainability.decision_chain || []" size="small" stripe style="margin-top: 8px">
               <el-table-column prop="scenario" label="场景" min-width="140" show-overflow-tooltip />
               <el-table-column prop="selected_option" label="选择" width="120" show-overflow-tooltip />
-              <el-table-column prop="selection_reason" label="依据" min-width="180" show-overflow-tooltip />
+              <el-table-column label="候选" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ formatCandidates(row.candidates) }}</template>
+              </el-table-column>
+              <el-table-column label="依据" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">{{ formatDecisionReason(row.selection_reason) }}</template>
+              </el-table-column>
               <el-table-column prop="status" label="状态" width="110" />
               <el-table-column prop="risk_level" label="风险" width="80" />
             </el-table>
@@ -705,6 +710,18 @@ const getTraceGroupLabel = (eventType: string) => {
     error: '❌ Error',
   }
   return map[eventType] || eventType
+}
+
+const formatCandidates = (candidates: any[]) => {
+  if (!Array.isArray(candidates) || candidates.length === 0) return '未提供候选'
+  return candidates.map(item => item?.label || item?.option_id || String(item)).join('、')
+}
+
+const formatDecisionReason = (reason?: string) => {
+  if (!reason) return '未提供依据'
+  if (reason === 'candidates_unavailable') return '未提供候选'
+  if (reason === 'reason_unavailable') return '未提供依据'
+  return reason
 }
 
 const formatTime = (isoString: string) => {

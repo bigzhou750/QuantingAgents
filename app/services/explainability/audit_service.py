@@ -224,7 +224,17 @@ class DecisionAuditService:
         evidence_events = [
             event for event in trace_events
             if event.get("event_type") in {"evidence", "retrieval", "citation"}
+            or (
+                event.get("event_type") == "tool_call"
+                and (event.get("data") or {}).get("evidence_status") in {"available", "unavailable", "pending"}
+            )
         ]
+        evidence_unavailable = sum(
+            1
+            for event in evidence_events
+            if (event.get("data") or {}).get("evidence_status") == "unavailable"
+            or (event.get("data") or {}).get("status") == "error"
+        )
         audit_status = self._compute_audit_status(
             records,
             trace_events,
@@ -245,6 +255,7 @@ class DecisionAuditService:
             "vibe_events": len(vibe_events),
             "trace_events": len(trace_events),
             "evidence_events": len(evidence_events),
+            "evidence_unavailable": evidence_unavailable,
             "decision_records": len(records),
             "explanations": len(explanations),
             "validations": len(validations),
