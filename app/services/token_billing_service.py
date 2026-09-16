@@ -1045,6 +1045,7 @@ async def init_token_billing():
 
     # ---- 种子套餐数据 ----
     default_packages = [
+        {"package_id": "pkg_test", "name": "0.01元测试", "amount_cny": 0.01, "sort_order": 0, "enabled": True, "tags": ["test"]},
         {"package_id": "pkg_20", "name": "20元套餐", "amount_cny": 20.0, "sort_order": 1, "enabled": True, "tags": []},
         {"package_id": "pkg_50", "name": "50元套餐", "amount_cny": 50.0, "sort_order": 2, "enabled": True, "tags": []},
         {"package_id": "pkg_100", "name": "100元套餐", "amount_cny": 100.0, "sort_order": 3, "enabled": True, "tags": ["hot"]},

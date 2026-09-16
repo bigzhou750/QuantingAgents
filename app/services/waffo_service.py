@@ -1,19 +1,29 @@
 """
 Waffo Pancake 支付服务（Python 实现）
 
-Waffo 官方仅提供 TypeScript SDK，此模块用 Python 直接调用 REST API。
-参考: https://docs.waffo.ai/integrate/sdks
+基于 @waffo/pancake-ts SDK v0.21.0 源码逆向，用 Python 直接调用 REST API。
+SDK 源码: https://github.com/waffo-com/waffo-pancake-sdk-ts
 
 功能:
-- Checkout Session 创建（一次性支付）
+- Checkout Session 创建（匿名 / 认证两种模式）
 - Webhook 签名验证
 - 订单状态查询（GraphQL）
 
 环境变量:
-- WAFFO_MERCHANT_ID: 商户 ID
-- WAFFO_PRIVATE_KEY: RSA 私钥（PEM 格式，支持 \\n 转义或 base64）
-- WAFFO_STORE_ID: 店铺 ID
+- WAFFO_MERCHANT_ID: 商户 ID (MER_xxx)
+- WAFFO_PRIVATE_KEY: RSA 私钥（PEM 格式或纯 base64）
+- WAFFO_STORE_ID: 店铺 ID (STO_xxx)
 - WAFFO_ENVIRONMENT: test | prod（默认 test）
+- WAFFO_RECHARGE_PRODUCT_ID: 充值产品 ID (PROD_xxx)
+- WAFFO_CURRENCY: 货币代码（默认 CNY）
+
+API 要点（来自 SDK 源码）:
+- Base URL: https://api.waffo.ai（test/prod 共用，通过 API Key 区分）
+- 认证: X-Merchant-Id + X-Timestamp + X-Signature headers
+- 签名串: "POST\\n{path}\\n{timestamp}\\n{body_hash_base64}"
+- body_hash = SHA-256(body).digest("base64")  ← 注意是 base64 不是 hex
+- 金额单位: 最小货币单位（如 CNY 的"分"，999 = ¥9.99）
+- metadata 值只能是 string
 """
 
 import os
@@ -28,11 +38,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Waffo API 基础 URL（参考官方文档: https://docs.waffo.ai）
-WAFFO_API_BASE = {
-    "test": "https://api-sandbox.waffo.com",
-    "prod": "https://api.waffo.com",
-}
+# Waffo API 基础 URL — SDK 源码中硬编码为 https://api.waffo.ai
+# test/prod 共用同一域名，通过不同的 API Key（私钥）区分环境
+WAFFO_API_BASE = "https://api.waffo.ai"
 
 
 class WaffoService:
@@ -69,7 +77,7 @@ class WaffoService:
         支持:
         - PEM 格式（带 -----BEGIN PRIVATE KEY----- 头尾）
         - 转义换行符的 PEM（\\n）
-        - Base64 编码的完整 PEM
+        - 纯 base64 内容（无 PEM 头尾）
         """
         raw = raw.strip()
 
@@ -77,7 +85,7 @@ class WaffoService:
         if raw.startswith("-----BEGIN"):
             return raw.replace("\\n", "\n")
 
-        # 尝试 base64 解码
+        # 尝试 base64 解码看是否是完整 PEM
         try:
             decoded = base64.b64decode(raw).decode("utf-8")
             if decoded.startswith("-----BEGIN"):
@@ -102,25 +110,30 @@ class WaffoService:
     @property
     def base_url(self) -> str:
         self._ensure_initialized()
-        return WAFFO_API_BASE.get(self._environment, WAFFO_API_BASE["test"])
+        return WAFFO_API_BASE
 
-    def _sign_request(self, method: str, path: str, body: str) -> str:
+    def _sign_request(self, method: str, path: str, timestamp: str, body: str) -> str:
         """
-        生成 Waffo API 请求签名
+        生成 Waffo API 请求签名（与 SDK signRequest 函数一致）
 
-        签名算法: RSA-SHA256
-        签名串格式: "{method}\n{path}\n{timestamp}\n{nonce}\n{body_hash}\n"
+        签名算法: RSA-SHA256 (PKCS1v15)
+        签名串格式（4行，无 nonce）:
+            {METHOD}
+            {path}
+            {timestamp}
+            {body_hash_base64}
+
+        注意: body_hash 使用 SHA-256 后 base64 编码（不是 hex）
         """
         self._ensure_initialized()
 
-        timestamp = str(int(time.time()))
-        nonce = hashlib.sha256(f"{timestamp}{path}".encode()).hexdigest()[:16]
+        # Body hash: SHA-256 → base64（与 JS SDK createHash("sha256").update(body).digest("base64") 一致）
+        body_hash = base64.b64encode(
+            hashlib.sha256(body.encode("utf-8")).digest()
+        ).decode("utf-8") if body else ""
 
-        # Body hash (SHA-256)
-        body_hash = hashlib.sha256(body.encode("utf-8")).hexdigest() if body else ""
-
-        # 构造签名串
-        message = f"{method.upper()}\n{path}\n{timestamp}\n{nonce}\n{body_hash}\n"
+        # 构造签名串（4行，与 SDK 一致）
+        canonical_request = f"{method.upper()}\n{path}\n{timestamp}\n{body_hash}"
 
         # RSA-SHA256 签名
         try:
@@ -132,7 +145,7 @@ class WaffoService:
                 password=None,
             )
             signature = private_key_obj.sign(
-                message.encode("utf-8"),
+                canonical_request.encode("utf-8"),
                 padding.PKCS1v15(),
                 hashes.SHA256(),
             )
@@ -146,73 +159,42 @@ class WaffoService:
 
         return sign_b64
 
-    def _build_auth_header(self, method: str, path: str, body: str) -> Dict[str, str]:
-        """构建 Authorization 头"""
+    def _build_headers(self, method: str, path: str, body: str) -> Dict[str, str]:
+        """
+        构建请求头（与 SDK HttpClient.post 一致）
+
+        Headers:
+        - Content-Type: application/json
+        - X-Merchant-Id: 商户 ID
+        - X-Timestamp: Unix 时间戳（秒）
+        - X-Signature: RSA-SHA256 签名
+        - X-Idempotency-Key: 幂等键（可选）
+        """
         self._ensure_initialized()
-        signature = self._sign_request(method, path, body)
         timestamp = str(int(time.time()))
+        signature = self._sign_request(method, path, timestamp, body)
 
-        return {
-            "Authorization": f'Bearer merchant_id="{self._merchant_id}",signature="{signature}",timestamp="{timestamp}"',
+        headers = {
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            "X-Merchant-Id": self._merchant_id,
+            "X-Timestamp": timestamp,
+            "X-Signature": signature,
         }
 
-    async def create_checkout_session(
-        self,
-        product_id: str,
-        currency: str = "USD",
-        buyer_identity: Optional[str] = None,
-        buyer_email: Optional[str] = None,
-        price_snapshot: Optional[Dict[str, Any]] = None,
-        success_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        expires_in_seconds: int = 3600,
-    ) -> Dict[str, Any]:
-        """
-        创建 Checkout Session
+        # 幂等键: sha256(merchantId:path:bodyStr:timestamp_window)
+        # window = 60s（与 SDK idempotencyWindow: 60 一致）
+        idempotency_window = 60
+        ts_window = int(time.time()) // idempotency_window
+        idempotency_input = f"{self._merchant_id}:{path}:{body}:{ts_window}"
+        idempotency_key = hashlib.sha256(idempotency_input.encode()).hexdigest()
+        headers["X-Idempotency-Key"] = idempotency_key
 
-        Args:
-            product_id: Waffo 产品 ID
-            currency: 货币代码 (ISO 4217)
-            buyer_identity: 买家标识（用户ID，用于绑定订单）
-            buyer_email: 买家邮箱（预填表单）
-            price_snapshot: 动态定价覆盖
-            success_url: 支付成功跳转 URL
-            metadata: 自定义元数据（会传递到 webhook）
-            expires_in_seconds: 会话过期时间（秒）
+        return headers
 
-        Returns:
-            {"checkout_url": "...", "session_id": "...", "expires_at": "..."}
-        """
-        self._ensure_initialized()
-
-        if not self.is_configured:
-            raise WaffoConfigError("Waffo 支付未配置: 缺少 WAFFO_MERCHANT_ID / WAFFO_PRIVATE_KEY / WAFFO_STORE_ID")
-
-        # 构建请求体
-        payload: Dict[str, Any] = {
-            "storeId": self._store_id,
-            "productId": product_id,
-            "productType": "onetime",
-            "currency": currency,
-            "expiresInSeconds": expires_in_seconds,
-        }
-
-        if buyer_identity:
-            payload["buyerIdentity"] = buyer_identity
-        if buyer_email:
-            payload["buyerEmail"] = buyer_email
-        if price_snapshot:
-            payload["priceSnapshot"] = price_snapshot
-        if success_url:
-            payload["successUrl"] = success_url
-        if metadata:
-            payload["metadata"] = metadata
-
+    async def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """发送签名 POST 请求并返回解析后的响应"""
         body = json.dumps(payload)
-        path = "/v1/checkout/sessions"
-        headers = self._build_auth_header("POST", path, body)
+        headers = self._build_headers("POST", path, body)
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -223,16 +205,142 @@ class WaffoService:
 
         if resp.status_code not in (200, 201):
             logger.error(
-                "Waffo checkout 创建失败: status=%d, body=%s",
-                resp.status_code, resp.text,
+                "Waffo API 请求失败: path=%s, status=%d, body=%s",
+                path, resp.status_code, resp.text,
             )
             raise WaffoApiError(resp.status_code, resp.text)
 
-        data = resp.json()
+        return resp.json()
+
+    async def create_checkout_session(
+        self,
+        product_id: str,
+        currency: str = "USD",
+        buyer_identity: Optional[str] = None,
+        buyer_email: Optional[str] = None,
+        price_snapshot: Optional[Dict[str, Any]] = None,
+        success_url: Optional[str] = None,
+        metadata: Optional[Dict[str, str]] = None,
+        expires_in_seconds: int = 2700,
+        order_merchant_external_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        创建 Checkout Session
+
+        根据是否有 buyer_identity 自动选择模式:
+        - 有 buyer_identity → 认证模式（推荐），会同时签发 session token
+        - 无 buyer_identity → 匿名模式
+
+        Args:
+            product_id: Waffo 产品 ID (PROD_xxx)
+            currency: 货币代码 (ISO 4217)，如 "CNY", "USD"
+            buyer_identity: 买家标识（用户ID），提供则走认证模式
+            buyer_email: 买家邮箱（预填结账页面）
+            price_snapshot: 动态定价覆盖 {"amount": "9.99", "taxCategory": "digital_goods"}
+                            注意 amount 是字符串，单位为元（SDK 文档说最小单位但实际传元）
+            success_url: 支付成功跳转 URL
+            metadata: 自定义元数据（值必须是字符串，会传递到 webhook）
+            expires_in_seconds: 会话过期时间（秒，默认 45 分钟）
+            order_merchant_external_id: 业务侧订单号
+
+        Returns:
+            {"checkout_url": "...", "session_id": "...", "expires_at": "..."}
+        """
+        self._ensure_initialized()
+
+        if not self.is_configured:
+            raise WaffoConfigError(
+                "Waffo 支付未配置: 缺少 WAFFO_MERCHANT_ID / WAFFO_PRIVATE_KEY / WAFFO_STORE_ID"
+            )
+
+        # 构建请求体
+        payload: Dict[str, Any] = {
+            "productId": product_id,
+            "currency": currency,
+            "expiresInSeconds": expires_in_seconds,
+        }
+
+        if buyer_email:
+            payload["buyerEmail"] = buyer_email
+        if price_snapshot:
+            payload["priceSnapshot"] = price_snapshot
+        if success_url:
+            payload["successUrl"] = success_url
+        if metadata:
+            # metadata 值必须是字符串
+            payload["metadata"] = {k: str(v) for k, v in metadata.items()}
+        if order_merchant_external_id:
+            payload["orderMerchantExternalId"] = order_merchant_external_id
+
+        if buyer_identity:
+            # 认证模式: 先签发 token，再创建 session
+            return await self._create_authenticated_checkout(
+                buyer_identity=buyer_identity,
+                session_payload=payload,
+            )
+        else:
+            # 匿名模式: 直接创建 session
+            return await self._create_anonymous_checkout(session_payload=payload)
+
+    async def _create_anonymous_checkout(self, session_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """匿名结账 — POST /v1/actions/checkout/create-session"""
+        path = "/v1/actions/checkout/create-session"
+        data = await self._post(path, session_payload)
+
+        # SDK unwrapAction: 从 envelope 中提取 data 字段
+        result = data.get("data", data)
+
         return {
-            "checkout_url": data.get("checkoutUrl", ""),
-            "session_id": data.get("sessionId", ""),
-            "expires_at": data.get("expiresAt", ""),
+            "checkout_url": result.get("checkoutUrl", ""),
+            "session_id": result.get("sessionId", ""),
+            "expires_at": result.get("expiresAt", ""),
+        }
+
+    async def _create_authenticated_checkout(
+        self,
+        buyer_identity: str,
+        session_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        认证结账 — 并行调用两个接口:
+        1. POST /v1/actions/auth/issue-session-token (签发 JWT)
+        2. POST /v1/actions/checkout/create-session (创建 session)
+        然后将 token 追加到 checkoutUrl 的 fragment 中
+        """
+        import asyncio
+
+        product_id = session_payload.get("productId", "")
+
+        # 并行请求
+        token_task = self._post(
+            "/v1/actions/auth/issue-session-token",
+            {"productId": product_id, "buyerIdentity": buyer_identity},
+        )
+        session_task = self._post(
+            "/v1/actions/checkout/create-session",
+            session_payload,
+        )
+
+        token_data, session_data = await asyncio.gather(token_task, session_task)
+
+        # 提取结果
+        token_result = token_data.get("data", token_data)
+        session_result = session_data.get("data", session_data)
+
+        checkout_url = session_result.get("checkoutUrl", "")
+        token = token_result.get("token", "")
+
+        # 将 token 追加到 URL fragment（与 SDK 行为一致）
+        if checkout_url and token:
+            separator = "&" if "#" in checkout_url else "#"
+            checkout_url = f"{checkout_url}{separator}token={token}"
+
+        return {
+            "checkout_url": checkout_url,
+            "session_id": session_result.get("sessionId", ""),
+            "expires_at": session_result.get("expiresAt", ""),
+            "token": token,
+            "token_expires_at": token_result.get("expiresAt", ""),
         }
 
     async def create_dynamic_checkout(
@@ -243,26 +351,24 @@ class WaffoService:
         buyer_identity: Optional[str] = None,
         buyer_email: Optional[str] = None,
         success_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, str]] = None,
+        order_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        创建动态金额的 Checkout Session（无需预创建产品）
-
-        使用 priceSnapshot 覆盖价格，适用于充值场景。
-        需要一个基础的 onetime 产品作为载体。
+        创建动态金额的 Checkout Session（使用 priceSnapshot 覆盖价格）
 
         Args:
-            amount: 金额（显示金额，如 50.00）
+            amount: 金额（元，如 50.00）— 会自动转为字符串传给 API
             currency: 货币代码
-            product_name: 产品描述
+            product_name: 产品描述（仅日志用）
             buyer_identity: 买家标识
             buyer_email: 买家邮箱
             success_url: 成功跳转
-            metadata: 元数据
+            metadata: 元数据（值会被转为字符串）
+            order_id: 内部订单号（作为 orderMerchantExternalId）
         """
         self._ensure_initialized()
 
-        # 获取或创建基础充值产品
         base_product_id = os.environ.get("WAFFO_RECHARGE_PRODUCT_ID", "")
         if not base_product_id:
             raise WaffoConfigError(
@@ -271,9 +377,9 @@ class WaffoService:
                 "然后将产品 ID 填入 .env"
             )
 
+        # priceSnapshot.amount 按 SDK 文档应为字符串
         price_snapshot = {
-            "amount": amount,
-            "taxIncluded": True,
+            "amount": str(amount),
             "taxCategory": "digital_goods",
         }
 
@@ -285,6 +391,7 @@ class WaffoService:
             price_snapshot=price_snapshot,
             success_url=success_url,
             metadata=metadata or {},
+            order_merchant_external_id=order_id,
         )
 
     @staticmethod
@@ -293,7 +400,7 @@ class WaffoService:
         验证 Waffo Webhook 签名
 
         Args:
-            body: 原始请求体（字符串，不能是解析后的 JSON）
+            body: 原始请求体（字符串）
             signature: x-waffo-signature header 值
 
         Returns:
@@ -302,19 +409,11 @@ class WaffoService:
         Raises:
             WaffoWebhookError: 签名验证失败
         """
-        # Waffo webhook 使用 RSA-SHA256 签名
-        # SDK 内嵌了测试和生产环境的公钥
-        # Python 实现需要从 Waffo 获取公钥或使用已知公钥
-
-        # TODO: 从 Waffo 获取公钥并验证签名
-        # 当前简化版：解析 JSON 并返回（生产环境需完善签名验证）
-
         try:
             event = json.loads(body)
         except json.JSONDecodeError as e:
             raise WaffoWebhookError(f"无效的 webhook body: {e}")
 
-        # 基本结构验证
         if "eventType" not in event:
             raise WaffoWebhookError("webhook 缺少 eventType 字段")
 
@@ -324,7 +423,7 @@ class WaffoService:
         )
 
         # TODO: 实现完整的 RSA-SHA256 签名验证
-        # 需要从 Waffo 获取公钥或使用内置公钥
+        # SDK 内嵌了测试和生产环境的公钥用于验证
         # 当前信任所有格式正确的 webhook（开发阶段）
 
         return event
@@ -354,27 +453,17 @@ class WaffoService:
         }
         """
 
-        payload = json.dumps({
+        payload = {
             "query": query,
             "variables": {"id": order_id},
-        })
+        }
 
-        path = "/v1/graphql"
-        headers = self._build_auth_header("POST", path, payload)
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{self.base_url}{path}",
-                content=payload,
-                headers=headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error("Waffo GraphQL 查询失败: %d %s", resp.status_code, resp.text)
+        try:
+            data = await self._post("/v1/graphql", payload)
+            return data.get("data", {}).get("order")
+        except WaffoApiError as e:
+            logger.error("Waffo GraphQL 查询失败: %s", e)
             return None
-
-        data = resp.json()
-        return data.get("data", {}).get("order")
 
 
 # ==================== 异常类 ====================
