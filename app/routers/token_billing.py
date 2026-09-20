@@ -323,6 +323,68 @@ async def get_pending_order(
     })
 
 
+@router.post("/orders/{order_id}/resume")
+async def resume_payment(
+    order_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    恢复支付：为 pending 订单重新创建 Waffo checkout session
+
+    Waffo checkout session 有效期 45 分钟，过期后需要重新创建。
+    此接口校验订单仍为 pending 状态，然后用相同金额重新下单。
+    """
+    import os as _os
+
+    user_id = current_user["id"]
+    order = await token_billing_service.get_order(user_id, order_id)
+
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    if order["status"] != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"订单状态为 {order['status']}，无法恢复支付",
+        )
+
+    if order["pay_type"] != "WAFFO":
+        raise HTTPException(status_code=400, detail="仅支持 Waffo 支付的订单恢复")
+
+    amount_yuan = mq_to_yuan(order["amount_mq"])
+    currency = _os.environ.get("WAFFO_CURRENCY", "CNY")
+
+    origin = request.headers.get("origin", "")
+    if not origin:
+        server_ip = _os.environ.get("SERVER_IP", "localhost")
+        origin = f"http://{server_ip}"
+    success_url = f"{origin}/token-recharge?order={order_id}&status=success"
+
+    try:
+        checkout_result = await waffo_service.create_dynamic_checkout(
+            amount=amount_yuan,
+            currency=currency,
+            product_name=f"算力充值-{amount_yuan:.0f}元",
+            success_url=success_url,
+            metadata={
+                "order_id": order_id,
+                "user_id": user_id,
+                "package_id": order.get("package_id", "custom"),
+            },
+            order_id=order_id,
+        )
+    except (WaffoConfigError, WaffoApiError) as e:
+        logger.error("恢复支付失败: %s", e)
+        raise HTTPException(status_code=500, detail=f"支付服务暂时不可用: {e}")
+
+    return ok({
+        "checkout_url": checkout_result["checkout_url"],
+        "session_id": checkout_result["session_id"],
+        "expires_at": checkout_result["expires_at"],
+    })
+
+
 @router.get("/orders/{order_id}")
 async def get_order_status(
     order_id: str,

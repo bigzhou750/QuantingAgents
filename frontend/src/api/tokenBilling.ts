@@ -149,6 +149,15 @@ export const tokenBillingApi = {
     return ApiClient.get<{ data: any }>('/api/token-billing/orders/pending')
   },
 
+  /** 恢复支付：为过期的 Waffo 订单重新创建 checkout session */
+  async resumePayment(orderId: string) {
+    return ApiClient.post<{ data: { checkout_url: string; session_id: string; expires_at: string } }>(
+      `/api/token-billing/orders/${orderId}/resume`,
+      {},
+      { retryCount: 0 }
+    )
+  },
+
   /** 主动查询微信订单 */
   async queryWxOrder(orderId: string) {
     return ApiClient.post<{ data: any }>(`/api/token-billing/orders/${orderId}/query-wx`)
