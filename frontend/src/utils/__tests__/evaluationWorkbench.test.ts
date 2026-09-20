@@ -32,6 +32,15 @@ describe('Evaluation production workbench', () => {
     expect(readView('HumanReview.vue')).toContain('claimEvidenceList')
   })
 
+  it('shows structured decision candidates and evidence availability', () => {
+    const audit = readView('DecisionAudit.vue')
+    const detail = readView('RunDetail.vue')
+    expect(audit).toContain('formatCandidates')
+    expect(audit).toContain('evidence_status')
+    expect(audit).toContain('未提供依据')
+    expect(detail).toContain('formatCandidates')
+  })
+
   it('exposes trend stability, regression and governance controls', () => {
     const source = readView('Trends.vue')
     expect(source).toContain('pass_at_k')

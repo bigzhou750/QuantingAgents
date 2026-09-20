@@ -94,6 +94,24 @@
         </el-col>
       </el-row>
 
+      <el-card v-if="(audit.evidence_events || []).length" shadow="never" style="margin-bottom: 24px">
+        <template #header><span>证据状态</span></template>
+        <el-table :data="audit.evidence_events || []" size="small" stripe>
+          <el-table-column label="证据" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.data?.evidence_id || row.data?.call_id || row.event_id || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="工具/来源" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.data?.tool || row.event_type || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">{{ evidenceStatusLabel(row.data?.evidence_status || row.data?.status) }}</template>
+          </el-table-column>
+          <el-table-column label="摘要" min-width="280" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.data?.preview || row.data?.message || '-' }}</template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
       <el-card v-if="audit.scope === 'session' && (audit.tasks || []).length" shadow="never" style="margin-bottom: 24px">
         <template #header><span>会话内对话</span></template>
         <el-table :data="audit.tasks" size="small" stripe @row-click="selectTask">
@@ -158,8 +176,16 @@
         <el-table :data="audit.decision_chain || []" size="small" stripe>
           <el-table-column prop="scenario" label="场景" min-width="140" show-overflow-tooltip />
           <el-table-column prop="selected_option" label="选择" width="130" show-overflow-tooltip />
-          <el-table-column prop="selection_reason" label="依据" min-width="200" show-overflow-tooltip />
+          <el-table-column label="候选" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatCandidates(row.candidates) }}</template>
+          </el-table-column>
+          <el-table-column label="依据" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDecisionReason(row.selection_reason) }}</template>
+          </el-table-column>
           <el-table-column prop="conclusion" label="结论" min-width="240" show-overflow-tooltip />
+          <el-table-column label="证据" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatEvidenceIds(row.evidence_ids) }}</template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="110" />
           <el-table-column prop="risk_level" label="风险" width="80" />
         </el-table>
@@ -299,6 +325,7 @@ const EVENT_LABELS: Record<string, string> = {
   tool_call: '调用工具',
   tool_result: '工具返回',
   decision: '形成决策',
+  'decision.record': '形成决策',
   evidence: '获取证据',
   retrieval: '检索信息',
   citation: '添加引用',
@@ -321,8 +348,30 @@ const eventDisplayName = (row: any) => {
   const phase = row.payload?.phase || row.payload?._meta?.original_type
   if (row.event_type === 'worker_status' && phase) return EVENT_LABELS[phase] || '运行状态变更'
   if (row.event_type === 'tool_call' && row.payload?.phase === 'tool_result') return '工具返回'
-  return EVENT_LABELS[row.event_type || ''] || '运行事件'
+  return EVENT_LABELS[row.event_type || ''] || row.event_type || '运行事件'
 }
+const formatCandidates = (candidates: any[]) => {
+  if (!Array.isArray(candidates) || candidates.length === 0) return '未提供候选'
+  return candidates.map(item => item?.label || item?.option_id || String(item)).join('、')
+}
+const formatDecisionReason = (reason?: string) => {
+  if (!reason) return '未提供依据'
+  if (reason === 'candidates_unavailable') return '未提供候选'
+  if (reason === 'reason_unavailable') return '未提供依据'
+  return reason
+}
+const formatEvidenceIds = (ids: string[]) => {
+  if (!Array.isArray(ids) || ids.length === 0) return '无证据引用'
+  return ids.join('、')
+}
+const evidenceStatusLabel = (status?: string) => ({
+  available: '已获取',
+  pending: '获取中',
+  unavailable: '不可用',
+  not_requested: '未调用',
+  ok: '已获取',
+  error: '获取失败',
+}[String(status || '')] || status || '未知')
 const eventRowNumber = (index: number) => (eventsPage.value - 1) * eventsPageSize.value + index + 1
 const formatEventPayload = (payload: unknown) => {
   if (payload == null) return '-'

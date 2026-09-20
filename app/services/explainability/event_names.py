@@ -14,6 +14,8 @@ EVENT_NAME_MAP = {
     "tool_call": "调用工具",
     "tool_result": "工具返回",
     "decision": "形成决策",
+    "decision.record": "形成决策",
+    "decision_node": "形成决策",
     "evidence": "获取证据",
     "retrieval": "检索信息",
     "citation": "添加引用",
@@ -47,4 +49,4 @@ def event_display_name(event: Dict[str, Any]) -> str:
         return "工具返回"
     if phase in {"tool_result", "attempt.completed", "attempt.failed", "attempt.started"}:
         return EVENT_NAME_MAP.get(phase, "运行状态变更")
-    return EVENT_NAME_MAP.get(event_type, "运行事件")
+    return EVENT_NAME_MAP.get(event_type, event_type)

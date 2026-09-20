@@ -469,6 +469,13 @@ const loadRunningTasks = async () => {
   tasksBySession.value = next
 }
 
+const createDefaultSession = async (title = '研究会话') => {
+  const res = await vibeAgentApi.createSession({ title })
+  const session = (res as any).data as VibeSession
+  sessions.value.unshift(session)
+  await selectSession(session.session_id)
+}
+
 const createSession = async () => {
   try {
     const { value } = await ElMessageBox.prompt('请输入会话名称', '新建研究会话', {
@@ -478,10 +485,7 @@ const createSession = async () => {
       inputPlaceholder: '例如：格力电器分钟线回测',
       inputValidator: (input: string) => input.trim() ? true : '会话名称不能为空'
     })
-    const res = await vibeAgentApi.createSession({ title: value.trim() })
-    const session = (res as any).data as VibeSession
-    sessions.value.unshift(session)
-    await selectSession(session.session_id)
+    await createDefaultSession(value.trim())
   } catch (error: any) {
     if (error !== 'cancel' && error !== 'close') {
       ElMessage.error(error?.message || '创建会话失败')
@@ -518,7 +522,7 @@ const deleteSession = async (session: VibeSession) => {
       if (nextSession) {
         await selectSession(nextSession.session_id)
       } else {
-        await createSession()
+        await createDefaultSession()
       }
     }
     ElMessage.success('会话已删除')
@@ -821,7 +825,7 @@ onMounted(async () => {
   }
   await openSessionFromRoute()
   if (!activeSessionId.value && sessions.value.length === 0) {
-    await createSession()
+    await createDefaultSession()
   }
   if (activeSessionId.value && streamState.value === 'idle') {
     reconnectStream()

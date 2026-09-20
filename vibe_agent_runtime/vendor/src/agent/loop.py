@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from src.agent.context import ContextBuilder
+from src.agent.evidence import ToolEvidenceIndex
 from src.agent.grounding import GroundingLedger
 from src.agent.memory import WorkspaceMemory
 from src.agent.progress import HeartbeatTimer, ProgressEvent, _set_emitter
@@ -950,6 +951,9 @@ class AgentLoop:
         self._stall_reason: str | None = None
         self._last_activity_wall: float = 0.0
         self._run_done = threading.Event()
+        self.evidence_index = ToolEvidenceIndex()
+        self._last_reasoning_tail: str = ""
+        self._decision_sequence = 0
         # Identical deterministic tool calls (e.g. financial_rigor calc with
         # the same expression) are served from this cache instead of being
         # re-executed. Regression: after auto-compact cleared earlier tool
@@ -1050,6 +1054,9 @@ class AgentLoop:
         self._stall_reason = None
         self._last_activity_wall = _time.time()
         self._run_done = threading.Event()
+        self.evidence_index = ToolEvidenceIndex()
+        self._last_reasoning_tail = ""
+        self._decision_sequence = 0
         self._called_identical = {}
         run_started_wall = _time.time()
 
@@ -1069,6 +1076,7 @@ class AgentLoop:
             run_dir=run_dir,
             user_message=user_message,
             history=history,
+            event_callback=self._event_callback,
         )
 
         context = ContextBuilder(
@@ -1256,6 +1264,7 @@ class AgentLoop:
                     # can whisper the current thought; a bounded window keeps
                     # replay-buffer pressure flat regardless of trace length.
                     reasoning_tail = (reasoning_tail + delta)[-600:]
+                    self._last_reasoning_tail = reasoning_tail
                     now = _time.monotonic()
                     if (
                         last_reasoning_emit is not None
@@ -2158,6 +2167,7 @@ class AgentLoop:
             args = _normalize_tool_run_dir(tc.arguments, self.memory.run_dir)
             redacted_args = redact_payload(args)
             event_args = {k: str(v)[:200] for k, v in redacted_args.items()}
+            self._emit_tool_selection_decision(tc, iteration)
             self._emit(
                 "tool_call",
                 {
@@ -2213,6 +2223,7 @@ class AgentLoop:
 
         redacted_args = redact_payload(args)
         event_args = {k: str(v)[:200] for k, v in redacted_args.items()}
+        self._emit_tool_selection_decision(tc, iteration)
         self._emit(
             "tool_call",
             {
@@ -2597,6 +2608,39 @@ class AgentLoop:
             },
         )
 
+    def _emit_tool_selection_decision(self, tc: Any, iteration: int) -> None:
+        """Emit a real tool-selection decision before executing a tool."""
+        self._decision_sequence += 1
+        evidence_id = self.evidence_index.record_call(
+            call_id=tc.id,
+            tool=tc.name,
+            arguments=_normalize_tool_run_dir(tc.arguments, self.memory.run_dir),
+        )
+        tool_names = sorted(str(name) for name in getattr(self.registry, "tool_names", []) or [])
+        candidates = [
+            {"id": name, "label": name, "metadata": {"source": "tool_registry"}}
+            for name in tool_names
+        ]
+        reason = str(self._last_reasoning_tail or "").strip() or "reason_unavailable"
+        self._emit(
+            "decision.record",
+            {
+                "decision_id": f"decision_{self._run_iteration + 1}_{self._decision_sequence}",
+                "sequence": self._decision_sequence,
+                "decision_type": "tool",
+                "scenario": "工具选择决策",
+                "candidates": candidates,
+                "selected_option": tc.name,
+                "selection_reason": reason,
+                "conclusion": f"选择执行工具 {tc.name}",
+                "evidence_ids": [evidence_id],
+                "parent_decision_id": None,
+                "status": "confirmed" if reason != "reason_unavailable" else "unverified",
+                "confidence": 0.5,
+                "risk_level": "medium",
+            },
+        )
+
     # -- Context compression ---------------------------------------------------
 
     def _auto_compact(
@@ -2786,6 +2830,24 @@ class AgentLoop:
 
     def _emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Fire an event via the callback."""
+        if event_type == "tool_call":
+            evidence_id = self.evidence_index.record_call(
+                call_id=str(data.get("call_id") or "unknown"),
+                tool=str(data.get("tool") or ""),
+                arguments=data.get("arguments") if isinstance(data.get("arguments"), dict) else {},
+            )
+            data.setdefault("evidence_id", evidence_id)
+            data.setdefault("evidence_status", "pending")
+        elif event_type == "tool_result":
+            evidence = self.evidence_index.record_result(
+                call_id=str(data.get("call_id") or "unknown"),
+                tool=str(data.get("tool") or ""),
+                status=str(data.get("status") or "error"),
+                preview=str(data.get("preview") or ""),
+                error=data.get("error"),
+            )
+            data.setdefault("evidence_id", evidence.evidence_id)
+            data["evidence_status"] = evidence.status
         if self._event_callback:
             try:
                 self._event_callback(event_type, data)
