@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time as _time
 from datetime import datetime, time as dtime, timedelta
 from typing import Dict, Optional, Tuple, List
 from zoneinfo import ZoneInfo
@@ -11,6 +13,9 @@ from app.core.database import get_mongo_db
 from app.services.data_sources.manager import DataSourceManager
 
 logger = logging.getLogger(__name__)
+
+# 同步数据源调用的最大超时时间（秒），防止阻塞事件循环
+_SYNC_FETCH_TIMEOUT_SECONDS = 60
 
 
 class QuotesIngestionService:
@@ -499,10 +504,16 @@ class QuotesIngestionService:
 
     async def backfill_last_close_snapshot(self) -> None:
         """一次性补齐上一笔收盘快照（用于冷启动或数据陈旧）。允许在休市期调用。"""
+        t0 = _time.monotonic()
+        logger.info("🔄 [BACKFILL] 开始补齐收盘快照")
         try:
             manager = DataSourceManager()
-            # 使用近实时快照作为兜底，休市期返回的即为最后收盘数据
-            quotes_map, source = manager.get_realtime_quotes_with_fallback()
+            # 同步调用放入线程池，防止阻塞事件循环
+            loop = asyncio.get_event_loop()
+            quotes_map, source = await asyncio.wait_for(
+                loop.run_in_executor(None, manager.get_realtime_quotes_with_fallback),
+                timeout=_SYNC_FETCH_TIMEOUT_SECONDS,
+            )
             if not quotes_map:
                 logger.warning("backfill: 未获取到行情数据，跳过")
                 return
@@ -511,8 +522,14 @@ class QuotesIngestionService:
             except Exception:
                 trade_date = datetime.now(self.tz).strftime("%Y%m%d")
             await self._bulk_upsert(quotes_map, trade_date, source)
+            elapsed = _time.monotonic() - t0
+            logger.info(f"✅ [BACKFILL] 完成, 耗时={elapsed:.2f}s, count={len(quotes_map)}, source={source}")
+        except asyncio.TimeoutError:
+            elapsed = _time.monotonic() - t0
+            logger.error(f"⏰ [BACKFILL-TIMEOUT] 超过 {_SYNC_FETCH_TIMEOUT_SECONDS}s, 已放弃 (实际={elapsed:.2f}s)")
         except Exception as e:
-            logger.error(f"❌ backfill 行情补数失败: {e}")
+            elapsed = _time.monotonic() - t0
+            logger.error(f"❌ [BACKFILL-ERROR] 耗时={elapsed:.2f}s: {e}", exc_info=True)
 
     async def backfill_last_close_snapshot_if_needed(self) -> None:
         """若集合为空或 trade_date 落后于最新交易日，则执行一次 backfill"""
@@ -534,9 +551,9 @@ class QuotesIngestionService:
         except Exception as e:
             logger.warning(f"backfill 触发检查失败（忽略）: {e}")
 
-    def _fetch_quotes_from_source(self, source_type: str, akshare_api: Optional[str] = None) -> Tuple[Optional[Dict], Optional[str]]:
+    def _fetch_quotes_sync(self, source_type: str, akshare_api: Optional[str] = None) -> Tuple[Optional[Dict], Optional[str]]:
         """
-        从指定数据源获取行情
+        【同步方法】从指定数据源获取行情（在线程池中执行，不阻塞事件循环）
 
         Args:
             source_type: "tushare" | "akshare"
@@ -547,7 +564,6 @@ class QuotesIngestionService:
         """
         try:
             if source_type == "tushare":
-                # 检查是否可以调用 Tushare
                 if not self._can_call_tushare():
                     return None, None
 
@@ -558,8 +574,11 @@ class QuotesIngestionService:
                     logger.warning("Tushare 不可用")
                     return None, None
 
-                logger.info("📊 使用 Tushare rt_k 接口获取实时行情")
+                logger.info("📊 [SYNC] 使用 Tushare rt_k 接口获取实时行情")
+                t0 = _time.monotonic()
                 quotes_map = adapter.get_realtime_quotes()
+                elapsed = _time.monotonic() - t0
+                logger.info(f"📊 [SYNC] Tushare rt_k 完成, 耗时={elapsed:.2f}s, 数据量={len(quotes_map) if quotes_map else 0}")
 
                 if quotes_map:
                     self._record_tushare_call()
@@ -577,8 +596,11 @@ class QuotesIngestionService:
                     return None, None
 
                 api_name = akshare_api or "eastmoney"
-                logger.info(f"📊 使用 AKShare {api_name} 接口获取实时行情")
+                logger.info(f"📊 [SYNC] 使用 AKShare {api_name} 接口获取实时行情")
+                t0 = _time.monotonic()
                 quotes_map = adapter.get_realtime_quotes(source=api_name)
+                elapsed = _time.monotonic() - t0
+                logger.info(f"📊 [SYNC] AKShare {api_name} 完成, 耗时={elapsed:.2f}s, 数据量={len(quotes_map) if quotes_map else 0}")
 
                 if quotes_map:
                     return quotes_map, f"akshare_{api_name}"
@@ -591,7 +613,40 @@ class QuotesIngestionService:
                 return None, None
 
         except Exception as e:
-            logger.error(f"从 {source_type} 获取行情失败: {e}")
+            logger.error(f"[SYNC] 从 {source_type} 获取行情失败: {e}", exc_info=True)
+            return None, None
+
+    async def _fetch_quotes_from_source(self, source_type: str, akshare_api: Optional[str] = None) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        【异步包装】在线程池中执行同步数据源调用，带超时保护。
+        防止同步 HTTP 请求阻塞 asyncio 事件循环导致服务假死。
+        """
+        loop = asyncio.get_event_loop()
+        label = f"{source_type}/{akshare_api or '-'}"
+        logger.info(f"🔄 [FETCH] 开始获取行情 source={label}, timeout={_SYNC_FETCH_TIMEOUT_SECONDS}s")
+        t0 = _time.monotonic()
+
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, self._fetch_quotes_sync, source_type, akshare_api),
+                timeout=_SYNC_FETCH_TIMEOUT_SECONDS,
+            )
+            elapsed = _time.monotonic() - t0
+            data_count = len(result[0]) if result and result[0] else 0
+            logger.info(f"✅ [FETCH] 完成 source={label}, 耗时={elapsed:.2f}s, 数据量={data_count}")
+            return result
+
+        except asyncio.TimeoutError:
+            elapsed = _time.monotonic() - t0
+            logger.error(
+                f"⏰ [FETCH-TIMEOUT] source={label} 超过 {_SYNC_FETCH_TIMEOUT_SECONDS}s 未返回！"
+                f"已放弃等待，避免阻塞事件循环。(实际等待={elapsed:.2f}s)"
+            )
+            return None, None
+
+        except Exception as e:
+            elapsed = _time.monotonic() - t0
+            logger.error(f"❌ [FETCH-ERROR] source={label} 异常, 耗时={elapsed:.2f}s: {e}", exc_info=True)
             return None, None
 
     async def run_once(self) -> None:
@@ -602,20 +657,44 @@ class QuotesIngestionService:
         1. 检测 Tushare 权限（首次运行）
         2. 按轮换顺序尝试获取行情：Tushare → AKShare东方财富 → AKShare新浪财经
         3. 任意一个接口成功即入库，失败则跳过本次采集
+
+        【诊断日志】每次执行记录事件循环延迟和总耗时，用于排查假死问题
         """
+        run_t0 = _time.monotonic()
+        run_wall = datetime.now(self.tz)
+        logger.info(f"🚀 [RUN_ONCE] 开始执行 at={run_wall.isoformat()}")
+
+        # 事件循环健康检查：测量调度延迟
+        loop = asyncio.get_event_loop()
+        loop_check_t0 = _time.monotonic()
+        await asyncio.sleep(0)  # yield to event loop
+        loop_delay = _time.monotonic() - loop_check_t0
+        if loop_delay > 1.0:
+            logger.warning(
+                f"⚠️ [EVENT_LOOP] 事件循环响应延迟 {loop_delay:.2f}s！"
+                f"可能存在阻塞调用。thread_count={len(loop._ready) if hasattr(loop, '_ready') else 'N/A'}"
+            )
+        else:
+            logger.debug(f"✅ [EVENT_LOOP] 事件循环正常, delay={loop_delay*1000:.1f}ms")
+
         # 非交易时段处理
         if not self._is_trading_time():
             if settings.QUOTES_BACKFILL_ON_OFFHOURS:
                 await self.backfill_last_close_snapshot_if_needed()
             else:
                 logger.info("⏭️ 非交易时段，跳过行情采集")
+            elapsed = _time.monotonic() - run_t0
+            logger.info(f"🏁 [RUN_ONCE] 结束(非交易时段), 总耗时={elapsed:.2f}s")
             return
 
         try:
             # 首次运行：检测 Tushare 权限
             if settings.QUOTES_AUTO_DETECT_TUSHARE_PERMISSION and not self._tushare_permission_checked:
                 logger.info("🔍 首次运行，检测 Tushare rt_k 接口权限...")
-                has_premium = self._check_tushare_permission()
+                # 权限检测也是同步调用，放入线程池
+                has_premium = await asyncio.get_event_loop().run_in_executor(
+                    None, self._check_tushare_permission
+                )
 
                 if has_premium:
                     logger.info(
@@ -630,18 +709,19 @@ class QuotesIngestionService:
             # 获取下一个数据源
             source_type, akshare_api = self._get_next_source()
 
-            # 尝试获取行情
-            quotes_map, source_name = self._fetch_quotes_from_source(source_type, akshare_api)
+            # 尝试获取行情（已改为 async + run_in_executor + 超时保护）
+            quotes_map, source_name = await self._fetch_quotes_from_source(source_type, akshare_api)
 
             if not quotes_map:
                 logger.warning(f"⚠️ {source_name or source_type} 未获取到行情数据，跳过本次入库")
-                # 记录失败状态
                 await self._record_sync_status(
                     success=False,
                     source=source_name or source_type,
                     records_count=0,
                     error_msg="未获取到行情数据"
                 )
+                elapsed = _time.monotonic() - run_t0
+                logger.info(f"🏁 [RUN_ONCE] 结束(无数据), 总耗时={elapsed:.2f}s")
                 return
 
             # 获取交易日
@@ -652,7 +732,10 @@ class QuotesIngestionService:
                 trade_date = datetime.now(self.tz).strftime("%Y%m%d")
 
             # 入库
+            upsert_t0 = _time.monotonic()
             await self._bulk_upsert(quotes_map, trade_date, source_name)
+            upsert_elapsed = _time.monotonic() - upsert_t0
+            logger.info(f"💾 [UPSERT] 入库完成, 耗时={upsert_elapsed:.2f}s, 数据量={len(quotes_map)}")
 
             # 记录成功状态
             await self._record_sync_status(
@@ -662,9 +745,12 @@ class QuotesIngestionService:
                 error_msg=None
             )
 
+            elapsed = _time.monotonic() - run_t0
+            logger.info(f"🏁 [RUN_ONCE] 结束(成功), 总耗时={elapsed:.2f}s, source={source_name}, count={len(quotes_map)}")
+
         except Exception as e:
-            logger.error(f"❌ 行情入库失败: {e}")
-            # 记录失败状态
+            elapsed = _time.monotonic() - run_t0
+            logger.error(f"❌ [RUN_ONCE] 异常退出, 耗时={elapsed:.2f}s: {e}", exc_info=True)
             await self._record_sync_status(
                 success=False,
                 source=None,

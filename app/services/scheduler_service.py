@@ -730,6 +730,47 @@ class SchedulerService:
         )
         logger.info("✅ 僵尸任务检测定时任务已添加")
 
+        # 添加事件循环健康监控（每2分钟检查一次事件循环响应延迟）
+        self.scheduler.add_job(
+            self._check_event_loop_health,
+            'interval',
+            minutes=2,
+            id='event_loop_health_check',
+            name='事件循环健康监控',
+            replace_existing=True
+        )
+        logger.info("✅ 事件循环健康监控已添加（每2分钟）")
+
+    async def _check_event_loop_health(self):
+        """
+        事件循环健康监控：测量 asyncio 事件循环的响应延迟。
+        如果延迟过高，说明有同步阻塞调用正在卡住事件循环，可能导致服务假死。
+        """
+        import time as _time
+        try:
+            t0 = _time.monotonic()
+            await asyncio.sleep(0)
+            delay = _time.monotonic() - t0
+
+            # 获取当前运行的任务数
+            running_tasks = len(asyncio.all_tasks()) if hasattr(asyncio, 'all_tasks') else 0
+
+            if delay > 5.0:
+                logger.critical(
+                    f"🔴 [EVENT_LOOP_CRITICAL] 事件循环严重阻塞！delay={delay:.2f}s, "
+                    f"running_tasks={running_tasks}。服务可能已假死！"
+                )
+            elif delay > 1.0:
+                logger.warning(
+                    f"⚠️ [EVENT_LOOP_WARN] 事件循环响应缓慢: delay={delay:.2f}s, "
+                    f"running_tasks={running_tasks}"
+                )
+            else:
+                logger.debug(f"✅ [EVENT_LOOP_OK] delay={delay*1000:.1f}ms, tasks={running_tasks}")
+
+        except Exception as e:
+            logger.error(f"❌ [EVENT_LOOP_CHECK] 健康检查异常: {e}")
+
     async def _check_zombie_tasks(self):
         """检测僵尸任务（长时间处于running状态的任务）"""
         try:
