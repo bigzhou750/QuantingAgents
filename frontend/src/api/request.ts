@@ -82,8 +82,14 @@ const handle401Error = (authStore: any, message: string = '登录已过期，请
 
 // 创建axios实例
 const createAxiosInstance = (): AxiosInstance => {
+  // API modules use absolute `/api/...` paths. Strip a trailing `/api` from
+  // configured base URLs so builds with VITE_API_BASE_URL=/api do not request
+  // the invalid `/api/api/...` path.
+  const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+  const apiBaseUrl = configuredBaseUrl.replace(/\/api$/i, '')
+
   const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '',
+    baseURL: apiBaseUrl,
     timeout: 60000, // 增加超时时间到60秒（数据同步等长时间操作）
     headers: {
       'Content-Type': 'application/json',

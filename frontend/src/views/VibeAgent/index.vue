@@ -815,7 +815,6 @@ watch(
 
 onMounted(async () => {
   billingStore.fetchAccount()
-  if (!await loadHealth() || authRequired.value) return
   try {
     await loadSessions()
   } catch {
@@ -823,6 +822,11 @@ onMounted(async () => {
     ElMessage.error('会话列表加载失败')
     return
   }
+  // Session history is persisted independently of runtime capability health.
+  // Load it first so a temporary Agent health failure does not hide existing
+  // sessions after a page refresh.
+  await loadHealth()
+  if (authRequired.value) return
   await openSessionFromRoute()
   if (!activeSessionId.value && sessions.value.length === 0) {
     await createDefaultSession()
