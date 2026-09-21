@@ -380,14 +380,37 @@ function openMwebPay() {
   }
 }
 
-function resumePayment() {
-  if (billingStore.pendingOrder) {
-    currentOrderId.value = billingStore.pendingOrder.order_id
-    payType.value = billingStore.pendingOrder.pay_type
-    payStatus.value = 'polling'
-    payStatusDialogVisible.value = true
-    startPolling()
+async function resumePayment() {
+  if (!billingStore.pendingOrder) return
+
+  const orderId = billingStore.pendingOrder.order_id
+  currentOrderId.value = orderId
+  payType.value = billingStore.pendingOrder.pay_type
+
+  // Waffo 支付需要重新创建 checkout session（旧 session 45 分钟过期）
+  if (billingStore.pendingOrder.pay_type === 'WAFFO') {
+    try {
+      const res = await tokenBillingApi.resumePayment(orderId)
+      if (res.success && res.data?.checkout_url) {
+        checkoutUrl.value = res.data.checkout_url
+        payStatus.value = 'polling'
+        payStatusDialogVisible.value = true
+        startPolling()
+        setTimeout(() => {
+          window.open(checkoutUrl.value, '_blank', 'noopener,noreferrer')
+        }, 500)
+        return
+      }
+    } catch (e: any) {
+      ElMessage.error(e?.message || '恢复支付失败，请重新下单')
+      return
+    }
   }
+
+  // 非 Waffo 支付或恢复失败，直接轮询
+  payStatus.value = 'polling'
+  payStatusDialogVisible.value = true
+  startPolling()
 }
 
 function retryPay() {
