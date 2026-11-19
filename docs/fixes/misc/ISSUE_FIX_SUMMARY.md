@@ -92,27 +92,27 @@ async def _test_single_adapter(adapter) -> dict:
         "available": True,
         "tests": {}
     }
-    
+
     # ✅ 在后台线程中执行同步方法
     try:
         df = await asyncio.to_thread(adapter.get_stock_list)
         # ...
     except Exception as e:
         # ...
-    
+
     try:
         trade_date = await asyncio.to_thread(adapter.find_latest_trade_date)
         # ...
     except Exception as e:
         # ...
-    
+
     try:
         if trade_date:
             df = await asyncio.to_thread(adapter.get_daily_basic, trade_date)
             # ...
     except Exception as e:
         # ...
-    
+
     return result
 ```
 
@@ -122,19 +122,19 @@ async def _test_single_adapter(adapter) -> dict:
 async def test_data_sources():
     """
     测试所有数据源的连接和数据获取能力
-    
+
     注意：此接口会执行耗时操作（获取股票列表等），
     所有同步操作都在后台线程中执行，避免阻塞事件循环
     """
     manager = DataSourceManager()
     available_adapters = manager.get_available_adapters()
-    
+
     logger.info(f"🧪 开始测试 {len(available_adapters)} 个数据源...")
-    
+
     # ✅ 并发测试所有适配器（在后台线程中执行）
     test_tasks = [_test_single_adapter(adapter) for adapter in available_adapters]
     test_results = await asyncio.gather(*test_tasks, return_exceptions=True)
-    
+
     # 处理异常结果
     final_results = []
     for i, result in enumerate(test_results):
@@ -153,9 +153,9 @@ async def test_data_sources():
             })
         else:
             final_results.append(result)
-    
+
     logger.info(f"✅ 数据源测试完成，共测试 {len(final_results)} 个数据源")
-    
+
     return SyncResponse(
         success=True,
         message=f"Tested {len(final_results)} data sources",
@@ -293,7 +293,7 @@ async def monitor_blocking():
     start = time.time()
     result = await some_operation()
     elapsed = time.time() - start
-    
+
     if elapsed > 5:
         logger.warning(f"⚠️  检测到耗时操作: {elapsed:.2f}秒")
 ```

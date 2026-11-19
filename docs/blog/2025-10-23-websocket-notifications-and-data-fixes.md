@@ -1,7 +1,7 @@
 # WebSocket 通知系统与数据修复：彻底解决 Redis 连接泄漏问题
 
-**日期**: 2025-10-23  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-23
+**作者**: zhitouagent 开发团队
 **标签**: `feature`, `bug-fix`, `websocket`, `redis`, `data-quality`, `performance`
 
 ---
@@ -62,14 +62,14 @@ redis.exceptions.ConnectionError: Too many connections
    ):
        user_id = current_user.get("user_id")
        await manager.connect(websocket, user_id)
-       
+
        try:
            # 发送连接确认
            await websocket.send_json({
                "type": "connected",
                "data": {"message": "WebSocket connected", "user_id": user_id}
            })
-           
+
            # 心跳循环（每 30 秒）
            while True:
                await asyncio.sleep(30)
@@ -84,14 +84,14 @@ redis.exceptions.ConnectionError: Too many connections
        def __init__(self):
            self.active_connections: Dict[str, Set[WebSocket]] = {}
            self._lock = asyncio.Lock()
-       
+
        async def connect(self, websocket: WebSocket, user_id: str):
            await websocket.accept()
            async with self._lock:
                if user_id not in self.active_connections:
                    self.active_connections[user_id] = set()
                self.active_connections[user_id].add(websocket)
-       
+
        async def send_personal_message(self, message: dict, user_id: str):
            if user_id in self.active_connections:
                dead_connections = set()
@@ -100,7 +100,7 @@ redis.exceptions.ConnectionError: Too many connections
                        await connection.send_json(message)
                    except:
                        dead_connections.add(connection)
-               
+
                # 清理死连接
                for conn in dead_connections:
                    self.active_connections[user_id].discard(conn)
@@ -115,7 +115,7 @@ redis.exceptions.ConnectionError: Too many connections
        logger.debug(f"✅ [WS] 通知已通过 WebSocket 发送")
    except Exception as e:
        logger.debug(f"⚠️ [WS] WebSocket 发送失败，尝试 Redis: {e}")
-       
+
        # 降级到 Redis PubSub（兼容旧的 SSE 客户端）
        try:
            r = get_redis_client()
@@ -133,22 +133,22 @@ redis.exceptions.ConnectionError: Too many connections
      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
      const url = `${wsProtocol}//${base}/api/ws/notifications?token=${token}`
      const socket = new WebSocket(url)
-     
+
      socket.onopen = () => {
        console.log('[WS] 连接成功')
        wsConnected.value = true
        wsReconnectAttempts = 0
      }
-     
+
      socket.onmessage = (event) => {
        const message = JSON.parse(event.data)
        handleWebSocketMessage(message)
      }
-     
+
      socket.onclose = (event) => {
        console.log('[WS] 连接关闭:', event.code, event.reason)
        wsConnected.value = false
-       
+
        // 自动重连（指数退避，最多 5 次）
        if (wsReconnectAttempts < maxReconnectAttempts) {
          const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000)
@@ -171,13 +171,13 @@ redis.exceptions.ConnectionError: Too many connections
        case 'connected':
          console.log('[WS] 连接确认:', message.data)
          break
-       
+
        case 'notification':
          if (message.data?.title && message.data?.type) {
            addNotification(message.data)
          }
          break
-       
+
        case 'heartbeat':
          // 心跳消息，无需处理
          break
@@ -198,13 +198,13 @@ location /api/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
-    
+
     # 超时设置（重要！）
     # WebSocket 长连接需要更长的超时时间
     proxy_connect_timeout 120s;
     proxy_send_timeout 3600s;  # 1小时
     proxy_read_timeout 3600s;  # 1小时
-    
+
     # 禁用缓存
     proxy_buffering off;
     proxy_cache off;
@@ -275,10 +275,10 @@ def _standardize_record(self, row, date_index=None, ...):
 ```python
 def _standardize_record(self, row, date_index=None, ...):
     trade_date = None
-    
+
     # 🔥 优先从列中获取日期
     date_from_column = row.get('date') or row.get('trade_date')
-    
+
     if date_from_column is not None:
         trade_date = self._format_date(date_from_column)  # ✅ 从列中获取
     # 只有日期类型的索引才使用
@@ -648,7 +648,7 @@ socket.onmessage = (event) => {
 
 ---
 
-**相关提交**: 
+**相关提交**:
 - WebSocket: 3866cf9, 65839c0, 6ea839a
 - 数据修复: 36b4cf9, 60d1910
 - 配置管理: 44ba931, 77bc278, 2433dd1, 1f5c931, a4e0a46

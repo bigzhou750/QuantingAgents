@@ -1,14 +1,14 @@
 # 配置系统全面优化：从测试到部署的完整改进
 
-**日期**: 2025-10-21  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-21
+**作者**: zhitouagent 开发团队
 **标签**: `bug-fix`, `optimization`, `configuration`, `testing`, `deployment`
 
 ---
 
 ## 📋 概述
 
-2025年10月21日，我们对 TradingAgents-CN 的配置系统进行了全面的优化和修复，涉及 **20+ 个提交**，解决了配置测试、环境变量管理、多市场数据架构等多个关键问题。本文详细记录了这些改进的背景、解决方案和影响。
+2025年10月21日，我们对 zhitouagent 的配置系统进行了全面的优化和修复，涉及 **20+ 个提交**，解决了配置测试、环境变量管理、多市场数据架构等多个关键问题。本文详细记录了这些改进的背景、解决方案和影响。
 
 ---
 
@@ -219,13 +219,13 @@ class ChatGoogleOpenAI:
             # 自动将 /v1 转换为 /v1beta（Google AI 的正确端点）
             if base_url.endswith('/v1'):
                 base_url = base_url[:-3] + '/v1beta'
-            
+
             # 提取域名部分（移除 /v1beta 后缀）
             if base_url.endswith('/v1beta'):
                 api_endpoint = base_url[:-7]
             else:
                 api_endpoint = base_url
-            
+
             # 通过 client_options 传递自定义端点
             kwargs['client_options'] = {'api_endpoint': api_endpoint}
 ```
@@ -444,6 +444,6 @@ MongoDB 集合结构：
 
 ---
 
-**TradingAgents-CN 开发团队**  
+**zhitouagent 开发团队**
 *让量化交易更简单、更可靠*
 

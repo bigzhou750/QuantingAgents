@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-TradingAgents-CN 是一个基于多智能体大语言模型（LLM）的金融交易框架，由 Tauric Research 开发并开源。本项目为中文增强版（v0.1.7），专为中国用户提供完整的A股支持、国产LLM集成、Docker容器化部署和专业报告导出功能。
+zhitouagent 是一个基于多智能体大语言模型（LLM）的金融交易框架，由 Tauric Research 开发并开源。本项目为中文增强版（v0.1.7），专为中国用户提供完整的A股支持、国产LLM集成、Docker容器化部署和专业报告导出功能。
 
 该项目模拟真实世界交易公司的运作模式，通过部署多个专业化的AI智能体来协作评估市场条件并做出交易决策。
 
@@ -165,7 +165,7 @@ TradingAgents 框架仅用于研究和教育目的。交易表现可能因多种
 ## 联系我们
 
 - **官方网站**: [https://tauric.ai](https://tauric.ai)
-- **GitHub**: [https://github.com/TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
+- **GitHub**: [mailto:zh75067197@gmail.com](mailto:zh75067197@gmail.com)
 - **Discord**: [TradingResearch](https://discord.com/invite/hk9PGKShPK)
 - **Twitter**: [@TauricResearch](https://x.com/TauricResearch)
 - **邮箱**: contact@tauric.ai

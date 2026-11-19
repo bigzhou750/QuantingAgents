@@ -430,7 +430,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.OPENAI,
                     model_name="gpt-3.5-turbo",
-                    api_key="your-openai-api-key",
+                    api_key="",
                     api_base="https://api.openai.com/v1",
                     max_tokens=4000,
                     temperature=0.7,
@@ -440,7 +440,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.ZHIPU,
                     model_name="glm-4",
-                    api_key="your-zhipu-api-key",
+                    api_key="",
                     api_base="https://open.bigmodel.cn/api/paas/v4",
                     max_tokens=4000,
                     temperature=0.7,
@@ -450,7 +450,7 @@ class ConfigService:
                 LLMConfig(
                     provider=ModelProvider.QWEN,
                     model_name="qwen-turbo",
-                    api_key="your-qwen-api-key",
+                    api_key="",
                     api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
                     max_tokens=4000,
                     temperature=0.7,
@@ -458,7 +458,7 @@ class ConfigService:
                     description="阿里云通义千问模型"
                 )
             ],
-            default_llm="glm-4",
+            default_llm="deepseek-chat",
             data_source_configs=[
                 DataSourceConfig(
                     name="AKShare",
@@ -473,7 +473,7 @@ class ConfigService:
                 DataSourceConfig(
                     name="Tushare",
                     type=DataSourceType.TUSHARE,
-                    api_key="your-tushare-token",
+                    api_key="",
                     endpoint="http://api.tushare.pro",
                     timeout=30,
                     rate_limit=200,
@@ -520,13 +520,13 @@ class ConfigService:
                 "sse_task_max_idle_seconds": 300,
                 "sse_batch_poll_interval_seconds": 2.0,
                 "sse_batch_max_idle_seconds": 600,
-                # TradingAgents runtime intervals (optional; DB-managed)
+                # zhitouagent runtime intervals (optional; DB-managed)
                 "ta_hk_min_request_interval_seconds": 2.0,
                 "ta_hk_timeout_seconds": 60,
                 "ta_hk_max_retries": 3,
                 "ta_hk_rate_limit_wait_seconds": 60,
                 "ta_hk_cache_ttl_seconds": 86400,
-                # 新增：TradingAgents 数据来源策略
+                # 新增：zhitouagent 数据来源策略
                 # 是否优先从 app 缓存(Mongo 集合 stock_basic_info / market_quotes) 读取
                 "ta_use_app_cache": False,
                 "ta_china_min_api_interval_seconds": 0.5,
@@ -3731,8 +3731,8 @@ class ConfigService:
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "https://tradingagents.cn",  # OpenRouter要求
-                "X-Title": "TradingAgents-CN"
+                "HTTP-Referer": "https://zhitouagent.local",  # OpenRouter要求
+                "X-Title": "zhitouagent"
             }
 
             data = {

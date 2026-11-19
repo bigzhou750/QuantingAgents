@@ -267,6 +267,7 @@ import {
   Download,
   Search
 } from '@element-plus/icons-vue'
+import axios from 'axios'
 import * as echarts from 'echarts'
 
 type TokenRecord = {
@@ -357,26 +358,27 @@ const getProviderName = (provider: string): string => {
 const loadStatistics = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 模拟数据
+    const daysMap: Record<string, number> = { week: 7, month: 30, quarter: 90 }
+    const days = daysMap[timeRange.value] || 30
+
+    const res = await axios.get('/api/usage/statistics', { params: { days } })
+    const data = res.data?.data || {}
+
     Object.assign(overview, {
-      totalRequests: 1234,
-      totalTokens: 567890,
-      totalCost: 123.45,
-      avgCostPerRequest: 0.1,
-      requestsChange: 15.2,
-      tokensChange: 23.8,
-      costChange: 18.5,
-      avgCostChange: 2.1
+      totalRequests: data.total_requests || 0,
+      totalTokens: data.total_tokens || 0,
+      totalCost: data.total_cost || 0,
+      avgCostPerRequest: data.avg_cost_per_request || 0,
+      requestsChange: data.requests_change || 0,
+      tokensChange: data.tokens_change || 0,
+      costChange: data.cost_change || 0,
+      avgCostChange: data.avg_cost_change || 0,
     })
-    
-    // 加载图表数据
+
     await nextTick()
     renderCharts()
-    
-  } catch (_error) {
+  } catch (error) {
+    console.error('Failed to load statistics:', error)
     ElMessage.error('加载统计数据失败')
   } finally {
     loading.value = false
@@ -384,23 +386,19 @@ const loadStatistics = async () => {
 }
 
 const loadRecords = async () => {
-  // 模拟加载记录数据
-  records.value = [
-    {
-      timestamp: '2024-01-18T14:30:00Z',
-      provider: 'dashscope',
-      model: 'qwen-turbo',
-      stock_symbol: '000001',
-      prompt_tokens: 1500,
-      completion_tokens: 800,
-      total_tokens: 2300,
-      cost: 0.023,
-      duration: 1200
-    }
-  ]
-  
-  totalRecords.value = 50
-  filterRecords()
+  try {
+    const res = await axios.get('/api/usage/records', {
+      params: { page: currentPage.value, page_size: pageSize.value },
+    })
+    const data = res.data?.data || {}
+    records.value = Array.isArray(data) ? data : (data.items || [])
+    totalRecords.value = data.total || records.value.length
+    filterRecords()
+  } catch (error) {
+    console.error('Failed to load records:', error)
+    records.value = []
+    filterRecords()
+  }
 }
 
 const filterRecords = () => {

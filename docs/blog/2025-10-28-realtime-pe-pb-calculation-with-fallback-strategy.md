@@ -1,7 +1,7 @@
 # 实时 PE/PB 计算与完善的回退策略实现
 
-**日期**: 2025-10-28  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-28
+**作者**: zhitouagent 开发团队
 **标签**: `估值指标` `实时计算` `回退策略` `数据完整性`
 
 ---
@@ -25,7 +25,7 @@
   错误计算：
   shares = 238.24亿元 × 10000 / 38.89元 = 61,258.75万股 ❌
   realtime_mv = 45.0元 × 61,258.75万股 / 10000 = 275.66亿元 ❌
-  
+
   正确计算：
   shares = 238.24亿元 × 10000 / 45.0元 = 52,941.18万股 ✓
   realtime_mv = 45.0元 × 52,941.18万股 / 10000 = 238.24亿元 ✓
@@ -65,7 +65,7 @@
 def calculate_realtime_pe_pb(symbol: str, db_client=None) -> Optional[Dict[str, Any]]:
     """
     基于实时行情和财务数据计算PE/PB
-    
+
     策略：
     1. 检查 stock_basic_info 是否已在收盘后更新（15:00+）
        - 如果是，直接使用其数据，无需重新计算
@@ -86,7 +86,7 @@ if basic_info_updated_at:
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
     update_date = basic_info_updated_at.date()
     update_time = basic_info_updated_at.time()
-    
+
     # 如果更新日期是今天，且更新时间在15:00之后
     if update_date == today and update_time >= dtime(15, 0):
         need_recalculate = False
@@ -109,7 +109,7 @@ if not need_recalculate:
 # 方案1：优先使用 stock_basic_info.total_share + pre_close
 if total_share and total_share > 0:
     total_shares_wan = total_share
-    
+
     if pre_close and pre_close > 0:
         # 有 pre_close，计算昨日市值
         yesterday_mv_yi = (total_shares_wan * pre_close) / 10000
@@ -129,7 +129,7 @@ elif pre_close and pre_close > 0 and total_mv_yi and total_mv_yi > 0:
     if basic_info_updated_at:
         if update_date == today and update_time >= dtime(15, 0):
             is_yesterday_data = False
-    
+
     if is_yesterday_data:
         # total_mv_yi 是昨天的市值，用 pre_close 反推股本
         total_shares_wan = (total_mv_yi * 10000) / pre_close
@@ -197,12 +197,12 @@ return {
 def get_pe_pb_with_fallback(symbol: str, db_client=None) -> Dict[str, Any]:
     """
     获取PE/PB，智能降级策略
-    
+
     策略：
     1. 优先使用动态 PE（基于实时股价 + Tushare TTM 净利润）
     2. 如果动态计算失败，降级到 Tushare 静态 PE（基于昨日收盘价）
     """
-    
+
     # 方案1：动态 PE 计算
     realtime_metrics = calculate_realtime_pe_pb(symbol, db_client)
     if realtime_metrics:
@@ -211,7 +211,7 @@ def get_pe_pb_with_fallback(symbol: str, db_client=None) -> Dict[str, Any]:
         pb = realtime_metrics.get('pb')
         if validate_pe_pb(pe, pb):
             return realtime_metrics
-    
+
     # 方案2：降级到 Tushare 静态 PE
     basic_info = db.stock_basic_info.find_one({"code": code6})
     if basic_info:
@@ -223,7 +223,7 @@ def get_pe_pb_with_fallback(symbol: str, db_client=None) -> Dict[str, Any]:
             "is_realtime": False,
             ...
         }
-    
+
     # 所有方案失败
     return {}
 ```
@@ -237,14 +237,14 @@ def get_pe_pb_with_fallback(symbol: str, db_client=None) -> Dict[str, Any]:
 ```python
 def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict:
     """获取真实财务指标 - 优先使用数据库缓存，再使用API"""
-    
+
     # 🔥 优先从 market_quotes 获取实时股价
     if db_manager.is_mongodb_available():
         try:
             client = db_manager.get_mongodb_client()
             db = client['tradingagents']
             code6 = symbol.replace('.SH', '').replace('.SZ', '').zfill(6)
-            
+
             quote = db.market_quotes.find_one({"code": code6})
             if quote and quote.get("close"):
                 realtime_price = float(quote.get("close"))
@@ -252,7 +252,7 @@ def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict:
                 price_value = realtime_price
         except Exception as e:
             logger.warning(f"⚠️ 从 market_quotes 获取实时股价失败: {e}")
-    
+
     # 后续使用 price_value 计算财务指标
     ...
 ```
@@ -262,16 +262,16 @@ def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict:
 ```python
 def _parse_akshare_financial_data(self, financial_data: dict, stock_info: dict, price_value: float) -> dict:
     """解析AKShare财务数据为指标"""
-    
+
     # 🔥 第1层：优先使用实时 PE/PB 计算
     pe_value = None
     pb_value = None
-    
+
     try:
         stock_code = stock_info.get('code', '').zfill(6)
         if stock_code:
             from tradingagents.dataflows.realtime_metrics import get_pe_pb_with_fallback
-            
+
             realtime_metrics = get_pe_pb_with_fallback(stock_code, client)
             if realtime_metrics:
                 pe_value = realtime_metrics.get('pe')
@@ -279,12 +279,12 @@ def _parse_akshare_financial_data(self, financial_data: dict, stock_info: dict, 
                 # 设置 metrics
     except Exception as e:
         logger.warning(f"⚠️ [AKShare-PE计算-第1层异常] {e}")
-    
+
     # 🔥 第2层：如果实时计算失败，降级到传统计算
     if pe_value is None:
         # 使用 price_value / eps_for_pe 计算
         ...
-    
+
     if pb_value is None:
         # 使用 price_value / bps_val 计算
         ...
@@ -390,7 +390,7 @@ logger.error(f"❌ [AKShare-PE计算-全部失败] 无可用EPS数据")
 ## 📦 相关提交
 
 ### Commit 1: 修复实时市值和PE/PB计算逻辑
-**哈希**: `f42fc1f`  
+**哈希**: `f42fc1f`
 **日期**: 2025-10-28
 
 **主要改进**：
@@ -399,7 +399,7 @@ logger.error(f"❌ [AKShare-PE计算-全部失败] 无可用EPS数据")
 3. `app/routers/stocks.py` 已使用 `get_pe_pb_with_fallback` 获取实时数据
 
 ### Commit 2: 完善实时PE/PB计算的回退策略
-**哈希**: `18727ef`  
+**哈希**: `18727ef`
 **日期**: 2025-10-28
 
 **主要改进**：
@@ -439,12 +439,12 @@ logger.error(f"❌ [AKShare-PE计算-全部失败] 无可用EPS数据")
 ## 🤝 贡献者
 
 - **问题发现**: 用户反馈（688146 涨幅 15% 但 PE 未更新）
-- **方案设计**: TradingAgents-CN 开发团队
-- **代码实现**: TradingAgents-CN 开发团队
-- **测试验证**: TradingAgents-CN 开发团队
+- **方案设计**: zhitouagent 开发团队
+- **代码实现**: zhitouagent 开发团队
+- **测试验证**: zhitouagent 开发团队
 
 ---
 
-**最后更新**: 2025-10-28  
+**最后更新**: 2025-10-28
 **版本**: v1.0.0-preview
 

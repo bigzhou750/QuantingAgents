@@ -56,7 +56,7 @@ def __init__(self):
     super().__init__("Tushare")
     self.api = None
     self.config = get_provider_config("tushare")  # ❌ 从 providers_config 获取配置
-    
+
 def connect_sync(self) -> bool:
     token = self.config.get('token')  # ❌ 使用的是环境变量中的 token
     if not token:
@@ -144,17 +144,17 @@ else:
 ```python
 class DataSourceConfig:
     """数据源配置管理器"""
-    
+
     def __init__(self):
         self._configs = {}
         self._load_configs()
-    
+
     def reload_configs(self):
         """重新加载配置（用于运行时更新）"""
         self._configs = {}
         self._load_configs()
         logger.info("✅ 数据源配置已重新加载")
-    
+
     # ... 其他方法保持不变
 
 # 添加全局重新加载函数
@@ -176,12 +176,12 @@ def _get_token_from_database(self) -> Optional[str]:
         from app.core.database import get_mongo_db
         db = get_mongo_db()
         config_collection = db.system_configs
-        
+
         config_data = config_collection.find_one(
             {"is_active": True},
             sort=[("version", -1)]
         )
-        
+
         if config_data and config_data.get('data_source_configs'):
             for ds_config in config_data['data_source_configs']:
                 if ds_config.get('type') == 'tushare':
@@ -190,7 +190,7 @@ def _get_token_from_database(self) -> Optional[str]:
                         return api_key
     except Exception as e:
         self.logger.debug(f"从数据库读取 Token 失败: {e}")
-    
+
     return None
 
 def connect_sync(self) -> bool:
@@ -202,15 +202,15 @@ def connect_sync(self) -> bool:
     try:
         # 优先从数据库读取 Token
         token = self._get_token_from_database()
-        
+
         # 降级到环境变量
         if not token:
             token = self.config.get('token')
-        
+
         if not token:
             self.logger.error("❌ Tushare token未配置")
             return False
-        
+
         # 设置token并初始化API
         ts.set_token(token)
         self.api = ts.pro_api()
@@ -304,8 +304,8 @@ def connect_sync(self) -> bool:
 
 ---
 
-**创建日期**: 2025-10-26  
-**问题来源**: 用户反馈  
-**优先级**: 高  
+**创建日期**: 2025-10-26
+**问题来源**: 用户反馈
+**优先级**: 高
 **状态**: 待修复
 

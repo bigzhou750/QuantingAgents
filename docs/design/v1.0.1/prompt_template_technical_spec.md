@@ -12,26 +12,26 @@ from datetime import datetime
 
 class PromptTemplateManager:
     """提示词模版管理器"""
-    
+
     def __init__(self, template_dir: str = "prompts/templates"):
         self.template_dir = Path(template_dir)
         self.cache = {}  # 模版缓存
-        
+
     def load_template(
-        self, 
-        analyst_type: str, 
+        self,
+        analyst_type: str,
         template_name: str
     ) -> Dict:
         """
         加载指定的模版
-        
+
         Args:
             analyst_type: 分析师类型 (fundamentals/market/news/social)
             template_name: 模版名称 (default/conservative/aggressive等)
-            
+
         Returns:
             模版字典，包含所有配置
-            
+
         Raises:
             FileNotFoundError: 模版文件不存在
             ValueError: 模版格式无效
@@ -39,27 +39,27 @@ class PromptTemplateManager:
         cache_key = f"{analyst_type}:{template_name}"
         if cache_key in self.cache:
             return self.cache[cache_key]
-            
+
         template_path = (
             self.template_dir / analyst_type / f"{template_name}.yaml"
         )
-        
+
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
-            
+
         with open(template_path, 'r', encoding='utf-8') as f:
             template = yaml.safe_load(f)
-            
+
         self.validate_template(template)
         self.cache[cache_key] = template
         return template
-        
+
     def list_templates(self, analyst_type: str) -> List[Dict]:
         """列出某个分析师的所有模版"""
         analyst_dir = self.template_dir / analyst_type
         if not analyst_dir.exists():
             return []
-            
+
         templates = []
         for yaml_file in analyst_dir.glob("*.yaml"):
             with open(yaml_file, 'r', encoding='utf-8') as f:
@@ -71,7 +71,7 @@ class PromptTemplateManager:
                     "tags": template.get("tags", [])
                 })
         return templates
-        
+
     def validate_template(self, template: Dict) -> bool:
         """验证模版格式"""
         required_fields = [
@@ -79,25 +79,25 @@ class PromptTemplateManager:
             "system_prompt", "tool_guidance", "analysis_requirements",
             "output_format", "constraints"
         ]
-        
+
         for field in required_fields:
             if field not in template:
                 raise ValueError(f"Missing required field: {field}")
-                
+
         return True
-        
+
     def render_template(
-        self, 
-        template: Dict, 
+        self,
+        template: Dict,
         **variables
     ) -> Dict:
         """
         渲染模版中的变量
-        
+
         Args:
             template: 模版字典
             **variables: 要注入的变量 (ticker, company_name等)
-            
+
         Returns:
             渲染后的模版
         """
@@ -195,7 +195,7 @@ def create_fundamentals_analyst(
 ):
     """
     创建基本面分析师
-    
+
     Args:
         llm: 语言模型
         toolkit: 工具包
@@ -204,10 +204,10 @@ def create_fundamentals_analyst(
     """
     if template_manager is None:
         template_manager = PromptTemplateManager()
-        
+
     # 加载模版
     template = template_manager.load_template("fundamentals", template_name)
-    
+
     def fundamentals_analyst_node(state):
         # 渲染模版变量
         rendered_template = template_manager.render_template(
@@ -219,7 +219,7 @@ def create_fundamentals_analyst(
             currency_symbol=market_info["currency_symbol"],
             current_date=state["trade_date"]
         )
-        
+
         # 使用渲染后的模版
         system_prompt = rendered_template["system_prompt"]
         # ... 继续分析流程
@@ -278,7 +278,7 @@ from datetime import datetime
 class PromptTemplateDB(Base):
     """数据库模型 - 用于保存自定义模版"""
     __tablename__ = "prompt_templates"
-    
+
     id = Column(String(36), primary_key=True)
     analyst_type = Column(String(50), nullable=False)
     name = Column(String(100), nullable=False)
@@ -302,25 +302,25 @@ class PromptTemplateDB(Base):
 ```python
 class PromptTemplateVersion:
     """模版版本管理"""
-    
+
     def save_version(self, template: Dict, version: str):
         """保存模版版本"""
         version_dir = self.template_dir / ".versions"
         version_dir.mkdir(exist_ok=True)
-        
+
         version_file = (
-            version_dir / 
+            version_dir /
             f"{template['analyst_type']}_{template['name']}_v{version}.yaml"
         )
-        
+
         with open(version_file, 'w', encoding='utf-8') as f:
             yaml.dump(template, f, allow_unicode=True)
-            
+
     def get_versions(self, analyst_type: str, template_name: str) -> List[str]:
         """获取模版的所有版本"""
         version_dir = self.template_dir / ".versions"
         pattern = f"{analyst_type}_{template_name}_v*.yaml"
-        
+
         versions = []
         for file in version_dir.glob(pattern):
             version = file.stem.split('_v')[-1]

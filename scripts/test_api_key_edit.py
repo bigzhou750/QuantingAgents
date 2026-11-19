@@ -48,7 +48,7 @@ async def test_add_provider_with_key():
         website="https://test.com",
         api_doc_url="https://test.com/docs",
         default_base_url="https://api.test.com/v1",
-        api_key="sk-test-key-1234567890abcdef",  # 有效的 Key
+            api_key="sk-test-key",  # 有效的 Key
         supported_features=["chat"],
         is_active=True
     )
@@ -224,4 +224,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

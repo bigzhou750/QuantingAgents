@@ -69,45 +69,45 @@ config = create_analysis_config(
 def get_provider_and_url_by_model_sync(model_name: str) -> dict:
     """
     根据模型名称从数据库配置中查找对应的供应商和 API URL（同步版本）
-    
+
     Returns:
         dict: {"provider": "google", "backend_url": "https://..."}
     """
     try:
         from pymongo import MongoClient
         from app.core.config import settings
-        
+
         client = MongoClient(settings.MONGO_URI)
         db = client[settings.MONGO_DB]
-        
+
         # 1. 查询模型配置
         configs_collection = db.system_configs
         doc = configs_collection.find_one({"is_active": True}, sort=[("version", -1)])
-        
+
         if doc and "llm_configs" in doc:
             for config_dict in doc["llm_configs"]:
                 if config_dict.get("model_name") == model_name:
                     provider = config_dict.get("provider")
                     api_base = config_dict.get("api_base")
-                    
+
                     # 2. 如果有自定义 API 地址，直接使用
                     if api_base:
                         return {"provider": provider, "backend_url": api_base}
-                    
+
                     # 3. 否则从 llm_providers 查找默认 URL
                     providers_collection = db.llm_providers
                     provider_doc = providers_collection.find_one({"name": provider})
-                    
+
                     if provider_doc and provider_doc.get("default_base_url"):
                         backend_url = provider_doc["default_base_url"]
                         return {"provider": provider, "backend_url": backend_url}
-        
+
         client.close()
-        
+
         # 4. 回退到默认映射
         provider = _get_default_provider_by_model(model_name)
         return {"provider": provider, "backend_url": _get_default_backend_url(provider)}
-        
+
     except Exception as e:
         logger.error(f"❌ 查找失败: {e}")
         provider = _get_default_provider_by_model(model_name)

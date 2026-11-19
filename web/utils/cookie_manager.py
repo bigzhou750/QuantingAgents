@@ -41,7 +41,7 @@ class CookieManager:
                 self.cookies = None
         else:
             self.cookies = None
-    
+
     def set_analysis_state(self, analysis_id: str, status: str = "running",
                           stock_symbol: str = "", market_type: str = ""):
         """设置分析状态到cookie"""
@@ -68,7 +68,7 @@ class CookieManager:
         except Exception as e:
             st.error(f"❌ 设置分析状态失败: {e}")
             return False
-    
+
     def get_analysis_state(self) -> Optional[Dict[str, Any]]:
         """从cookie获取分析状态"""
         try:
@@ -98,7 +98,7 @@ class CookieManager:
         except Exception as e:
             st.warning(f"⚠️ 获取分析状态失败: {e}")
             return None
-    
+
     def clear_analysis_state(self):
         """清除分析状态"""
         try:
@@ -131,7 +131,7 @@ class CookieManager:
                 debug_info["cookie_error"] = str(e)
 
         return debug_info
-    
+
 
 
 # 全局cookie管理器实例
@@ -143,7 +143,7 @@ def get_persistent_analysis_id() -> Optional[str]:
         # 1. 首先检查session state
         if st.session_state.get('current_analysis_id'):
             return st.session_state.current_analysis_id
-        
+
         # 2. 检查cookie
         cookie_state = cookie_manager.get_analysis_state()
         if cookie_state:
@@ -153,30 +153,30 @@ def get_persistent_analysis_id() -> Optional[str]:
                 st.session_state.current_analysis_id = analysis_id
                 st.session_state.analysis_running = (cookie_state.get('status') == 'running')
                 return analysis_id
-        
+
         # 3. 最后从Redis/文件恢复
         from .async_progress_tracker import get_latest_analysis_id
         latest_id = get_latest_analysis_id()
         if latest_id:
             st.session_state.current_analysis_id = latest_id
             return latest_id
-        
+
         return None
-        
+
     except Exception as e:
         st.warning(f"⚠️ 获取持久化分析ID失败: {e}")
         return None
 
-def set_persistent_analysis_id(analysis_id: str, status: str = "running", 
+def set_persistent_analysis_id(analysis_id: str, status: str = "running",
                               stock_symbol: str = "", market_type: str = ""):
     """设置持久化的分析ID"""
     try:
         # 设置到session state
         st.session_state.current_analysis_id = analysis_id
         st.session_state.analysis_running = (status == 'running')
-        
+
         # 设置到cookie
         cookie_manager.set_analysis_state(analysis_id, status, stock_symbol, market_type)
-        
+
     except Exception as e:
         st.warning(f"⚠️ 设置持久化分析ID失败: {e}")

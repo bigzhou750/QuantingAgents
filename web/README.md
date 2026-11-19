@@ -1,4 +1,4 @@
-# TradingAgents-CN Web管理界面
+# zhitouagent Web 管理界面
 
 基于Streamlit构建的TradingAgents Web管理界面，提供直观的股票分析体验。支持多种LLM提供商和AI模型，让您轻松进行专业的股票投资分析。
 
@@ -6,7 +6,7 @@
 
 ### 🌐 现代化Web界面
 - 🎯 直观的股票分析界面
-- 📊 实时分析进度显示  
+- 📊 实时分析进度显示
 - 📱 响应式设计，支持移动端
 - 🎨 专业的UI设计和用户体验
 
@@ -78,7 +78,7 @@ python -m streamlit run web/app.py
 
 2. **🧠 AI模型配置**
    - **选择LLM提供商**: 阿里百炼 或 Google AI
-   - **选择具体模型**: 
+   - **选择具体模型**:
      - 阿里百炼: qwen-turbo(快速) / qwen-plus-latest(平衡) / qwen-max(最强)
      - Google AI: gemini-2.0-flash(推荐) / gemini-1.5-pro(强大) / gemini-1.5-flash(快速)
 
@@ -190,7 +190,7 @@ FINNHUB_API_KEY=your_finnhub_key
 # Reddit API（可选，用于社交媒体分析）
 REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
-REDDIT_USER_AGENT=TradingAgents-CN/1.0
+REDDIT_USER_AGENT=zhitouagent/1.0
 ```
 
 ### 🤖 模型配置说明
@@ -200,7 +200,7 @@ REDDIT_USER_AGENT=TradingAgents-CN/1.0
 - **qwen-plus-latest**: 平衡性能，推荐日常使用
 - **qwen-max**: 最强性能，适合复杂分析
 
-#### Google AI模型  
+#### Google AI模型
 - **gemini-2.0-flash**: 最新模型，推荐使用
 - **gemini-1.5-pro**: 强大性能，适合深度分析
 - **gemini-1.5-flash**: 快速响应，适合简单分析
@@ -254,7 +254,7 @@ streamlit run web/app.py --logger.level=debug
 
 1. 📖 查看 [完整文档](../docs/)
 2. 🧪 运行 [测试程序](../tests/test_web_interface.py)
-3. 💬 提交 [GitHub Issue](https://github.com/hsliuping/TradingAgents-CN/issues)
+3. 💬 提交 [GitHub Issue](mailto:zh75067197@gmail.com)
 
 ## 🚀 开发指南
 
@@ -307,4 +307,4 @@ st.markdown('<link rel="stylesheet" href="static/custom.css">', unsafe_allow_htm
 
 ## 🙏 致谢
 
-感谢 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 原始项目提供的优秀框架基础。
+本管理界面是智能投研助手的内部运营界面。

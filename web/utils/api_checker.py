@@ -15,7 +15,7 @@ def check_api_keys():
     google_key = os.getenv("GOOGLE_API_KEY")
     qianfan_key = os.getenv("QIANFAN_API_KEY")
 
-    
+
     # 构建详细状态
     details = {
         "DASHSCOPE_API_KEY": {
@@ -62,11 +62,11 @@ def check_api_keys():
         #     "description": "文心一言（千帆）Secret Key (仅脚本示例)"
         # },
     }
-    
+
     # 检查必需的API密钥
     required_keys = [key for key, info in details.items() if info["required"]]
     missing_required = [key for key in required_keys if not details[key]["configured"]]
-    
+
     return {
         "all_configured": len(missing_required) == 0,
         "required_configured": len(missing_required) == 0,
@@ -82,9 +82,9 @@ def check_api_keys():
 
 def get_api_key_status_message():
     """获取API密钥状态消息"""
-    
+
     status = check_api_keys()
-    
+
     if status["all_configured"]:
         return "✅ 所有必需的API密钥已配置完成"
     elif status["required_configured"]:
@@ -95,14 +95,14 @@ def get_api_key_status_message():
 
 def validate_api_key_format(key_type, api_key):
     """验证API密钥格式"""
-    
+
     if not api_key:
         return False, "API密钥不能为空"
-    
+
     # 基本长度检查
     if len(api_key) < 10:
         return False, "API密钥长度过短"
-    
+
     # 特定格式检查
     if key_type == "DASHSCOPE_API_KEY":
         if not api_key.startswith("sk-"):
@@ -113,21 +113,21 @@ def validate_api_key_format(key_type, api_key):
     elif key_type == "QIANFAN_API_KEY":
         if not api_key.startswith("bce-v3/"):
             return False, "千帆 API Key（OpenAI兼容）应以 'bce-v3/' 开头"
-    
+
     return True, "API密钥格式正确"
 
 def test_api_connection(key_type, api_key):
     """测试API连接（简单验证）"""
-    
+
     # 这里可以添加实际的API连接测试
     # 为了简化，现在只做格式验证
-    
+
     is_valid, message = validate_api_key_format(key_type, api_key)
-    
+
     if not is_valid:
         return False, message
-    
+
     # 可以在这里添加实际的API调用测试
     # 例如：调用一个简单的API端点验证密钥有效性
-    
+
     return True, "API密钥验证通过"

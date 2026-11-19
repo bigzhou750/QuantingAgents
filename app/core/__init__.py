@@ -1,3 +1,3 @@
 """
-Core module for TradingAgents FastAPI backend
+Core module for zhitouagent FastAPI backend
 """

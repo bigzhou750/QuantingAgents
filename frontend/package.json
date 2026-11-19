@@ -1,7 +1,7 @@
 {
-  "name": "tradingagents-frontend",
+  "name": "zhitouagent-frontend",
   "version": "1.0.0-preview",
-  "description": "TradingAgents-CN 现代化前端界面",
+  "description": "智能投研助手 zhitouagent",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -41,9 +41,11 @@
     "@vue/compiler-sfc": "^3.5.22",
     "@vue/eslint-config-prettier": "^8.0.0",
     "@vue/eslint-config-typescript": "^12.0.0",
+    "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.5.1",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.19.2",
+    "happy-dom": "^20.11.1",
     "prettier": "^3.1.1",
     "sass": "^1.69.5",
     "sass-embedded": "^1.69.5",

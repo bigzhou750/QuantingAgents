@@ -30,10 +30,14 @@ class VibeEventType(str, Enum):
     token = "token"
     tool_call = "tool_call"
     evidence = "evidence"
+    decision = "decision"
     react_summary = "react_summary"
     swarm_status = "swarm_status"
     task_status = "task_status"
     error = "error"
+    llm_usage = "llm_usage"
+    balance_update = "balance_update"
+    balance_exhausted = "balance_exhausted"
 
 
 class VibeSessionCreate(BaseModel):
@@ -50,6 +54,9 @@ class VibeMessageCreate(BaseModel):
     content: str = Field(min_length=1)
     idempotency_key: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    # 个人投资助手上下文注入参数
+    profile_id: Optional[str] = None
+    strategy_id: Optional[str] = None
 
 
 class VibeSession(BaseModel):
@@ -123,4 +130,3 @@ class VibeTaskList(BaseModel):
     total: int
     page: int
     page_size: int
-

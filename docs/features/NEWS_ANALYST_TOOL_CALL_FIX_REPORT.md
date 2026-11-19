@@ -5,14 +5,14 @@
 新闻分析师在强制调用和备用工具调用时出现 Pydantic 验证错误，导致工具调用失败：
 
 ```
-❌ 强制调用失败: 1 validation error for get_realtime_stock_news 
-curr_date 
+❌ 强制调用失败: 1 validation error for get_realtime_stock_news
+curr_date
   Field required [type=missing, input_value={'ticker': '600036'}, input_type=dict]
 
-❌ 备用工具调用失败: 2 validation errors for get_google_news 
-query 
+❌ 备用工具调用失败: 2 validation errors for get_google_news
+query
   Field required [type=missing, input_value={'ticker': '600036'}, input_type=dict]
-curr_date 
+curr_date
   Field required [type=missing, input_value={'ticker': '600036'}, input_type=dict]
 ```
 
@@ -50,7 +50,7 @@ def get_google_news(
 ```python
 # 修复后
 fallback_news = toolkit.get_realtime_stock_news.invoke({
-    "ticker": ticker, 
+    "ticker": ticker,
     "curr_date": current_date
 })
 ```
@@ -59,7 +59,7 @@ fallback_news = toolkit.get_realtime_stock_news.invoke({
 ```python
 # 修复后
 backup_news = toolkit.get_google_news.invoke({
-    "query": f"{ticker} 股票 新闻", 
+    "query": f"{ticker} 股票 新闻",
     "curr_date": current_date
 })
 ```

@@ -13,7 +13,7 @@
    ```python
    # ❌ 错误做法
    api_key = "sk-1234567890abcdef"
-   
+
    # ✅ 正确做法
    api_key = os.getenv("DASHSCOPE_API_KEY")
    ```
@@ -22,7 +22,7 @@
    ```python
    # ❌ 错误做法
    print(f"Using API key: {api_key}")
-   
+
    # ✅ 正确做法
    print(f"Using API key: {api_key[:12]}...")
    ```

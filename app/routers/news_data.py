@@ -465,6 +465,59 @@ async def cleanup_old_news(
         )
 
 
+@router.get("/live-feed", response_model=dict)
+async def get_live_feed(
+    sources: Optional[str] = Query(None, description="数据源，逗号分隔: cls,em,futu"),
+    limit: int = Query(20, description="每个数据源返回条数"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取7x24小时实时快讯（财联社/东方财富/富途）
+
+    直接从AKShare实时拉取，不依赖数据库。
+
+    Args:
+        sources: 数据源列表（逗号分隔），默认全部
+        limit: 每个数据源返回条数
+
+    Returns:
+        dict: 实时快讯列表
+    """
+    try:
+        from app.services.data_sources.akshare_adapter import AKShareAdapter
+        import asyncio
+
+        adapter = AKShareAdapter()
+
+        # 解析数据源参数
+        source_list = None
+        if sources:
+            source_list = [s.strip() for s in sources.split(",") if s.strip()]
+
+        # AKShare是同步库，放到线程池执行避免阻塞
+        news_list = await asyncio.to_thread(
+            adapter.get_live_news,
+            sources=source_list,
+            limit_per_source=limit
+        )
+
+        return ok(
+            data={
+                "total_count": len(news_list),
+                "sources_used": list(set(n.get("source", "") for n in news_list)),
+                "news": news_list,
+            },
+            message=f"获取实时快讯成功，共 {len(news_list)} 条"
+        )
+
+    except Exception as e:
+        logger.error(f"❌ 获取实时快讯失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取实时快讯失败: {str(e)}"
+        )
+
+
 @router.get("/health", response_model=dict)
 async def health_check():
     """健康检查"""

@@ -311,7 +311,7 @@ docker-compose -f docker-compose.hub.yml up -d
 
 ### Q2: 如果误删了重要数据卷怎么办？
 
-**A**: 
+**A**:
 1. 如果有备份，可以从备份恢复
 2. 如果没有备份，数据将永久丢失
 3. 建议在删除前先备份：
@@ -323,7 +323,7 @@ docker-compose -f docker-compose.hub.yml up -d
 
 ### Q3: 为什么使用 `external: true`？
 
-**A**: 
+**A**:
 - 避免 Docker Compose 自动添加项目名称前缀
 - 确保所有 docker-compose 文件使用同一个数据卷
 - 防止意外创建新的数据卷

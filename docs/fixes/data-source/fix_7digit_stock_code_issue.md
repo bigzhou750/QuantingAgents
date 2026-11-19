@@ -265,11 +265,11 @@ AKShare 的 `stock_zh_a_spot_em()` 接口从东方财富网获取数据，可能
    ```python
    # 1. 转换为字符串并去除空格
    code_str = str(code_raw).strip()
-   
+
    # 2. 如果是纯数字，移除前导0
    if code_str.isdigit():
        code_clean = code_str.lstrip('0') or '0'
-       
+
    # 3. 补齐到指定位数
    code = code_clean.zfill(6)  # A股6位
    ```

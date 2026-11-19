@@ -150,17 +150,17 @@ def _send_progress_update(self, chunk, progress_callback):
     try:
         if not isinstance(chunk, dict):
             return
-        
+
         # 获取节点名称
         node_name = None
         for key in chunk.keys():
             if not key.startswith('__'):
                 node_name = key
                 break
-        
+
         if not node_name:
             return
-        
+
         # ✅ 正确的节点名称映射表（匹配 LangGraph 实际节点名）
         node_mapping = {
             # 分析师节点
@@ -190,16 +190,16 @@ def _send_progress_update(self, chunk, progress_callback):
             'Neutral Analyst': "⚖️ 中性风险评估",
             'Risk Judge': "🎯 风险经理",
         }
-        
+
         message = node_mapping.get(node_name)
-        
+
         if message is None:
             # 跳过工具节点和消息清理节点
             return
-        
+
         if message:
             progress_callback(message)
-            
+
     except Exception as e:
         logger.error(f"❌ 进度更新失败: {e}", exc_info=True)
 ```
@@ -237,10 +237,10 @@ def graph_progress_callback(message: str):
     try:
         if not progress_tracker:
             return
-        
+
         # ✅ 直接映射节点到进度百分比
         progress_pct = node_progress_map.get(message)
-        
+
         if progress_pct is not None:
             progress_tracker.update_progress({
                 'progress_percentage': int(progress_pct),
@@ -252,7 +252,7 @@ def graph_progress_callback(message: str):
             progress_tracker.update_progress({
                 'last_message': message
             })
-            
+
     except Exception as e:
         logger.error(f"❌ 回调失败: {e}", exc_info=True)
 ```

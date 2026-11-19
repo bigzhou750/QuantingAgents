@@ -17,7 +17,7 @@
 ```typescript
 export interface LLMConfig {
   // ... 现有字段 ...
-  
+
   // 🆕 模型能力分级系统
   capability_level?: number  // 模型能力等级(1-5)
   suitable_roles?: string[]  // 适用角色
@@ -69,7 +69,7 @@ export interface LLMConfig {
 ```typescript
 const defaultFormData = {
   // ... 现有字段 ...
-  
+
   // 🆕 模型能力配置
   capability_level: 2,  // 默认标准级
   suitable_roles: ['both'],  // 默认两者都适合

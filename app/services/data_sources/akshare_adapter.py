@@ -343,47 +343,158 @@ class AKShareAdapter(DataSourceAdapter):
             return None
 
     def get_news(self, code: str, days: int = 2, limit: int = 50, include_announcements: bool = True):
-        """AKShare-based news/announcements fallback"""
+        """AKShare-based news/announcements fallback
+
+        异常不吞：解析失败/网络/限流抛出 RuntimeError（含分类信息），
+        由调用方（如 news_aggregator_service）区分 empty vs failed 并触发降级链。
+        """
         if not self.is_available():
             return None
+        import akshare as ak
+        code6 = str(code).zfill(6)
+        items = []
+        errors = []
+        # news
         try:
-            import akshare as ak
-            code6 = str(code).zfill(6)
-            items = []
-            # news
-            try:
-                dfn = ak.stock_news_em(symbol=code6)
-                if dfn is not None and not dfn.empty:
-                    for _, row in dfn.head(limit).iterrows():
-                        items.append({
-                            # AkShare 将字段标准化为中文列名：新闻标题 / 文章来源 / 发布时间 / 新闻链接
-                            "title": str(row.get('新闻标题') or row.get('标题') or row.get('title') or ''),
-                            "source": str(row.get('文章来源') or row.get('来源') or row.get('source') or 'akshare'),
-                            "time": str(row.get('发布时间') or row.get('time') or ''),
-                            "url": str(row.get('新闻链接') or row.get('url') or ''),
-                            "type": "news",
-                        })
-            except Exception:
-                pass
-            # announcements
-            try:
-                if include_announcements:
-                    dfa = ak.stock_announcement_em(symbol=code6)
-                    if dfa is not None and not dfa.empty:
-                        for _, row in dfa.head(max(0, limit - len(items))).iterrows():
-                            items.append({
-                                "title": str(row.get('公告标题') or row.get('title') or ''),
-                                "source": "akshare",
-                                "time": str(row.get('公告时间') or row.get('time') or ''),
-                                "url": str(row.get('公告链接') or row.get('url') or ''),
-                                "type": "announcement",
-                            })
-            except Exception:
-                pass
-            return items if items else None
+            dfn = ak.stock_news_em(symbol=code6)
+            if dfn is not None and not dfn.empty:
+                for _, row in dfn.head(limit).iterrows():
+                    items.append({
+                        # AkShare 将字段标准化为中文列名：新闻标题 / 文章来源 / 发布时间 / 新闻链接
+                        "title": str(row.get('新闻标题') or row.get('标题') or row.get('title') or ''),
+                        "source": str(row.get('文章来源') or row.get('来源') or row.get('source') or 'akshare'),
+                        "time": str(row.get('发布时间') or row.get('time') or ''),
+                        "url": str(row.get('新闻链接') or row.get('url') or ''),
+                        "type": "news",
+                    })
         except Exception as e:
-            logger.error(f"AKShare get_news failed: {e}")
-            return None
+            errors.append(("news", e))
+            logger.warning(f"AKShare stock_news_em failed for {code6}: {e}")
+        # announcements
+        if include_announcements:
+            try:
+                dfa = ak.stock_announcement_em(symbol=code6)
+                if dfa is not None and not dfa.empty:
+                    for _, row in dfa.head(max(0, limit - len(items))).iterrows():
+                        items.append({
+                            "title": str(row.get('公告标题') or row.get('title') or ''),
+                            "source": "akshare",
+                            "time": str(row.get('公告时间') or row.get('time') or ''),
+                            "url": str(row.get('公告链接') or row.get('url') or ''),
+                            "type": "announcement",
+                        })
+            except Exception as e:
+                errors.append(("announcement", e))
+                logger.warning(f"AKShare stock_announcement_em failed for {code6}: {e}")
+
+        # 全部子源失败时抛出（含分类信息），避免"失败被吞成0条"
+        if not items and errors:
+            last_err = errors[-1][1]
+            msg = str(last_err)
+            if "429" in msg or "rate" in msg.lower():
+                raise RuntimeError(f"akshare rate_limited: {msg[:200]}")
+            raise RuntimeError(f"akshare fetch failed: {msg[:200]}")
+        return items if items else None
+
+    def get_live_news(self, sources: list = None, limit_per_source: int = 20) -> list:
+        """获取7x24小时实时快讯（财联社/东方财富/富途）
+
+        Args:
+            sources: 数据源列表，可选 "cls"/"em"/"futu"，默认全部
+            limit_per_source: 每个数据源最多返回条数
+
+        Returns:
+            标准化后的快讯列表
+        """
+        if not self.is_available():
+            return []
+
+        import akshare as ak
+
+        all_sources = ["em", "cls", "futu"]
+        if sources:
+            all_sources = [s for s in sources if s in ("cls", "em", "futu")]
+
+        items = []
+
+        # 东方财富（主力源，数据最全）
+        if "em" in all_sources:
+            try:
+                df = ak.stock_info_global_em()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        summary = str(row.get('摘要', '') or '').strip()
+                        items.append({
+                            "title": title or summary[:60],
+                            "content": summary,
+                            "publish_time": str(row.get('发布时间', '')),
+                            "url": str(row.get('链接', '') or ''),
+                            "source": "东方财富",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 东财快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 东财快讯获取失败: {e}")
+
+        # 财联社
+        if "cls" in all_sources:
+            try:
+                df = ak.stock_info_global_cls()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        content = str(row.get('内容', '') or '').strip()
+                        pub_date = str(row.get('发布日期', '') or '')
+                        pub_time = str(row.get('发布时间', '') or '')
+                        # 拼接完整时间
+                        full_time = f"{pub_date} {pub_time}" if pub_date else pub_time
+                        items.append({
+                            "title": title or content[:60],
+                            "content": content,
+                            "publish_time": full_time.strip(),
+                            "url": "",
+                            "source": "财联社",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 财联社快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 财联社快讯获取失败: {e}")
+
+        # 富途
+        if "futu" in all_sources:
+            try:
+                df = ak.stock_info_global_futu()
+                if df is not None and not df.empty:
+                    for _, row in df.head(limit_per_source).iterrows():
+                        title = str(row.get('标题', '') or '').strip()
+                        content = str(row.get('内容', '') or '').strip()
+                        items.append({
+                            "title": title or content[:60],
+                            "content": content,
+                            "publish_time": str(row.get('发布时间', '')),
+                            "url": str(row.get('链接', '') or ''),
+                            "source": "富途牛牛",
+                            "type": "live",
+                        })
+                    logger.info(f"✅ AKShare 富途快讯: {min(limit_per_source, len(df))}条")
+            except Exception as e:
+                logger.warning(f"⚠️ AKShare 富途快讯获取失败: {e}")
+
+        # 按时间降序排序
+        items.sort(key=lambda x: x.get("publish_time", ""), reverse=True)
+
+        # 去重：标题精确匹配
+        seen_titles = set()
+        deduped = []
+        for item in items:
+            key = item["title"].strip()
+            if key and key not in seen_titles:
+                seen_titles.add(key)
+                deduped.append(item)
+
+        logger.info(f"📰 实时快讯汇总: {len(deduped)}条（去重前{len(items)}条）")
+        return deduped
 
     def find_latest_trade_date(self) -> Optional[str]:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")

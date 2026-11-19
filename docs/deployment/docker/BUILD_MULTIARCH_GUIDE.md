@@ -1,4 +1,4 @@
-# TradingAgents-CN 多架构镜像构建指南（Ubuntu 服务器）
+# zhitouagent 多架构镜像构建指南（Ubuntu 服务器）
 
 > 📦 在 Ubuntu 22.04 Intel 服务器上构建支持 ARM 和 x86_64 的 Docker 镜像
 
@@ -87,7 +87,7 @@ tradingagents-builder *    docker-container
 ### 步骤 1: 进入项目目录
 
 ```bash
-cd /home/hsliup/TradingAgents-CN
+cd /home/hsliup/zhitouagent
 ```
 
 ### 步骤 2: 给脚本添加执行权限
@@ -156,10 +156,10 @@ Password: [输入密码]
   镜像名称: your-dockerhub-username/tradingagents-backend
   目标架构: linux/amd64,linux/arm64
   开始时间: 2025-10-20 10:00:00
-  
+
   构建并推送: your-dockerhub-username/tradingagents-backend:v1.0.0-preview
   [构建过程输出...]
-  
+
   ✅ 后端镜像构建并推送成功！
   构建耗时: 1200秒 (20分钟)
 
@@ -167,10 +167,10 @@ Password: [输入密码]
   镜像名称: your-dockerhub-username/tradingagents-frontend
   目标架构: linux/amd64,linux/arm64
   开始时间: 2025-10-20 10:20:00
-  
+
   构建并推送: your-dockerhub-username/tradingagents-frontend:v1.0.0-preview
   [构建过程输出...]
-  
+
   ✅ 前端镜像构建并推送成功！
   构建耗时: 600秒 (10分钟)
 
@@ -178,7 +178,7 @@ Password: [输入密码]
   验证后端镜像: your-dockerhub-username/tradingagents-backend:v1.0.0-preview
   Platform:  linux/amd64
   Platform:  linux/arm64
-  
+
   验证前端镜像: your-dockerhub-username/tradingagents-frontend:v1.0.0-preview
   Platform:  linux/amd64
   Platform:  linux/arm64
@@ -226,7 +226,7 @@ Manifests:
   Name:      your-dockerhub-username/tradingagents-backend:latest@sha256:def456...
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/amd64
-  
+
   Name:      your-dockerhub-username/tradingagents-backend:latest@sha256:ghi789...
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/arm64

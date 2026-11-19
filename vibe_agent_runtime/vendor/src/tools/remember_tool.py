@@ -6,14 +6,20 @@ import json
 from typing import Any
 
 from src.agent.tools import BaseTool
-from src.memory.lifecycle import MemoryLifecycle
-from src.memory.persistent import PersistentMemory
+
+try:
+    from src.memory.lifecycle import MemoryLifecycle
+    from src.memory.persistent import PersistentMemory
+except (ImportError, ModuleNotFoundError):
+    # vendor 同步时可能漏拷 src/memory/ 包，降级占位
+    MemoryLifecycle = None  # type: ignore[assignment,misc]
+    PersistentMemory = None  # type: ignore[assignment,misc]
 
 
 class RememberTool(BaseTool):
     """Save, recall, or forget cross-session memories.
 
-    Memories persist to ~/.vibe-trading/memory/ and survive across sessions.
+    Memories persist to ~/.zhitouagent/memory/ and survive across sessions.
     """
 
     name = "remember"
@@ -71,7 +77,9 @@ class RememberTool(BaseTool):
         Args:
             memory: PersistentMemory instance (auto-created if omitted).
         """
-        self._memory = memory or PersistentMemory()
+        if memory is None:
+            raise RuntimeError("remember tool requires scoped persistent memory")
+        self._memory = memory
         self._lifecycle = MemoryLifecycle(self._memory)
 
     def execute(self, **kwargs: Any) -> str:

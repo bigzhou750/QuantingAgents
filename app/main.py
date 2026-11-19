@@ -1,5 +1,5 @@
 """
-TradingAgents-CN v1.0.0-preview FastAPI Backend
+ zhitouagent FastAPI Backend
 主应用程序入口
 
 Copyright (c) 2025 hsliuping. All rights reserved.
@@ -9,8 +9,8 @@ This software is proprietary and confidential. Unauthorized copying, distributio
 or use of this software, via any medium, is strictly prohibited.
 本软件为专有和机密软件。严禁通过任何媒介未经授权复制、分发或使用本软件。
 
-For commercial licensing, please contact: hsliup@163.com
-商业许可咨询，请联系：hsliup@163.com
+For support, please contact: zh75067197@gmail.com
+技术支持请联系：zh75067197@gmail.com
 """
 
 from fastapi import FastAPI, Request
@@ -24,12 +24,29 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
 from pathlib import Path
+import os
+
+# 新部署使用 ZHITOUAGENT_*；旧部署变量仅作为读取兼容，不再写回或展示。
+for _key, _value in list(os.environ.items()):
+    if _key.startswith("TRADINGAGENTS_"):
+        os.environ.setdefault("ZHITOUAGENT_" + _key[len("TRADINGAGENTS_"):], _value)
+
+# 加载 .env.local（如果存在），覆盖 .env 中的同名变量
+# 用途：本地开发时设置 WXPAY_MOCK=true 等，不影响生产 .env
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _local_env = Path(__file__).parent.parent / ".env.local"
+    if _local_env.exists():
+        _load_dotenv(_local_env, override=True)
+except ImportError:
+    pass
 
 from app.core.config import settings
-from app.core.database import init_db, close_db
+from app.core.database import init_db, close_db, get_mongo_db
 from app.core.logging_config import setup_logging
 from app.routers import auth_db as auth, analysis, screening, queue, sse, health, favorites, config, reports, database, operation_logs, tags, tushare_init, akshare_init, baostock_init, historical_data, multi_period_sync, financial_data, news_data, social_media, internal_messages, usage_statistics, model_capabilities, cache, logs
 from app.routers import vibe_agent as vibe_agent_router
+from app.routers import decision_audit as decision_audit_router
 from app.routers import sync as sync_router, multi_source_sync
 from app.routers import stocks as stocks_router
 from app.routers import stock_data as stock_data_router
@@ -38,6 +55,9 @@ from app.routers import multi_market_stocks as multi_market_stocks_router
 from app.routers import notifications as notifications_router
 from app.routers import websocket_notifications as websocket_notifications_router
 from app.routers import scheduler as scheduler_router
+from app.routers import personal_investment as personal_investment_router
+from app.routers import news_watch as news_watch_router
+from app.routers import token_billing as token_billing_router
 from app.services.basics_sync_service import get_basics_sync_service
 from app.services.multi_source_basics_sync_service import MultiSourceBasicsSyncService
 from app.services.scheduler_service import set_scheduler_instance
@@ -87,7 +107,7 @@ async def _print_config_summary(logger):
     """显示配置摘要"""
     try:
         logger.info("=" * 70)
-        logger.info("📋 TradingAgents-CN Configuration Summary")
+        logger.info("📋 zhitouagent Configuration Summary")
         logger.info("=" * 70)
 
         # .env 文件路径信息
@@ -230,19 +250,136 @@ async def lifespan(app: FastAPI):
 
     await init_db()
 
+    # 受控管理员初始化：只有显式提供强初始密码时才创建管理员
+    try:
+        from app.services.user_service import user_service
+        existing_admin = await user_service.get_user_by_username("admin")
+        initial_admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
+        if existing_admin:
+            logger.info("ℹ️ 管理员账号已存在，跳过初始化")
+        elif initial_admin_password:
+            password_error = user_service.validate_password(initial_admin_password)
+            if password_error:
+                logger.warning("管理员初始化失败：初始密码不符合策略，请通过受控渠道重试")
+            else:
+                admin_user = await user_service.create_admin_user(
+                    username="admin",
+                    password=initial_admin_password,
+                    email="zh75067197@gmail.com"
+                )
+                if admin_user:
+                    logger.info("✅ 管理员账号初始化完成")
+                else:
+                    logger.warning("⚠️ 管理员账号初始化失败")
+        else:
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过自动创建管理员；请使用 scripts/create_default_admin.py 受控初始化")
+    except Exception as e:
+        logger.warning(f"⚠️ 管理员初始化检查失败（非阻塞）: {e}")
+
+    try:
+        from app.services.personal_investment.profile_service import profile_service
+        from app.services.personal_investment.strategy_service import strategy_service
+        from app.services.personal_investment.task_service import task_service
+
+        await profile_service.initialize()
+        await strategy_service.initialize()
+        await task_service.initialize()
+
+        from app.services.personal_investment.marketplace_service import marketplace_service
+        await marketplace_service.initialize()
+        await marketplace_service.seed_builtin_templates()
+
+        # 数据就绪服务
+        from app.services.data_readiness_service import get_data_readiness_service
+        data_readiness = await get_data_readiness_service()
+        try:
+            await data_readiness.refresh()
+        except Exception as e:
+            logger.warning(f"初始数据就绪检查失败（非阻塞）: {e}")
+
+        # 策略模拟服务
+        if settings.SIMULATION_ENABLED:
+            from app.services.simulation_service import get_simulation_service
+            await get_simulation_service()
+
+        # 观察标的服务
+        from app.services.personal_investment.observation_service import observation_service
+        await observation_service.initialize()
+
+        # 新闻智能闭环服务
+        from app.services.news_aggregator_service import get_news_aggregator_service
+        await get_news_aggregator_service()
+        from app.services.news_impact_agent_service import get_news_impact_agent_service
+        await get_news_impact_agent_service()
+        from app.services.news_closed_loop_service import get_news_closed_loop_service
+        await get_news_closed_loop_service()
+
+        logger.info("✅ 个人投资助手服务已初始化")
+    except Exception as e:
+        logger.warning(f"个人投资助手初始化失败: {e}")
+
     try:
         from app.services.vibe_agent.service import vibe_agent_service
         await vibe_agent_service.ensure_indexes()
+        from app.core.ownership import ensure_owner_indexes
+        await ensure_owner_indexes(get_mongo_db())
     except Exception as e:
         logger.warning(f"Vibe Agent 索引初始化失败: {e}")
 
-    #  配置桥接：将统一配置写入环境变量，供 TradingAgents 核心库使用
+    # 初始化 Agent 评测平台服务
+    try:
+        from app.services.eval.dataset_service import dataset_service
+        from app.services.eval.runner_service import runner_service
+        from app.services.eval.trace_adapter import trace_adapter
+        from app.services.eval.scorer_hub import scorer_hub
+        from app.services.eval.bad_case_service import bad_case_service
+
+        await dataset_service.initialize()
+        await runner_service.initialize()
+        await trace_adapter.initialize()
+        await scorer_hub.initialize()
+        from app.services.eval.skill_regression_service import skill_regression_service
+        await skill_regression_service.initialize()
+        await bad_case_service.initialize()
+        logger.info("✅ Agent 评测平台服务已初始化")
+    except Exception as e:
+        logger.warning(f"Agent 评测平台初始化失败: {e}")
+
+    # 初始化 Agent 自进化服务
+    try:
+        from app.services.evolution.artifact_registry import artifact_registry
+        from app.services.evolution.trigger_service import trigger_service
+        from app.services.evolution.proposal_service import proposal_service
+        from app.services.evolution.verification_service import verification_service
+        from app.services.evolution.approval_service import approval_service
+        from app.services.evolution.receipt_service import receipt_service
+        from app.services.evolution.governance_service import governance_service
+
+        await artifact_registry.initialize()
+        await trigger_service.initialize()
+        await proposal_service.initialize()
+        await verification_service.initialize()
+        await approval_service.initialize()
+        await receipt_service.initialize()
+        await governance_service.initialize()
+        logger.info("✅ Agent 自进化服务已初始化")
+    except Exception as e:
+        logger.warning(f"Agent 自进化服务初始化失败: {e}")
+
+    # Token 计费模块初始化（种子数据 + 默认配置）
+    try:
+        from app.services.token_billing_service import init_token_billing
+        await init_token_billing()
+    except Exception as e:
+        logger.warning(f"⚠️ Token计费模块初始化失败: {e}")
+
+    #  配置桥接：将统一配置写入环境变量，供 zhitouagent 核心库使用
     try:
         from app.core.config_bridge import bridge_config_to_env
         bridge_config_to_env()
     except Exception as e:
         logger.warning(f"⚠️  配置桥接失败: {e}")
-        logger.warning("⚠️  TradingAgents 将使用 .env 文件中的配置")
+        logger.warning("⚠️  zhitouagent 将使用 .env 文件中的配置")
 
     # Apply dynamic settings (log_level, enable_monitoring) from ConfigProvider
     try:
@@ -263,7 +400,7 @@ async def lifespan(app: FastAPI):
     # 显示配置摘要
     await _print_config_summary(logger)
 
-    logger.info("TradingAgents FastAPI backend started")
+    logger.info("zhitouagent FastAPI backend started")
 
     # 启动期：若需要在休市时补充上一交易日收盘快照
     if settings.QUOTES_BACKFILL_ON_STARTUP:
@@ -576,6 +713,151 @@ async def lifespan(app: FastAPI):
         else:
             logger.info(f"📰 新闻数据同步已配置（仅自选股）: {settings.NEWS_SYNC_CRON}")
 
+        # 数据就绪状态定期刷新
+        async def run_data_readiness_refresh():
+            try:
+                from app.services.data_readiness_service import get_data_readiness_service
+                dr = await get_data_readiness_service()
+                await dr.refresh()
+            except Exception as e:
+                logger.warning(f"数据就绪刷新失败: {e}")
+
+        scheduler.add_job(
+            run_data_readiness_refresh,
+            CronTrigger.from_crontab(settings.DATA_READINESS_REFRESH_CRON, timezone=settings.TIMEZONE),
+            id="data_readiness_refresh",
+            name="数据就绪状态刷新",
+        )
+        if not settings.DATA_READINESS_ENABLED:
+            scheduler.pause_job("data_readiness_refresh")
+            logger.info(f"⏸️ 数据就绪刷新已添加但暂停")
+        else:
+            logger.info(f"📊 数据就绪刷新已配置: {settings.DATA_READINESS_REFRESH_CRON}")
+
+        # 策略自动模拟（收盘后运行）
+        async def run_auto_simulations():
+            try:
+                from app.services.simulation_service import get_simulation_service
+                from app.services.personal_investment.marketplace_service import marketplace_service
+                from app.core.config import get_settings as _gs
+                _settings = _gs()
+                sim_svc = await get_simulation_service()
+                db = __import__("app.core.database", fromlist=["get_mongo_db"]).get_mongo_db()
+
+                # 获取所有已上架模板
+                cursor = db[marketplace_service.COLLECTION_TEMPLATES].find({"status": "published"})
+                async for tpl in cursor:
+                    template_id = tpl.get("template_id", "")
+                    screening_criteria = tpl.get("screening_criteria", {})
+
+                    # 按策略条件动态筛选股票池
+                    query = {}
+                    if screening_criteria:
+                        query["$or"] = [
+                            {"market_info.market": "CN"},
+                            {"category": "stock_cn"},
+                        ]
+                    pool_cursor = db["stock_basic_info"].find(query).limit(200)
+                    stock_pool = []
+                    async for doc in pool_cursor:
+                        code = doc.get("code", "")
+                        if code:
+                            stock_pool.append(code)
+
+                    if not stock_pool:
+                        continue
+
+                    end_date = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+                    start_date = (__import__("datetime").datetime.now() - __import__("datetime").timedelta(days=_settings.SIMULATION_DEFAULT_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+
+                    from app.services.simulation_service import SimulationConfig
+                    config = SimulationConfig(
+                        stock_pool=stock_pool[:100],  # 限制规模
+                        start_date=start_date,
+                        end_date=end_date,
+                        rebalance_frequency="monthly",
+                    )
+                    result = await sim_svc.run_simulation(template_id, config)
+                    await sim_svc.update_template_metrics(template_id, result)
+                    logger.info(f"Auto simulation for {template_id}: return={result.cumulative_return:.2%}")
+
+            except Exception as e:
+                logger.error(f"自动模拟任务失败: {e}", exc_info=True)
+
+        scheduler.add_job(
+            run_auto_simulations,
+            CronTrigger.from_crontab(settings.SIMULATION_AUTO_RUN_CRON, timezone=settings.TIMEZONE),
+            id="auto_simulation",
+            name="策略自动模拟",
+        )
+        if not settings.SIMULATION_ENABLED:
+            scheduler.pause_job("auto_simulation")
+            logger.info(f"⏸️ 策略自动模拟已添加但暂停")
+        else:
+            logger.info(f"📈 策略自动模拟已配置: {settings.SIMULATION_AUTO_RUN_CRON}")
+
+        # 自进化定时检查（必须显式配置 cron）
+        if settings.EVOLUTION_SCHEDULE_CRON:
+            async def run_evolution_scheduled_check():
+                try:
+                    from app.services.evolution.trigger_service import trigger_service
+                    from app.services.evolution.proposal_service import proposal_service
+                    trigger_info = await trigger_service.scheduled_check()
+                    if trigger_info:
+                        await proposal_service.create_from_trigger(trigger_info)
+                except Exception as e:
+                    logger.warning(f"自进化定时检查失败: {e}")
+
+            scheduler.add_job(
+                run_evolution_scheduled_check,
+                CronTrigger.from_crontab(settings.EVOLUTION_SCHEDULE_CRON, timezone=settings.TIMEZONE),
+                id="evolution_scheduled_check",
+                name="自进化定时检查",
+            )
+            logger.info(f"🧬 自进化定时检查已配置: {settings.EVOLUTION_SCHEDULE_CRON}")
+        else:
+            logger.info("⏸️ 自进化定时检查未启用")
+
+        # Token计费：每5分钟对账补偿（释放僵死frozen）
+        async def _reconcile_token_billing():
+            try:
+                from app.services.token_billing_service import token_billing_service
+                count = await token_billing_service.reconcile_stale_frozen()
+                if count > 0:
+                    logger.info(f"🔄 Token计费对账: 释放 {count} 个僵死账户")
+            except Exception as e:
+                logger.warning(f"⚠️ Token计费对账失败: {e}")
+
+        scheduler.add_job(
+            _reconcile_token_billing,
+            "interval",
+            minutes=5,
+            id="token_billing_reconcile",
+            name="Token计费对账补偿",
+            replace_existing=True,
+        )
+        logger.info("💰 Token计费对账任务已配置: 每5分钟")
+
+        # Token计费：每2分钟清理过期订单
+        async def _expire_stale_orders():
+            try:
+                from app.services.token_billing_service import token_billing_service
+                count = await token_billing_service.expire_stale_orders()
+                if count > 0:
+                    logger.info(f"⏰ 订单过期清理: {count} 个订单已标记expired")
+            except Exception as e:
+                logger.warning(f"⚠️ 订单过期清理失败: {e}")
+
+        scheduler.add_job(
+            _expire_stale_orders,
+            "interval",
+            minutes=2,
+            id="token_order_expiry",
+            name="Token订单过期清理",
+            replace_existing=True,
+        )
+        logger.info("⏰ Token订单过期清理任务已配置: 每2分钟")
+
         scheduler.start()
 
         # 设置调度器实例到服务中，以便API可以管理任务
@@ -604,12 +886,12 @@ async def lifespan(app: FastAPI):
             logger.warning(f"UserService cleanup error: {e}")
 
         await close_db()
-        logger.info("TradingAgents FastAPI backend stopped")
+        logger.info("zhitouagent FastAPI backend stopped")
 
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="TradingAgents-CN API",
+    title="zhitouagent API",
     description="股票分析与批量队列系统 API",
     version=get_version(),
     docs_url="/docs" if settings.DEBUG else None,
@@ -697,6 +979,9 @@ app.include_router(reports.router, tags=["reports"])
 app.include_router(screening.router, prefix="/api/screening", tags=["screening"])
 app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
 app.include_router(vibe_agent_router.router, prefix="/api/vibe-agent", tags=["vibe-agent"])
+app.include_router(decision_audit_router.router, prefix="/api/decision-audit", tags=["decision-audit"])
+app.include_router(personal_investment_router.router, prefix="/api/investment", tags=["personal-investment"])
+app.include_router(news_watch_router.router, prefix="/api/news-watch", tags=["news-watch"])
 app.include_router(favorites.router, prefix="/api", tags=["favorites"])
 app.include_router(stocks_router.router, prefix="/api", tags=["stocks"])
 app.include_router(multi_market_stocks_router.router, prefix="/api", tags=["multi-market"])
@@ -727,6 +1012,7 @@ app.include_router(sse.router, prefix="/api/stream", tags=["streaming"])
 app.include_router(sync_router.router)
 app.include_router(multi_source_sync.router)
 app.include_router(paper_router.router, prefix="/api", tags=["paper"])
+app.include_router(token_billing_router.router, prefix="/api", tags=["token-billing"])
 app.include_router(tushare_init.router, prefix="/api", tags=["tushare-init"])
 app.include_router(akshare_init.router, prefix="/api", tags=["akshare-init"])
 app.include_router(baostock_init.router, prefix="/api", tags=["baostock-init"])
@@ -737,13 +1023,25 @@ app.include_router(news_data.router, tags=["news-data"])
 app.include_router(social_media.router, tags=["social-media"])
 app.include_router(internal_messages.router, tags=["internal-messages"])
 
+# Agent 评测平台
+from app.routers import eval as eval_router
+app.include_router(eval_router.router, prefix="/api/eval", tags=["evaluation"])
+
+# Agent 自进化闭环
+from app.routers import evolution as evolution_router
+app.include_router(evolution_router.router, prefix="/api/evolution", tags=["evolution"])
+
+# 数据就绪状态 API
+from app.routers import data_readiness as data_readiness_router
+app.include_router(data_readiness_router.router, prefix="/api/system", tags=["data-readiness"])
+
 
 @app.get("/")
 async def root():
     """根路径，返回API信息"""
     print("🏠 根路径被访问")
     return {
-        "name": "TradingAgents-CN API",
+        "name": "zhitouagent API",
         "version": get_version(),
         "status": "running",
         "docs_url": "/docs" if settings.DEBUG else None

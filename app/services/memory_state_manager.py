@@ -147,7 +147,7 @@ class MemoryStateManager:
         selected_analysts = parameters.get('selected_analysts', [])
         from tradingagents.llm_clients.provider_keys import normalize_provider_key
 
-        llm_provider = normalize_provider_key(parameters.get('llm_provider', 'dashscope'))
+        llm_provider = normalize_provider_key(parameters.get('llm_provider', 'deepseek'))
 
         # 研究深度映射
         depth_map = {"快速": 1, "标准": 2, "深度": 3}
@@ -246,34 +246,55 @@ class MemoryStateManager:
 
             return True
     
-    async def get_task(self, task_id: str) -> Optional[TaskState]:
+    async def get_task(self, task_id: str, user_id: Optional[str] = None) -> Optional[TaskState]:
         """获取任务状态"""
+        if not user_id:
+            raise RuntimeError("user scope is required for task lookup")
         with self._lock:
             logger.debug(f"🔍 查询任务: {task_id}")
             logger.debug(f"📊 当前内存中任务数量: {len(self._tasks)}")
             logger.debug(f"🔑 内存中的任务ID列表: {list(self._tasks.keys())}")
             task = self._tasks.get(task_id)
+            if task is not None and task.user_id != user_id:
+                return None
             if task:
                 logger.debug(f"✅ 找到任务: {task_id}")
             else:
                 logger.debug(f"❌ 未找到任务: {task_id}")
             return task
     
-    async def get_task_dict(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_task_dict(self, task_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """获取任务状态（字典格式）"""
-        task = await self.get_task(task_id)
+        task = await self.get_task(task_id, user_id=user_id)
+        return task.to_dict() if task else None
+
+    async def get_user_task(self, user_id: str, task_id: str) -> Optional[TaskState]:
+        """Get a task only when both its id and owner match."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None or task.user_id != user_id:
+                return None
+            return task
+
+    async def get_user_task_dict(self, user_id: str, task_id: str) -> Optional[Dict[str, Any]]:
+        task = await self.get_user_task(user_id, task_id)
         return task.to_dict() if task else None
     
     async def list_all_tasks(
         self,
         status: Optional[TaskStatus] = None,
         limit: int = 20,
-        offset: int = 0
+        offset: int = 0,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """获取所有任务列表（不限用户）"""
+        """获取任务列表；管理员调用也必须显式传入其审计范围。"""
+        if not user_id:
+            raise RuntimeError("user scope is required for task listing")
         with self._lock:
             tasks = []
             for task in self._tasks.values():
+                if task.user_id != user_id:
+                    continue
                 if status is None or task.status == status:
                     item = task.to_dict()
                     # 兼容前端字段
@@ -312,22 +333,37 @@ class MemoryStateManager:
             # 分页
             return tasks[offset:offset + limit]
     
-    async def delete_task(self, task_id: str) -> bool:
+    async def delete_task(self, task_id: str, user_id: Optional[str] = None) -> bool:
         """删除任务"""
+        if not user_id:
+            raise RuntimeError("user scope is required for task deletion")
         with self._lock:
-            if task_id in self._tasks:
+            if task_id in self._tasks and self._tasks[task_id].user_id == user_id:
                 del self._tasks[task_id]
                 logger.info(f"🗑️ 删除任务: {task_id}")
                 return True
             return False
-    
-    async def get_statistics(self) -> Dict[str, Any]:
-        """获取统计信息"""
+
+    async def delete_user_task(self, user_id: str, task_id: str) -> bool:
+        """Delete a task only when it belongs to the requested user."""
         with self._lock:
-            total_tasks = len(self._tasks)
+            task = self._tasks.get(task_id)
+            if task is None or task.user_id != user_id:
+                return False
+            del self._tasks[task_id]
+            logger.info("🗑️ 删除用户任务: %s", task_id)
+            return True
+    
+    async def get_statistics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """获取统计信息"""
+        if not user_id:
+            raise RuntimeError("user scope is required for task statistics")
+        with self._lock:
+            scoped_tasks = [task for task in self._tasks.values() if task.user_id == user_id]
+            total_tasks = len(scoped_tasks)
             status_counts = {}
             
-            for task in self._tasks.values():
+            for task in scoped_tasks:
                 status = task.status.value
                 status_counts[status] = status_counts.get(status, 0) + 1
             
@@ -339,14 +375,16 @@ class MemoryStateManager:
                 "failed_tasks": status_counts.get("failed", 0)
             }
     
-    async def cleanup_old_tasks(self, max_age_hours: int = 24) -> int:
+    async def cleanup_old_tasks(self, max_age_hours: int = 24, user_id: Optional[str] = None) -> int:
         """清理旧任务"""
+        if not user_id:
+            raise RuntimeError("user scope is required for task cleanup")
         with self._lock:
             cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
             tasks_to_remove = []
 
             for task_id, task in self._tasks.items():
-                if task.start_time and task.start_time.timestamp() < cutoff_time:
+                if task.user_id == user_id and task.start_time and task.start_time.timestamp() < cutoff_time:
                     if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
                         tasks_to_remove.append(task_id)
 
@@ -356,7 +394,7 @@ class MemoryStateManager:
             logger.info(f"🧹 清理了 {len(tasks_to_remove)} 个旧任务")
             return len(tasks_to_remove)
 
-    async def cleanup_zombie_tasks(self, max_running_hours: int = 2) -> int:
+    async def cleanup_zombie_tasks(self, max_running_hours: int = 2, user_id: Optional[str] = None) -> int:
         """清理僵尸任务（长时间处于 running 状态的任务）
 
         Args:
@@ -365,13 +403,15 @@ class MemoryStateManager:
         Returns:
             清理的任务数量
         """
+        if not user_id:
+            raise RuntimeError("user scope is required for zombie cleanup")
         with self._lock:
             cutoff_time = datetime.now().timestamp() - (max_running_hours * 3600)
             zombie_tasks = []
 
             for task_id, task in self._tasks.items():
                 # 检查是否是长时间运行的任务
-                if task.status in [TaskStatus.RUNNING, TaskStatus.PENDING]:
+                if task.user_id == user_id and task.status in [TaskStatus.RUNNING, TaskStatus.PENDING]:
                     if task.start_time and task.start_time.timestamp() < cutoff_time:
                         zombie_tasks.append(task_id)
 
@@ -394,7 +434,7 @@ class MemoryStateManager:
 
             return len(zombie_tasks)
 
-    async def remove_task(self, task_id: str) -> bool:
+    async def remove_task(self, task_id: str, user_id: Optional[str] = None) -> bool:
         """从内存中删除任务
 
         Args:
@@ -403,8 +443,10 @@ class MemoryStateManager:
         Returns:
             是否成功删除
         """
+        if not user_id:
+            raise RuntimeError("user scope is required for task removal")
         with self._lock:
-            if task_id in self._tasks:
+            if task_id in self._tasks and self._tasks[task_id].user_id == user_id:
                 del self._tasks[task_id]
                 logger.info(f"🗑️ 任务已从内存中删除: {task_id}")
                 return True

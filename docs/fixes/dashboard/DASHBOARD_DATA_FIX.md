@@ -94,7 +94,7 @@ const loadRecentAnalyses = async () => {
     })
     if (response.success && response.data) {
       recentAnalyses.value = response.data.tasks || []
-      
+
       // 更新统计数据
       userStats.value.totalAnalyses = response.data.total || 0
       userStats.value.successfulAnalyses = response.data.tasks?.filter(

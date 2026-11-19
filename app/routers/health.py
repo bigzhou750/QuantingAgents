@@ -1,6 +1,9 @@
 from fastapi import APIRouter
+from fastapi import Depends, HTTPException
 import time
 from pathlib import Path
+
+from app.routers.auth_db import get_current_user
 
 router = APIRouter()
 
@@ -25,7 +28,7 @@ async def health():
             "status": "ok",
             "version": get_version(),
             "timestamp": int(time.time()),
-            "service": "TradingAgents-CN API"
+            "service": "zhitouagent API"
         },
         "message": "服务运行正常"
     }
@@ -39,3 +42,12 @@ async def healthz():
 async def readyz():
     """Kubernetes就绪检查"""
     return {"ready": True}
+
+
+@router.get("/isolation/metrics")
+async def isolation_metrics(user: dict = Depends(get_current_user)):
+    """运行时隔离审计指标；仅管理员可查看。"""
+    if not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="管理员权限不足")
+    from app.core.isolation_metrics import snapshot
+    return {"success": True, "data": snapshot(), "message": "隔离指标"}

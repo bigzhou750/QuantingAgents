@@ -1,9 +1,9 @@
-# TradingAgents-CN 配置指南
+# zhitouagent 配置指南
 
 > **目标读者**: 新用户、系统管理员
-> 
+>
 > **阅读时间**: 10分钟
-> 
+>
 > **更新日期**: 2025-10-04
 
 ---
@@ -418,7 +418,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### Q3: 大模型API密钥配置后不生效？
 
-**A**: 
+**A**:
 1. 检查 `.env` 文件中的密钥是否正确
 2. 重启后端服务
 3. 在Web界面检查模型是否已启用
@@ -460,7 +460,7 @@ REDIS_HOST=redis      # Docker服务名
    ```bash
    # Windows
    sc query MongoDB
-   
+
    # Linux
    systemctl status mongod
    ```
@@ -469,7 +469,7 @@ REDIS_HOST=redis      # Docker服务名
    ```bash
    # Windows
    sc query Redis
-   
+
    # Linux
    systemctl status redis
    ```
@@ -478,7 +478,7 @@ REDIS_HOST=redis      # Docker服务名
    ```bash
    # Windows
    netstat -ano | findstr :8000
-   
+
    # Linux
    lsof -i :8000
    ```

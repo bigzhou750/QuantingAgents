@@ -143,7 +143,7 @@
   "report_type": "annual",      // 报告类型 (annual/quarterly)
   "ann_date": "2024-03-20",     // 公告日期
   "f_ann_date": "2024-03-20",   // 实际公告日期
-  
+
   // 资产负债表数据
   "balance_sheet": {
     "total_assets": 4500000000000,      // 资产总计
@@ -155,7 +155,7 @@
     "total_ncl": 400000000000,          // 非流动负债合计
     "cash_and_equivalents": 180000000000 // 货币资金
   },
-  
+
   // 利润表数据
   "income_statement": {
     "total_revenue": 180000000000,      // 营业总收入
@@ -169,7 +169,7 @@
     "basic_eps": 3.35,                  // 基本每股收益
     "diluted_eps": 3.35                 // 稀释每股收益
   },
-  
+
   // 现金流量表数据
   "cashflow_statement": {
     "n_cashflow_act": 120000000000,     // 经营活动现金流量净额
@@ -178,7 +178,7 @@
     "c_cash_equ_end_period": 180000000000, // 期末现金及现金等价物余额
     "c_cash_equ_beg_period": 100000000000  // 期初现金及现金等价物余额
   },
-  
+
   // 财务指标
   "financial_indicators": {
     "roe": 23.21,                       // 净资产收益率
@@ -194,7 +194,7 @@
     "pb": 0.88,                         // 市净率
     "dividend_yield": 4.73              // 股息率
   },
-  
+
   "created_at": ISODate("2024-03-20T00:00:00Z"),
   "updated_at": ISODate("2024-03-20T00:00:00Z"),
   "data_source": "tushare",
@@ -508,7 +508,7 @@
   },
   "supported_data_types": [
     "stock_basic_info",
-    "stock_daily_quotes", 
+    "stock_daily_quotes",
     "stock_financial_data"
   ],
   "supported_markets": ["CN"],  // CN/US/HK

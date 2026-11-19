@@ -154,3 +154,34 @@ def test_event_stream_replays_history_before_connected(monkeypatch):
     assert "event: event" in first
     assert '"sequence": 8' in first
     assert 'event: connected' in second
+
+
+def test_short_follow_up_prompt_explicitly_carries_previous_turn():
+    prompt = VibeAgentService._augment_follow_up_prompt(
+        "需要",
+        [
+            {"role": "user", "content": "分析格力电器今天的持仓表现"},
+            {"role": "assistant", "content": "已完成行情和风险分析"},
+        ],
+    )
+
+    assert "上一轮用户问题" in prompt
+    assert "分析格力电器今天的持仓表现" in prompt
+    assert "当前用户消息：需要" in prompt
+
+
+def test_normal_prompt_is_not_rewritten():
+    content = "请分析格力电器的基本面和风险"
+    assert VibeAgentService._augment_follow_up_prompt(content, []) == content
+
+
+def test_profile_context_requires_explicit_request_consent():
+    profile = {"risk_preference": "aggressive", "context_injection_enabled": True}
+    assert not VibeAgentService.should_include_profile_context(None, profile)
+    assert not VibeAgentService.should_include_profile_context("stale-profile-id", profile)
+    assert VibeAgentService.should_include_profile_context("current_user_profile", profile)
+
+
+def test_profile_context_saved_setting_can_disable_explicit_request():
+    profile = {"context_injection_enabled": False}
+    assert not VibeAgentService.should_include_profile_context("current_user_profile", profile)

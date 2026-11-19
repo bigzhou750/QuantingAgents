@@ -186,18 +186,18 @@ AAPL → 自动识别为 美股
 ```typescript
 export function validateAStock(code: string): StockValidationResult {
   const cleanCode = code.trim().replace(/[^0-9]/g, '')
-  
+
   if (!/^\d{6}$/.test(cleanCode)) {
     return { valid: false, message: 'A股代码必须是6位数字' }
   }
-  
+
   const prefix = cleanCode.substring(0, 2)
   const validPrefixes = ['60', '68', '00', '30', '43', '83', '87']
-  
+
   if (!validPrefixes.includes(prefix)) {
     return { valid: false, message: 'A股代码前缀不正确' }
   }
-  
+
   return { valid: true, market: 'A股', normalizedCode: cleanCode }
 }
 ```
@@ -209,11 +209,11 @@ export function validateAStock(code: string): StockValidationResult {
 ```typescript
 export function validateUSStock(code: string): StockValidationResult {
   const cleanCode = code.trim().toUpperCase().replace(/[^A-Z.]/g, '')
-  
+
   if (!/^[A-Z]{1,5}(\.[A-Z])?$/.test(cleanCode)) {
     return { valid: false, message: '美股代码格式不正确' }
   }
-  
+
   return { valid: true, market: '美股', normalizedCode: cleanCode }
 }
 ```
@@ -225,13 +225,13 @@ export function validateUSStock(code: string): StockValidationResult {
 ```typescript
 export function validateHKStock(code: string): StockValidationResult {
   const cleanCode = code.trim().replace(/[^0-9]/g, '')
-  
+
   if (!/^\d{1,5}$/.test(cleanCode)) {
     return { valid: false, message: '港股代码必须是1-5位数字' }
   }
-  
+
   const normalizedCode = cleanCode.padStart(5, '0')
-  
+
   return { valid: true, market: '港股', normalizedCode: normalizedCode }
 }
 ```
@@ -248,7 +248,7 @@ export function validateStockCode(
   if (!code || !code.trim()) {
     return { valid: false, message: '请输入股票代码' }
   }
-  
+
   // 如果提供了市场提示，优先验证该市场
   if (marketHint) {
     switch (marketHint) {
@@ -257,7 +257,7 @@ export function validateStockCode(
       case '港股': return validateHKStock(code)
     }
   }
-  
+
   // 自动识别市场类型
   // ...
 }
@@ -296,28 +296,28 @@ const onMarketChange = () => {
 // 验证股票代码输入
 const validateStockCodeInput = () => {
   const code = analysisForm.stockCode.trim()
-  
+
   if (!code) {
     stockCodeError.value = ''
     stockCodeHelp.value = ''
     return
   }
-  
+
   const validation = validateStockCode(code, analysisForm.market)
-  
+
   if (!validation.valid) {
     stockCodeError.value = validation.message || '股票代码格式不正确'
     stockCodeHelp.value = ''
   } else {
     stockCodeError.value = ''
     stockCodeHelp.value = `✓ ${validation.market}代码格式正确`
-    
+
     // 自动更新市场类型
     if (validation.market && validation.market !== analysisForm.market) {
       analysisForm.market = validation.market
       ElMessage.success(`已自动识别为${validation.market}`)
     }
-    
+
     // 标准化代码
     if (validation.normalizedCode) {
       analysisForm.stockCode = validation.normalizedCode

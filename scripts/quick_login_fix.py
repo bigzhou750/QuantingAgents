@@ -178,7 +178,7 @@ def create_basic_mongodb_data(client):
             # 创建管理员用户
             admin_user = {
                 "username": "admin",
-                "email": "admin@tradingagents.cn",
+                "email": "zh75067197@gmail.com",
                 "password": admin_password,  # 开源版使用明文密码
                 "full_name": "系统管理员",
                 "role": "admin",

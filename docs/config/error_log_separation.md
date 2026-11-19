@@ -65,25 +65,25 @@ def _add_error_handler(self, logger: logging.Logger):
     error_config = self.config['handlers'].get('error', {})
     if not error_config.get('enabled', True):
         return
-        
+
     log_dir = Path(error_config.get('directory', self.config['handlers']['file']['directory']))
     error_log_file = log_dir / error_config.get('filename', 'error.log')
-    
+
     # 使用RotatingFileHandler进行日志轮转
     max_size = self._parse_size(error_config.get('max_size', '10MB'))
     backup_count = error_config.get('backup_count', 5)
-    
+
     error_handler = logging.handlers.RotatingFileHandler(
         error_log_file,
         maxBytes=max_size,
         backupCount=backup_count,
         encoding='utf-8'
     )
-    
+
     # 🔧 只记录WARNING及以上级别（WARNING, ERROR, CRITICAL）
     error_level = getattr(logging, error_config.get('level', 'WARNING'))
     error_handler.setLevel(error_level)
-    
+
     formatter = logging.Formatter(self.config['format']['file'])
     error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)

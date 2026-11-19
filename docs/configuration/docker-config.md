@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-本文档详细介绍TradingAgents-CN在Docker环境中的配置方法，包括环境变量设置、服务配置、网络配置和数据持久化配置。
+本文档详细介绍zhitouagent在Docker环境中的配置方法，包括环境变量设置、服务配置、网络配置和数据持久化配置。
 
 ## 🎯 Docker配置特点
 
@@ -29,7 +29,7 @@
 ```bash
 # === Docker环境基础配置 ===
 # 应用配置
-APP_NAME=TradingAgents-CN
+APP_NAME=zhitouagent
 APP_VERSION=0.1.7
 APP_ENV=production
 
@@ -109,12 +109,12 @@ services:
       # 数据库连接
       - MONGODB_URL=mongodb://mongodb:27017/tradingagents
       - REDIS_URL=redis://redis:6379
-      
+
       # LLM配置
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - QWEN_API_KEY=${QWEN_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      
+
       # 应用配置
       - APP_ENV=docker
       - EXPORT_ENABLED=true
@@ -122,11 +122,11 @@ services:
     volumes:
       # 配置文件
       - .env:/app/.env
-      
+
       # 开发环境代码同步 (可选)
       - ./web:/app/web
       - ./tradingagents:/app/tradingagents
-      
+
       # 导出文件存储
       - ./exports:/app/exports
     depends_on:
@@ -247,7 +247,7 @@ volumes:
       type: none
       o: bind
       device: ${DATA_PATH:-./data}/mongodb
-  
+
   redis_data:
     driver: local
     driver_opts:
@@ -389,6 +389,6 @@ MAX_CPU=2.0
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *贡献者: [@breeze303](https://github.com/breeze303)*

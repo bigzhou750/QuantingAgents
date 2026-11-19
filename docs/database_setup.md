@@ -59,13 +59,13 @@ python -m streamlit run app.py
 
 1. **stock_data** - 股票历史数据
    - 索引: (symbol, market_type), created_at, updated_at
-   
+
 2. **analysis_results** - 分析结果
    - 索引: (symbol, analysis_type), created_at
-   
+
 3. **user_sessions** - 用户会话
    - 索引: session_id, created_at, last_activity
-   
+
 4. **configurations** - 系统配置
    - 索引: (config_type, config_name), updated_at
 
@@ -126,7 +126,7 @@ REDIS_DB=0
    ```bash
    # 检查Docker容器状态
    docker ps --filter "name=tradingagents-"
-   
+
    # 查看容器日志
    docker logs tradingagents-mongodb
    docker logs tradingagents-redis

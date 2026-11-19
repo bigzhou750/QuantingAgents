@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TradingAgents-CN Streamlit Web界面
+zhitouagent Streamlit Web界面
 基于Streamlit的股票分析Web应用程序
 """
 
@@ -48,7 +48,7 @@ from utils.user_activity_logger import user_activity_logger
 
 # 设置页面配置
 st.set_page_config(
-    page_title="TradingAgents-CN 股票分析平台",
+    page_title="zhitouagent 股票分析平台",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -59,82 +59,82 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
+
     /* 隐藏Streamlit顶部工具栏和Deploy按钮 - 多种选择器确保兼容性 */
     .stAppToolbar {
         display: none !important;
     }
-    
+
     header[data-testid="stHeader"] {
         display: none !important;
     }
-    
+
     .stDeployButton {
         display: none !important;
     }
-    
+
     /* 新版本Streamlit的Deploy按钮选择器 */
     [data-testid="stToolbar"] {
         display: none !important;
     }
-    
+
     [data-testid="stDecoration"] {
         display: none !important;
     }
-    
+
     [data-testid="stStatusWidget"] {
         display: none !important;
     }
-    
+
     /* 隐藏整个顶部区域 */
     .stApp > header {
         display: none !important;
     }
-    
+
     .stApp > div[data-testid="stToolbar"] {
         display: none !important;
     }
-    
+
     /* 隐藏主菜单按钮 */
     #MainMenu {
         visibility: hidden !important;
         display: none !important;
     }
-    
+
     /* 隐藏页脚 */
     footer {
         visibility: hidden !important;
         display: none !important;
     }
-    
+
     /* 隐藏"Made with Streamlit"标识 */
     .viewerBadge_container__1QSob {
         display: none !important;
     }
-    
+
     /* 隐藏所有可能的工具栏元素 */
     div[data-testid="stToolbar"] {
         display: none !important;
     }
-    
+
     /* 隐藏右上角的所有按钮 */
     .stApp > div > div > div > div > section > div {
         padding-top: 0 !important;
     }
-    
+
     /* 全局样式 */
     .stApp {
         font-family: 'Inter', sans-serif;
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
-    
+
     /* 主容器样式 */
     .main .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
         max-width: 1200px;
     }
-    
+
     /* 主标题样式 */
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -146,20 +146,20 @@ st.markdown("""
         box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
-    
+
     .main-title {
         font-size: 2.5rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    
+
     .main-subtitle {
         font-size: 1.2rem;
         opacity: 0.9;
         font-weight: 400;
     }
-    
+
     /* 卡片样式 */
     .metric-card {
         background: rgba(255, 255, 255, 0.9);
@@ -172,7 +172,7 @@ st.markdown("""
         transition: all 0.3s ease;
         text-align: center;
     }
-    
+
     .metric-card h4 {
         white-space: nowrap;
         overflow: hidden;
@@ -180,7 +180,7 @@ st.markdown("""
         margin-bottom: 0.5rem;
         font-size: 1rem;
     }
-    
+
     .metric-card p {
         white-space: nowrap;
         overflow: hidden;
@@ -188,12 +188,12 @@ st.markdown("""
         margin: 0;
         font-size: 0.9rem;
     }
-    
+
     .metric-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
     }
-    
+
     .analysis-section {
         background: rgba(255, 255, 255, 0.95);
         padding: 2rem;
@@ -203,7 +203,7 @@ st.markdown("""
         border: 1px solid rgba(255, 255, 255, 0.3);
         backdrop-filter: blur(20px);
     }
-    
+
     /* 按钮样式 */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -216,12 +216,12 @@ st.markdown("""
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
-    
+
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
     }
-    
+
     /* 输入框样式 */
     .stTextInput > div > div > input,
     .stSelectbox > div > div > select,
@@ -233,7 +233,7 @@ st.markdown("""
         font-size: 1rem;
         transition: all 0.3s ease;
     }
-    
+
     .stTextInput > div > div > input:focus,
     .stSelectbox > div > div > select:focus,
     .stTextArea > div > div > textarea:focus {
@@ -241,13 +241,13 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         background: white;
     }
-    
+
     /* 侧边栏样式 */
     .css-1d391kg {
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(20px);
     }
-    
+
     /* 状态框样式 */
     .success-box {
         background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
@@ -257,7 +257,7 @@ st.markdown("""
         margin: 1rem 0;
         box-shadow: 0 4px 15px rgba(154, 230, 180, 0.3);
     }
-    
+
     .warning-box {
         background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
         border: 1px solid #f6d55c;
@@ -266,7 +266,7 @@ st.markdown("""
         margin: 1rem 0;
         box-shadow: 0 4px 15px rgba(255, 234, 167, 0.3);
     }
-    
+
     .error-box {
         background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
         border: 1px solid #f1556c;
@@ -275,18 +275,18 @@ st.markdown("""
         margin: 1rem 0;
         box-shadow: 0 4px 15px rgba(245, 198, 203, 0.3);
     }
-    
+
     /* 进度条样式 */
     .stProgress > div > div > div > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 10px;
     }
-    
+
     /* 标签页样式 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
-    
+
     .stTabs [data-baseweb="tab"] {
         background: rgba(255, 255, 255, 0.7);
         border-radius: 12px;
@@ -294,19 +294,19 @@ st.markdown("""
         border: 1px solid rgba(255, 255, 255, 0.3);
         transition: all 0.3s ease;
     }
-    
+
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
     }
-    
+
     /* 数据框样式 */
     .dataframe {
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     }
-    
+
     /* 图表容器样式 */
     .js-plotly-plot {
         border-radius: 12px;
@@ -325,7 +325,7 @@ def initialize_session_state():
         st.session_state.user_info = None
     if 'login_time' not in st.session_state:
         st.session_state.login_time = None
-    
+
     # 初始化分析相关状态
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
@@ -417,11 +417,11 @@ def initialize_session_state():
 def check_frontend_auth_cache():
     """检查前端缓存并尝试恢复登录状态"""
     from utils.auth_manager import auth_manager
-    
+
     logger.info("🔍 开始检查前端缓存恢复")
     logger.info(f"📊 当前认证状态: {st.session_state.get('authenticated', False)}")
     logger.info(f"🔗 URL参数: {dict(st.query_params)}")
-    
+
     # 如果已经认证，确保状态同步
     if st.session_state.get('authenticated', False):
         # 确保auth_manager也知道用户已认证
@@ -429,7 +429,7 @@ def check_frontend_auth_cache():
             logger.info("🔄 同步认证状态到auth_manager")
             try:
                 auth_manager.login_user(
-                    st.session_state.user_info, 
+                    st.session_state.user_info,
                     st.session_state.get('login_time', time.time())
                 )
                 logger.info("✅ 认证状态同步成功")
@@ -438,17 +438,17 @@ def check_frontend_auth_cache():
         else:
             logger.info("✅ 用户已认证，跳过缓存检查")
         return
-    
+
     # 检查URL参数中是否有恢复信息
     try:
         import base64
         restore_data = st.query_params.get('restore_auth')
-        
+
         if restore_data:
             logger.info("📥 发现URL中的恢复参数，开始恢复登录状态")
             # 解码认证数据
             auth_data = json.loads(base64.b64decode(restore_data).decode())
-            
+
             # 兼容旧格式（直接是用户信息）和新格式（包含loginTime）
             if 'userInfo' in auth_data:
                 user_info = auth_data['userInfo']
@@ -459,10 +459,10 @@ def check_frontend_auth_cache():
                 # 旧格式兼容
                 user_info = auth_data
                 login_time = time.time()
-                
+
             logger.info(f"✅ 成功解码用户信息: {user_info.get('username', 'Unknown')}")
             logger.info(f"🕐 使用当前时间作为登录时间: {login_time}")
-            
+
             # 恢复登录状态
             if auth_manager.restore_from_cache(user_info, login_time):
                 # 清除URL参数
@@ -489,23 +489,23 @@ def check_frontend_auth_cache():
 def inject_frontend_cache_check():
     """注入前端缓存检查脚本"""
     logger.info("📝 准备注入前端缓存检查脚本")
-    
+
     # 如果已经注入过，不重复注入
     if st.session_state.get('cache_script_injected', False):
         logger.info("⚠️ 前端脚本已注入，跳过重复注入")
         return
-    
+
     # 标记已注入
     st.session_state.cache_script_injected = True
     logger.info("✅ 标记前端脚本已注入")
-    
+
     cache_check_js = """
     <script>
     // 前端缓存检查和恢复
     function checkAndRestoreAuth() {
         console.log('🚀 开始执行前端缓存检查');
         console.log('📍 当前URL:', window.location.href);
-        
+
         try {
             // 检查URL中是否已经有restore_auth参数
             const currentUrl = new URL(window.location);
@@ -513,50 +513,50 @@ def inject_frontend_cache_check():
                 console.log('🔄 URL中已有restore_auth参数，跳过前端检查');
                 return;
             }
-            
+
             const authData = localStorage.getItem('tradingagents_auth');
             console.log('🔍 检查localStorage中的认证数据:', authData ? '存在' : '不存在');
-            
+
             if (!authData) {
                 console.log('🔍 前端缓存中没有登录状态');
                 return;
             }
-            
+
             const data = JSON.parse(authData);
             console.log('📊 解析的认证数据:', data);
-            
+
             // 验证数据结构
             if (!data.userInfo || !data.userInfo.username) {
                 console.log('❌ 认证数据结构无效，清除缓存');
                 localStorage.removeItem('tradingagents_auth');
                 return;
             }
-            
+
             const now = Date.now();
             const timeout = 10 * 60 * 1000; // 10分钟
             const timeSinceLastActivity = now - data.lastActivity;
-            
+
             console.log('⏰ 时间检查:', {
                 now: new Date(now).toLocaleString(),
                 lastActivity: new Date(data.lastActivity).toLocaleString(),
                 timeSinceLastActivity: Math.round(timeSinceLastActivity / 1000) + '秒',
                 timeout: Math.round(timeout / 1000) + '秒'
             });
-            
+
             // 检查是否超时
             if (timeSinceLastActivity > timeout) {
                 localStorage.removeItem('tradingagents_auth');
                 console.log('⏰ 登录状态已过期，自动清除');
                 return;
             }
-            
+
             // 更新最后活动时间
             data.lastActivity = now;
             localStorage.setItem('tradingagents_auth', JSON.stringify(data));
             console.log('🔄 更新最后活动时间');
-            
+
             console.log('✅ 从前端缓存恢复登录状态:', data.userInfo.username);
-            
+
             // 保留现有的URL参数，只添加restore_auth参数
             // 传递完整的认证数据，包括原始登录时间
             const restoreData = {
@@ -565,30 +565,30 @@ def inject_frontend_cache_check():
             };
             const restoreParam = btoa(JSON.stringify(restoreData));
             console.log('📦 生成恢复参数:', restoreParam);
-            
+
             // 保留所有现有参数
             const existingParams = new URLSearchParams(currentUrl.search);
             existingParams.set('restore_auth', restoreParam);
-            
+
             // 构建新URL，保留现有参数
             const newUrl = currentUrl.origin + currentUrl.pathname + '?' + existingParams.toString();
             console.log('🔗 准备跳转到:', newUrl);
             console.log('📋 保留的URL参数:', Object.fromEntries(existingParams));
-            
+
             window.location.href = newUrl;
-            
+
         } catch (e) {
             console.error('❌ 前端缓存恢复失败:', e);
             localStorage.removeItem('tradingagents_auth');
         }
     }
-    
+
     // 延迟执行，确保页面完全加载
     console.log('⏱️ 设置1000ms延迟执行前端缓存检查');
     setTimeout(checkAndRestoreAuth, 1000);
     </script>
     """
-    
+
     st.components.v1.html(cache_check_js, height=0)
 
 def main():
@@ -603,19 +603,19 @@ def main():
     # 检查用户认证状态
     if not auth_manager.is_authenticated():
         # 最后一次尝试从session state恢复认证状态
-        if (st.session_state.get('authenticated', False) and 
-            st.session_state.get('user_info') and 
+        if (st.session_state.get('authenticated', False) and
+            st.session_state.get('user_info') and
             st.session_state.get('login_time')):
             logger.info("🔄 从session state恢复认证状态")
             try:
                 auth_manager.login_user(
-                    st.session_state.user_info, 
+                    st.session_state.user_info,
                     st.session_state.login_time
                 )
                 logger.info(f"✅ 成功从session state恢复用户 {st.session_state.user_info.get('username', 'Unknown')} 的认证状态")
             except Exception as e:
                 logger.warning(f"⚠️ 从session state恢复认证状态失败: {e}")
-        
+
         # 如果仍然未认证，显示登录页面
         if not auth_manager.is_authenticated():
             render_login_form()
@@ -891,9 +891,9 @@ def main():
     render_header()
 
     # 侧边栏布局 - 标题在最顶部
-    st.sidebar.title("🤖 TradingAgents-CN")
+    st.sidebar.title("🤖 zhitouagent")
     st.sidebar.markdown("---")
-    
+
     # 页面导航 - 在标题下方显示用户信息
     render_sidebar_user_info()
 
@@ -908,7 +908,7 @@ def main():
         ["📊 股票分析", "⚙️ 配置管理", "💾 缓存管理", "💰 Token统计", "📋 操作日志", "📈 分析结果", "🔧 系统状态"],
         label_visibility="collapsed"
     )
-    
+
     # 记录页面访问活动
     try:
         user_activity_logger.log_page_visit(
@@ -1027,38 +1027,38 @@ def main():
     # 检查分析权限
     if not require_permission("analysis"):
         return
-        
+
     # 检查API密钥
     api_status = check_api_keys()
-    
+
     if not api_status['all_configured']:
         st.error("⚠️ API密钥配置不完整，请先配置必要的API密钥")
-        
+
         with st.expander("📋 API密钥配置指南", expanded=True):
             st.markdown("""
             ### 🔑 必需的API密钥
-            
+
             1. **阿里百炼API密钥** (DASHSCOPE_API_KEY)
                - 获取地址: https://dashscope.aliyun.com/
                - 用途: AI模型推理
-            
-            2. **金融数据API密钥** (FINNHUB_API_KEY)  
+
+            2. **金融数据API密钥** (FINNHUB_API_KEY)
                - 获取地址: https://finnhub.io/
                - 用途: 获取股票数据
-            
+
             ### ⚙️ 配置方法
-            
+
             1. 复制项目根目录的 `.env.example` 为 `.env`
             2. 编辑 `.env` 文件，填入您的真实API密钥
             3. 重启Web应用
-            
+
             ```bash
             # .env 文件示例
             DASHSCOPE_API_KEY=sk-your-dashscope-key
             FINNHUB_API_KEY=your-finnhub-key
             ```
             """)
-        
+
         # 显示当前API密钥状态
         st.subheader("🔍 当前API密钥状态")
         for key, status in api_status['details'].items():
@@ -1066,28 +1066,28 @@ def main():
                 st.success(f"✅ {key}: {status['display']}")
             else:
                 st.error(f"❌ {key}: 未配置")
-        
+
         return
-    
+
     # 渲染侧边栏
     config = render_sidebar()
-    
+
     # 添加使用指南显示切换
     # 如果正在分析或有分析结果，默认隐藏使用指南
     default_show_guide = not (st.session_state.get('analysis_running', False) or st.session_state.get('analysis_results') is not None)
-    
+
     # 如果用户没有手动设置过，使用默认值
     if 'user_set_guide_preference' not in st.session_state:
         st.session_state.user_set_guide_preference = False
         st.session_state.show_guide_preference = default_show_guide
-    
+
     show_guide = st.sidebar.checkbox(
-        "📖 显示使用指南", 
-        value=st.session_state.get('show_guide_preference', default_show_guide), 
+        "📖 显示使用指南",
+        value=st.session_state.get('show_guide_preference', default_show_guide),
         help="显示/隐藏右侧使用指南",
         key="guide_checkbox"
     )
-    
+
     # 记录用户的选择
     if show_guide != st.session_state.get('show_guide_preference', default_show_guide):
         st.session_state.user_set_guide_preference = True
@@ -1126,7 +1126,7 @@ def main():
     else:
         col1 = st.container()
         col2 = None
-    
+
     with col1:
         # 1. 分析配置区域
 
@@ -1181,7 +1181,7 @@ def main():
                 # 清空旧的分析结果
                 st.session_state.analysis_results = None
                 logger.info("🧹 [新分析] 清空旧的分析结果")
-                
+
                 # 自动隐藏使用指南（除非用户明确设置要显示）
                 if not st.session_state.get('user_set_guide_preference', False):
                     st.session_state.show_guide_preference = False
@@ -1269,7 +1269,7 @@ def main():
                         # 自动保存分析结果到历史记录
                         try:
                             from components.analysis_results import save_analysis_result
-                            
+
                             save_success = save_analysis_result(
                                 analysis_id=analysis_id,
                                 stock_symbol=form_data['stock_symbol'],
@@ -1278,12 +1278,12 @@ def main():
                                 result_data=results,
                                 status="completed"
                             )
-                            
+
                             if save_success:
                                 logger.info(f"💾 [后台保存] 分析结果已保存到历史记录: {analysis_id}")
                             else:
                                 logger.warning(f"⚠️ [后台保存] 保存失败: {analysis_id}")
-                                
+
                         except Exception as save_error:
                             logger.error(f"❌ [后台保存] 保存异常: {save_error}")
 
@@ -1292,11 +1292,11 @@ def main():
                     except Exception as e:
                         # 标记分析失败（不访问session state）
                         async_tracker.mark_failed(str(e))
-                        
+
                         # 保存失败的分析记录
                         try:
                             from components.analysis_results import save_analysis_result
-                            
+
                             save_analysis_result(
                                 analysis_id=analysis_id,
                                 stock_symbol=form_data['stock_symbol'],
@@ -1306,10 +1306,10 @@ def main():
                                 status="failed"
                             )
                             logger.info(f"💾 [失败记录] 分析失败记录已保存: {analysis_id}")
-                            
+
                         except Exception as save_error:
                             logger.error(f"❌ [失败记录] 保存异常: {save_error}")
-                        
+
                         logger.error(f"❌ [分析失败] {analysis_id}: {e}")
 
                     finally:
@@ -1398,12 +1398,12 @@ def main():
                             # 自动保存分析结果到历史记录
                             try:
                                 from components.analysis_results import save_analysis_result
-                                
+
                                 # 从进度数据中获取分析参数
                                 stock_symbol = progress_data.get('stock_symbol', st.session_state.get('last_stock_symbol', 'unknown'))
                                 analysts = progress_data.get('analysts', [])
                                 research_depth = progress_data.get('research_depth', 3)
-                                
+
                                 # 保存分析结果
                                 save_success = save_analysis_result(
                                     analysis_id=current_analysis_id,
@@ -1413,12 +1413,12 @@ def main():
                                     result_data=raw_results,
                                     status="completed"
                                 )
-                                
+
                                 if save_success:
                                     logger.info(f"💾 [结果保存] 分析结果已保存到历史记录: {current_analysis_id}")
                                 else:
                                     logger.warning(f"⚠️ [结果保存] 保存失败: {current_analysis_id}")
-                                    
+
                             except Exception as save_error:
                                 logger.error(f"❌ [结果保存] 保存异常: {save_error}")
 
@@ -1480,12 +1480,12 @@ def main():
             # 清除查看报告按钮状态，避免重复触发
             if show_results_button_clicked:
                 st.session_state.show_analysis_results = False
-    
+
     # 只有在显示指南时才渲染右侧内容
     if show_guide and col2 is not None:
         with col2:
             st.markdown("### ℹ️ 使用指南")
-        
+
             # 快速开始指南
             with st.expander("🎯 快速开始", expanded=True):
                 st.markdown("""
@@ -1606,7 +1606,7 @@ def main():
             - 重大投资决策建议咨询专业的投资顾问
             - AI分析存在局限性，市场变化难以完全预测
             """)
-        
+
         # 显示系统状态
         if st.session_state.last_analysis_time:
             st.info(f"🕒 上次分析时间: {st.session_state.last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')}")

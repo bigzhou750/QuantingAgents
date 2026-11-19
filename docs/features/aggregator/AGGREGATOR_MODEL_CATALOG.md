@@ -163,7 +163,7 @@ const handleFetchModelsFromAPI = async () => {
 
   // 调用后端 API
   const response = await configApi.fetchProviderModels(formData.value.provider)
-  
+
   if (response.success && response.models) {
     formData.value.models = response.models.map((model: any) => ({
       name: model.id || model.name,
@@ -173,7 +173,7 @@ const handleFetchModelsFromAPI = async () => {
       context_length: model.context_length || null,
       currency: 'CNY'
     }))
-    
+
     ElMessage.success(`成功获取 ${formData.value.models.length} 个模型`)
   }
 }
@@ -196,7 +196,7 @@ const getPresetModels = (providerName: string): ModelInfo[] => {
       // ... 更多模型
     ]
   }
-  
+
   return presets[providerName] || []
 }
 ```
@@ -227,14 +227,14 @@ async def fetch_provider_models(self, provider_id: str) -> dict:
     """从厂家 API 获取模型列表"""
     # 1. 获取厂家信息
     provider_data = await providers_collection.find_one({"_id": ObjectId(provider_id)})
-    
+
     # 2. 获取 API Key（数据库或环境变量）
     api_key = provider_data.get("api_key") or self._get_env_api_key(provider_name)
-    
+
     # 3. 调用 /v1/models 端点
     url = f"{base_url}/v1/models"
     response = requests.get(url, headers={"Authorization": f"Bearer {api_key}"})
-    
+
     # 4. 解析返回结果
     if response.status_code == 200:
         result = response.json()
@@ -330,7 +330,7 @@ async def fetch_provider_models(self, provider_id: str) -> dict:
 
 ---
 
-**功能开发日期**：2025-10-12  
-**开发人员**：AI Assistant  
+**功能开发日期**：2025-10-12
+**开发人员**：AI Assistant
 **需求提出人**：用户
 

@@ -10,7 +10,7 @@
 
 ```powershell
 # 进入项目目录
-cd d:\code\TradingAgents-CN
+cd d:\code\zhitouagent
 
 # 激活虚拟环境
 .\.venv\Scripts\Activate.ps1
@@ -23,7 +23,7 @@ cd d:\code\TradingAgents-CN
 
 ```powershell
 # 新开一个终端
-cd d:\code\TradingAgents-CN\frontend
+cd d:\code\zhitouagent\frontend
 
 # 启动前端
 npm run dev
@@ -179,24 +179,24 @@ async def add_test_data():
         'openai': ['gpt-4', 'gpt-3.5-turbo'],
         'google': ['gemini-pro']
     }
-    
+
     # 生成最近 30 天的数据
     for i in range(30):
         date = datetime.now() - timedelta(days=i)
-        
+
         # 每天生成 5-10 条记录
         for _ in range(random.randint(5, 10)):
             provider = random.choice(providers)
             model = random.choice(models[provider])
-            
+
             input_tokens = random.randint(500, 3000)
             output_tokens = random.randint(200, 1500)
-            
+
             # 假设价格
             input_price = 0.02
             output_price = 0.06
             cost = (input_tokens / 1000) * input_price + (output_tokens / 1000) * output_price
-            
+
             record = UsageRecord(
                 timestamp=date.isoformat(),
                 provider=provider,
@@ -207,9 +207,9 @@ async def add_test_data():
                 session_id=f"test_session_{i}_{_}",
                 analysis_type="stock_analysis"
             )
-            
+
             await usage_statistics_service.add_usage_record(record)
-    
+
     print("测试数据添加完成！")
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """
 简化的股票分析服务
-直接调用现有的 TradingAgents 分析功能
+直接调用现有的 zhitouagent 分析功能
 """
 
 import asyncio
@@ -15,11 +15,11 @@ import sys
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 初始化TradingAgents日志系统
+# 初始化zhitouagent日志系统
 from tradingagents.utils.logging_init import init_logging
 init_logging()
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.graph.trading_graph import zhitouagentGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from app.models.analysis import (
     AnalysisTask, AnalysisStatus, SingleAnalysisRequest, AnalysisParameters
@@ -426,7 +426,7 @@ def _get_default_provider_by_model(model_name: str) -> str:
         'chatglm3-6b': 'glm'
     }
 
-    provider = model_provider_map.get(model_name, 'qwen')  # 默认使用阿里百炼
+    provider = model_provider_map.get(model_name, 'deepseek')  # 默认使用 DeepSeek
     logger.info(f"🔧 使用默认映射: {model_name} -> {provider}")
     return provider
 
@@ -717,16 +717,10 @@ class SimpleAnalysisService:
         try:
             logger.info(f"🔄 开始转换用户ID: {user_id} (类型: {type(user_id)})")
 
-            # 如果是admin用户，使用固定的ObjectId
-            if user_id == "admin":
-                admin_object_id = ObjectId("507f1f77bcf86cd799439011")
-                logger.info(f"🔄 转换admin用户ID: {user_id} -> {admin_object_id}")
-                return PyObjectId(admin_object_id)
-            else:
-                # 尝试将字符串转换为ObjectId
-                object_id = ObjectId(user_id)
-                logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
-                return PyObjectId(object_id)
+            # 尝试将字符串转换为ObjectId
+            object_id = ObjectId(user_id)
+            logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
+            return PyObjectId(object_id)
         except Exception as e:
             logger.error(f"❌ 用户ID转换失败: {user_id} -> {e}")
             # 如果转换失败，生成一个新的ObjectId
@@ -734,26 +728,26 @@ class SimpleAnalysisService:
             logger.warning(f"⚠️ 生成新的用户ID: {new_object_id}")
             return PyObjectId(new_object_id)
 
-    def _get_trading_graph(self, config: Dict[str, Any]) -> TradingAgentsGraph:
-        """获取或创建TradingAgents实例
+    def _get_trading_graph(self, config: Dict[str, Any]) -> zhitouagentGraph:
+        """获取或创建zhitouagent实例
 
         ⚠️ 注意：为了避免并发执行时的数据混淆，每次都创建新实例
         虽然这会增加一些初始化开销，但可以确保线程安全
 
-        TradingAgentsGraph 实例包含可变状态（self.ticker, self.curr_state等），
+        zhitouagentGraph 实例包含可变状态（self.ticker, self.curr_state等），
         如果多个线程共享同一个实例，会导致数据混淆。
         """
         # 🔧 [并发安全] 每次都创建新实例，避免多线程共享状态
-        # 不再使用缓存，因为 TradingAgentsGraph 有可变的实例变量
-        logger.info(f"🔧 创建新的TradingAgents实例（并发安全模式）...")
+        # 不再使用缓存，因为 zhitouagentGraph 有可变的实例变量
+        logger.info(f"🔧 创建新的zhitouagent实例（并发安全模式）...")
 
-        trading_graph = TradingAgentsGraph(
+        trading_graph = zhitouagentGraph(
             selected_analysts=config.get("selected_analysts", ["market", "fundamentals"]),
             debug=config.get("debug", False),
             config=config
         )
 
-        logger.info(f"✅ TradingAgents实例创建成功（实例ID: {id(trading_graph)}）")
+        logger.info(f"✅ zhitouagent实例创建成功（实例ID: {id(trading_graph)}）")
 
         return trading_graph
 
@@ -787,7 +781,7 @@ class SimpleAnalysisService:
             logger.info(f"✅ 任务状态已创建: {task_state.task_id}")
 
             # 立即验证任务是否可以查询到
-            verify_task = await self.memory_manager.get_task(task_id)
+            verify_task = await self.memory_manager.get_task(task_id, user_id=user_id)
             if verify_task:
                 logger.info(f"✅ 任务创建验证成功: {verify_task.task_id}")
             else:
@@ -1337,7 +1331,7 @@ class SimpleAnalysisService:
             import time
 
             def simulate_progress():
-                """模拟TradingAgents内部进度"""
+                """模拟zhitouagent内部进度"""
                 try:
                     if not progress_tracker:
                         return
@@ -1886,7 +1880,7 @@ class SimpleAnalysisService:
             # 抛出包含友好错误信息的异常
             raise Exception(user_friendly_error) from e
 
-    async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_task_status(self, task_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """获取任务状态"""
         logger.info(f"🔍 查询任务状态: {task_id}")
         logger.info(f"🔍 当前服务实例ID: {id(self)}")
@@ -1897,10 +1891,15 @@ class SimpleAnalysisService:
         logger.info(f"🔍 全局内存管理器实例ID: {id(global_memory_manager)}")
 
         # 获取统计信息
-        stats = await global_memory_manager.get_statistics()
+        if not user_id:
+            raise RuntimeError("user scope is required for task status")
+        stats = await global_memory_manager.get_statistics(user_id=user_id)
         logger.info(f"📊 内存中任务统计: {stats}")
 
-        result = await global_memory_manager.get_task_dict(task_id)
+        result = (
+            await global_memory_manager.get_user_task_dict(user_id, task_id)
+            if user_id else None
+        )
         if result:
             logger.info(f"✅ 找到任务: {task_id} - 状态: {result.get('status')}")
 
@@ -1977,12 +1976,15 @@ class SimpleAnalysisService:
         self,
         status: Optional[str] = None,
         limit: int = 20,
-        offset: int = 0
+        offset: int = 0,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """获取所有任务列表（不限用户）
+        """获取任务列表（必须限定用户）
         - 合并内存和 MongoDB 数据
         - 按开始时间倒序排列
         """
+        if not user_id:
+            raise RuntimeError("user scope is required for task listing")
         try:
             task_status = None
             if status:
@@ -2005,7 +2007,8 @@ class SimpleAnalysisService:
             tasks_in_mem = await self.memory_manager.list_all_tasks(
                 status=task_status,
                 limit=limit * 2,
-                offset=0
+                offset=0,
+                user_id=user_id
             )
             logger.info(f"📋 [Tasks] 内存返回数量: {len(tasks_in_mem)}")
 
@@ -2013,7 +2016,7 @@ class SimpleAnalysisService:
             db = get_mongo_db()
             collection = db["analysis_tasks"]
 
-            query = {}
+            query = {"$or": [{"user_id": user_id}, {"user": user_id}]}
             if task_status:
                 query["status"] = task_status.value
 
@@ -2111,25 +2114,13 @@ class SimpleAnalysisService:
                 # user_id 可能是字符串或 ObjectId，做兼容
                 uid_candidates: List[Any] = [user_id]
 
-                # 特殊处理 admin 用户
-                if str(user_id) == 'admin':
-                    # admin 用户：添加固定的 ObjectId 和字符串形式
-                    try:
-                        from bson import ObjectId
-                        admin_oid_str = '507f1f77bcf86cd799439011'
-                        uid_candidates.append(ObjectId(admin_oid_str))
-                        uid_candidates.append(admin_oid_str)  # 兼容字符串存储
-                        logger.info(f"📋 [Tasks] admin用户查询，候选ID: ['admin', ObjectId('{admin_oid_str}'), '{admin_oid_str}']")
-                    except Exception as e:
-                        logger.warning(f"⚠️ [Tasks] admin用户ObjectId创建失败: {e}")
-                else:
-                    # 普通用户：尝试转换为 ObjectId
-                    try:
-                        from bson import ObjectId
-                        uid_candidates.append(ObjectId(user_id))
-                        logger.debug(f"📋 [Tasks] 用户ID已转换为ObjectId: {user_id}")
-                    except Exception as conv_err:
-                        logger.warning(f"⚠️ [Tasks] 用户ID转换ObjectId失败，按字符串匹配: {conv_err}")
+                # 普通用户：尝试转换为 ObjectId
+                try:
+                    from bson import ObjectId
+                    uid_candidates.append(ObjectId(user_id))
+                    logger.debug(f"📋 [Tasks] 用户ID已转换为ObjectId: {user_id}")
+                except Exception as conv_err:
+                    logger.warning(f"⚠️ [Tasks] 用户ID转换ObjectId失败，按字符串匹配: {conv_err}")
 
                 # 兼容 user_id 与 user 两种字段名
                 base_condition = {"$in": uid_candidates}
@@ -2259,7 +2250,7 @@ class SimpleAnalysisService:
             logger.error(f"❌ list_user_tasks 外层异常: {outer_e}", exc_info=True)
             return []
 
-    async def cleanup_zombie_tasks(self, max_running_hours: int = 2) -> Dict[str, Any]:
+    async def cleanup_zombie_tasks(self, max_running_hours: int = 2, user_id: Optional[str] = None) -> Dict[str, Any]:
         """清理僵尸任务（长时间处于 processing/running 状态的任务）
 
         Args:
@@ -2268,9 +2259,11 @@ class SimpleAnalysisService:
         Returns:
             清理结果统计
         """
+        if not user_id:
+            raise RuntimeError("user scope is required for zombie cleanup")
         try:
             # 1) 清理内存中的僵尸任务
-            memory_cleaned = await self.memory_manager.cleanup_zombie_tasks(max_running_hours)
+            memory_cleaned = await self.memory_manager.cleanup_zombie_tasks(max_running_hours, user_id=user_id)
 
             # 2) 清理 MongoDB 中的僵尸任务
             db = get_mongo_db()
@@ -2764,7 +2757,7 @@ class SimpleAnalysisService:
             project_root = Path(__file__).parent.parent.parent
 
             # 确定results目录路径 - 与web目录保持一致
-            results_dir_env = os.getenv("TRADINGAGENTS_RESULTS_DIR")
+            results_dir_env = os.getenv("ZHITOUAGENT_RESULTS_DIR")
             if results_dir_env:
                 if not os.path.isabs(results_dir_env):
                     results_dir = project_root / results_dir_env

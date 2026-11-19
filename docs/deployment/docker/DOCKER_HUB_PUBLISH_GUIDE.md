@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-本文档说明如何构建 TradingAgents-CN 的 Docker 镜像并发布到 Docker Hub。
+本文档说明如何构建 zhitouagent 的 Docker 镜像并发布到 Docker Hub。
 
 ---
 
@@ -145,7 +145,7 @@ PUSH_LATEST=false ./scripts/publish-docker-images.sh your-username
 services:
   tradingagents-backend:
     image: hsliuping/tradingagents-backend:latest  # 替换为你的用户名
-    
+
   tradingagents-frontend:
     image: hsliuping/tradingagents-frontend:latest  # 替换为你的用户名
 ```
@@ -183,13 +183,13 @@ services:
 
 **解决**: 必须在项目根目录运行：
 ```bash
-cd /path/to/TradingAgents-CN
+cd /path/to/zhitouagent
 ./scripts/publish-docker-images.sh your-username
 ```
 
 ### Q2: 推送失败 - "denied: requested access to the resource is denied"
 
-**原因**: 
+**原因**:
 1. 未登录 Docker Hub
 2. 用户名错误
 3. 没有权限推送到该仓库
@@ -206,7 +206,7 @@ docker info | grep Username
 
 ### Q3: 构建很慢
 
-**原因**: 
+**原因**:
 1. 网络问题（拉取依赖慢）
 2. 没有使用 Docker 缓存
 

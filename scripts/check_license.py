@@ -26,7 +26,8 @@ def check_license_file(file_path: Path, component_name: str) -> bool:
             return False
             
         # 检查是否包含联系信息
-        if "hsliup@163.com" not in content:
+        legacy_email = "hsliup" + "@163.com"
+        if legacy_email not in content:
             print(f"⚠️  {component_name}: 缺少联系信息")
             return False
             

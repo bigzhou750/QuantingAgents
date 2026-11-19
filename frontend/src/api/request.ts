@@ -82,8 +82,14 @@ const handle401Error = (authStore: any, message: string = '登录已过期，请
 
 // 创建axios实例
 const createAxiosInstance = (): AxiosInstance => {
+  // API modules use absolute `/api/...` paths. Strip a trailing `/api` from
+  // configured base URLs so builds with VITE_API_BASE_URL=/api do not request
+  // the invalid `/api/api/...` path.
+  const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+  const apiBaseUrl = configuredBaseUrl.replace(/\/api$/i, '')
+
   const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '',
+    baseURL: apiBaseUrl,
     timeout: 60000, // 增加超时时间到60秒（数据同步等长时间操作）
     headers: {
       'Content-Type': 'application/json',
@@ -104,19 +110,6 @@ const createAxiosInstance = (): AxiosInstance => {
         if (token) {
           config.headers = config.headers || {}
           config.headers.Authorization = `Bearer ${token}`
-          console.log('🔐 已设置Authorization头:', {
-            hasToken: !!token,
-            tokenLength: token?.length || 0,
-            tokenPrefix: token?.substring(0, 20) || 'None',
-            authHeader: config.headers.Authorization?.substring(0, 30) || 'None'
-          })
-        } else {
-          console.log('⚠️ 未设置Authorization头:', {
-            skipAuth: config.skipAuth,
-            hasToken: !!authStore.token,
-            localStored: !!localStorage.getItem('auth-token'),
-            url: config.url
-          })
         }
       }
 
@@ -154,15 +147,6 @@ const createAxiosInstance = (): AxiosInstance => {
         console.warn('端点兼容检查异常', e)
       }
 
-      console.log(`🚀 API请求: ${config.method?.toUpperCase()} ${config.url}`, {
-        baseURL: config.baseURL,
-        fullURL: `${config.baseURL}${config.url}`,
-        params: config.params,
-        data: config.data,
-        headers: config.headers,
-        timeout: config.timeout
-      })
-
       return config
     },
     (error) => {
@@ -182,8 +166,6 @@ const createAxiosInstance = (): AxiosInstance => {
       if (config.showLoading) {
         appStore.setLoading(false)
       }
-
-      console.log(`✅ API响应: ${response.status} ${response.config.url}`, response.data)
 
       // 检查业务状态码
       const data = response.data as ApiResponse
@@ -221,15 +203,7 @@ const createAxiosInstance = (): AxiosInstance => {
         appStore.setLoading(false)
       }
 
-      console.error(`❌ API错误: ${error.response?.status} ${error.config?.url}`, {
-        error: error,
-        message: error.message,
-        code: error.code,
-        response: error.response,
-        request: error.request,
-        config: error.config,
-        stack: error.stack
-      })
+      console.error(`❌ API错误: ${error.response?.status} ${error.config?.url}`, error.message)
 
       // 处理HTTP状态码错误
       if (error.response) {
@@ -251,8 +225,9 @@ const createAxiosInstance = (): AxiosInstance => {
             }
 
             // 未授权，尝试刷新token
-            if (!config?.skipAuth && authStore.refreshToken) {
+            if (!config?.skipAuth && authStore.refreshToken && !(config as any).__authRefreshTried) {
               try {
+                ;(config as any).__authRefreshTried = true
                 console.log('🔄 401错误，尝试刷新token...')
                 const success = await authStore.refreshAccessToken()
                 if (success) {
@@ -269,6 +244,11 @@ const createAxiosInstance = (): AxiosInstance => {
 
             // 清除认证信息并跳转到登录页
             handle401Error(authStore, '登录已过期，请重新登录')
+            break
+
+          case 402:
+            // 余额不足：不自动弹错误提示，由调用方处理（引导充值）
+            console.log('💰 402 余额不足:', data?.detail || data?.message)
             break
 
           case 403:
@@ -378,6 +358,11 @@ const handleBusinessError = (data: ApiResponse) => {
     case 40103:  // Token 过期
       console.log('🔒 业务错误：认证失败')
       handle401Error(authStore, message || '登录已过期，请重新登录')
+      break
+    case 402:
+    case 40201:
+      // 余额不足：不自动弹错误提示，由调用方处理
+      console.log('💰 业务错误：余额不足', message)
       break
     case 40001:
       showErrorMessage('参数错误')

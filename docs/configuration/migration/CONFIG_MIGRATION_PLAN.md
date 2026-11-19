@@ -97,15 +97,15 @@ def create_analysis_config(
     market_type: str = "A股"
 ) -> dict:
     from app.core.unified_config import unified_config
-    
+
     # 从统一配置获取模型
     quick_model = quick_model or unified_config.get_quick_analysis_model()
     deep_model = deep_model or unified_config.get_deep_analysis_model()
-    
+
     # 自动推断 provider
     quick_config = unified_config.get_llm_config_by_name(quick_model)
     llm_provider = quick_config.provider.value if quick_config else "dashscope"
-    
+
     # 构建配置
     config = DEFAULT_CONFIG.copy()
     config["llm_provider"] = llm_provider
@@ -160,7 +160,7 @@ config.update({
   - [ ] 添加 `unified_config` 导入
   - [ ] 替换所有 `os.getenv()` 调用
   - [ ] 从统一配置读取 API 密钥和模型配置
-  
+
 - [ ] 修改 `app/services/simple_analysis_service.py`
   - [ ] 更新 `create_analysis_config()` 函数
   - [ ] 移除硬编码的 provider 映射
@@ -216,20 +216,20 @@ def get_api_key_for_model(model_name: str) -> str:
     llm_config = unified_config.get_llm_config_by_name(model_name)
     if llm_config and llm_config.api_key:
         return llm_config.api_key
-    
+
     # 2. 从厂家配置获取
     if llm_config:
         provider_config = unified_config.get_provider_config(llm_config.provider)
         if provider_config and provider_config.api_key:
             return provider_config.api_key
-    
+
     # 3. 从环境变量获取（兼容旧版）
     env_key = f"{llm_config.provider.upper()}_API_KEY"
     api_key = os.getenv(env_key)
     if api_key:
         logger.warning(f"⚠️ 使用环境变量 {env_key}，建议在配置管理中设置")
         return api_key
-    
+
     # 4. 失败
     raise ValueError(f"未找到模型 {model_name} 的 API 密钥")
 ```

@@ -2,7 +2,7 @@
 
 ## 📋 功能概述
 
-本文档介绍 TradingAgents-CN 的使用统计和定价配置功能，包括：
+本文档介绍 zhitouagent 的使用统计和定价配置功能，包括：
 
 1. **模型定价配置** - 为每个大模型配置输入/输出 token 价格
 2. **使用统计** - 查看模型使用情况和成本统计
@@ -135,7 +135,7 @@ frontend/src/views/Settings/components/LLMConfigDialog.vue
 ```python
 class LLMConfig(BaseModel):
     # ... 原有字段 ...
-    
+
     # 定价配置
     input_price_per_1k: Optional[float] = None
     output_price_per_1k: Optional[float] = None

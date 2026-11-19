@@ -29,7 +29,7 @@ def render_config_management():
     """渲染配置管理页面"""
     # 应用隐藏Deploy按钮的CSS样式
     apply_hide_deploy_button_css()
-    
+
     st.title("⚙️ 配置管理")
 
     # 显示.env配置状态
@@ -41,7 +41,7 @@ def render_config_management():
         "选择功能",
         ["模型配置", "定价设置", "使用统计", "系统设置"]
     )
-    
+
     if page == "模型配置":
         render_model_config()
     elif page == "定价设置":
@@ -61,7 +61,7 @@ def render_model_config():
 
     # 显示当前配置
     st.markdown("**当前模型配置**")
-    
+
     if models:
         # 创建DataFrame显示
         model_data = []
@@ -83,19 +83,19 @@ def render_model_config():
                 "温度": model.temperature,
                 "状态": "✅ 启用" if model.enabled else "❌ 禁用"
             })
-        
+
         df = pd.DataFrame(model_data)
         st.dataframe(df, use_container_width=True)
-        
+
         # 编辑模型配置
         st.markdown("**编辑模型配置**")
-        
+
         # 选择要编辑的模型
         model_options = [f"{m.provider} - {m.model_name}" for m in models]
         selected_model_idx = st.selectbox("选择要编辑的模型", range(len(model_options)),
                                          format_func=lambda x: model_options[x],
                                          key="select_model_to_edit")
-        
+
         if selected_model_idx is not None:
             model = models[selected_model_idx]
 
@@ -116,7 +116,7 @@ def render_model_config():
             with col2:
                 new_enabled = st.checkbox("启用模型", value=model.enabled, key=f"edit_enabled_{selected_model_idx}")
                 new_base_url = st.text_input("自定义API地址 (可选)", value=model.base_url or "", key=f"edit_base_url_{selected_model_idx}")
-            
+
             if st.button("保存配置", type="primary", key=f"save_model_config_{selected_model_idx}"):
                 # 更新模型配置
                 models[selected_model_idx] = ModelConfig(
@@ -128,19 +128,19 @@ def render_model_config():
                     temperature=new_temperature,
                     enabled=new_enabled
                 )
-                
+
                 config_manager.save_models(models)
                 st.success("✅ 配置已保存！")
                 st.rerun()
-    
+
     else:
         st.warning("没有找到模型配置")
-    
+
     # 添加新模型
     st.markdown("**添加新模型**")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         new_provider = st.selectbox("供应商", ["dashscope", "openai", "google", "anthropic", "other"], key="new_provider")
         new_model_name = st.text_input("模型名称", placeholder="例如: gpt-4, qwen-plus-latest", key="new_model_name")
@@ -150,7 +150,7 @@ def render_model_config():
         new_max_tokens = st.number_input("最大Token数", value=4000, min_value=1000, max_value=32000, key="new_max_tokens")
         new_temperature = st.slider("温度参数", 0.0, 2.0, 0.7, 0.1, key="new_temperature")
         new_enabled = st.checkbox("启用模型", value=True, key="new_enabled")
-    
+
     if st.button("添加模型", key="add_new_model"):
         if new_provider and new_model_name and new_api_key:
             new_model = ModelConfig(
@@ -161,7 +161,7 @@ def render_model_config():
                 temperature=new_temperature,
                 enabled=new_enabled
             )
-            
+
             models.append(new_model)
             config_manager.save_models(models)
             st.success("✅ 新模型已添加！")
@@ -179,7 +179,7 @@ def render_pricing_config():
 
     # 显示当前定价
     st.markdown("**当前定价配置**")
-    
+
     if pricing_configs:
         pricing_data = []
         for i, pricing in enumerate(pricing_configs):
@@ -191,23 +191,23 @@ def render_pricing_config():
                 "输出价格 (每1K token)": f"{pricing.output_price_per_1k} {pricing.currency}",
                 "货币": pricing.currency
             })
-        
+
         df = pd.DataFrame(pricing_data)
         st.dataframe(df, use_container_width=True)
-        
+
         # 编辑定价
         st.markdown("**编辑定价**")
-        
+
         pricing_options = [f"{p.provider} - {p.model_name}" for p in pricing_configs]
         selected_pricing_idx = st.selectbox("选择要编辑的定价", range(len(pricing_options)),
                                           format_func=lambda x: pricing_options[x],
                                           key="select_pricing_to_edit")
-        
+
         if selected_pricing_idx is not None:
             pricing = pricing_configs[selected_pricing_idx]
-            
+
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
                 new_input_price = st.number_input("输入价格 (每1K token)",
                                                 value=pricing.input_price_per_1k,
@@ -224,7 +224,7 @@ def render_pricing_config():
                 new_currency = st.selectbox("货币", ["CNY", "USD", "EUR"],
                                           index=["CNY", "USD", "EUR"].index(pricing.currency),
                                           key=f"edit_currency_{selected_pricing_idx}")
-            
+
             if st.button("保存定价", type="primary", key=f"save_pricing_config_{selected_pricing_idx}"):
                 pricing_configs[selected_pricing_idx] = PricingConfig(
                     provider=pricing.provider,
@@ -233,16 +233,16 @@ def render_pricing_config():
                     output_price_per_1k=new_output_price,
                     currency=new_currency
                 )
-                
+
                 config_manager.save_pricing(pricing_configs)
                 st.success("✅ 定价已保存！")
                 st.rerun()
-    
+
     # 添加新定价
     st.markdown("**添加新定价**")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         new_provider = st.text_input("供应商", placeholder="例如: openai, dashscope", key="new_pricing_provider")
         new_model_name = st.text_input("模型名称", placeholder="例如: gpt-4, qwen-plus", key="new_pricing_model")
@@ -251,7 +251,7 @@ def render_pricing_config():
     with col2:
         new_input_price = st.number_input("输入价格 (每1K token)", min_value=0.0, step=0.001, format="%.6f", key="new_pricing_input")
         new_output_price = st.number_input("输出价格 (每1K token)", min_value=0.0, step=0.001, format="%.6f", key="new_pricing_output")
-    
+
     if st.button("添加定价", key="add_new_pricing"):
         if new_provider and new_model_name:
             new_pricing = PricingConfig(
@@ -261,7 +261,7 @@ def render_pricing_config():
                 output_price_per_1k=new_output_price,
                 currency=new_currency
             )
-            
+
             pricing_configs.append(new_pricing)
             config_manager.save_pricing(pricing_configs)
             st.success("✅ 新定价已添加！")
@@ -290,25 +290,25 @@ def render_usage_statistics():
 
     # 总体统计
     st.markdown("**📈 总体统计**")
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("总成本", f"¥{stats['total_cost']:.4f}")
-    
+
     with col2:
         st.metric("总请求数", f"{stats['total_requests']:,}")
-    
+
     with col3:
         st.metric("输入Token", f"{stats['total_input_tokens']:,}")
-    
+
     with col4:
         st.metric("输出Token", f"{stats['total_output_tokens']:,}")
-    
+
     # 按供应商统计
     if stats["provider_stats"]:
         st.markdown("**🏢 按供应商统计**")
-        
+
         provider_data = []
         for provider, data in stats["provider_stats"].items():
             provider_data.append({
@@ -319,10 +319,10 @@ def render_usage_statistics():
                 "输出Token": f"{data['output_tokens']:,}",
                 "平均成本/请求": f"¥{data['cost']/data['requests']:.6f}" if data['requests'] > 0 else "¥0"
             })
-        
+
         df = pd.DataFrame(provider_data)
         st.dataframe(df, use_container_width=True)
-        
+
         # 成本分布饼图
         if len(provider_data) > 1:
             fig = px.pie(
@@ -331,10 +331,10 @@ def render_usage_statistics():
                 title="成本分布"
             )
             st.plotly_chart(fig, use_container_width=True)
-    
+
     # 使用趋势
     st.markdown("**📈 使用趋势**")
-    
+
     records = config_manager.load_usage_records()
     if records:
         # 按日期聚合
@@ -348,29 +348,29 @@ def render_usage_statistics():
                 daily_stats[date]["requests"] += 1
             except:
                 continue
-        
+
         if daily_stats:
             dates = sorted(daily_stats.keys())
             costs = [daily_stats[date]["cost"] for date in dates]
             requests = [daily_stats[date]["requests"] for date in dates]
-            
+
             # 创建双轴图表
             fig = go.Figure()
-            
+
             fig.add_trace(go.Scatter(
                 x=dates, y=costs,
                 mode='lines+markers',
                 name='每日成本 (¥)',
                 yaxis='y'
             ))
-            
+
             fig.add_trace(go.Scatter(
                 x=dates, y=requests,
                 mode='lines+markers',
                 name='每日请求数',
                 yaxis='y2'
             ))
-            
+
             fig.update_layout(
                 title='使用趋势',
                 xaxis_title='日期',
@@ -378,7 +378,7 @@ def render_usage_statistics():
                 yaxis2=dict(title='请求数', side='right', overlaying='y'),
                 hovermode='x unified'
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
 
 
@@ -390,9 +390,9 @@ def render_system_settings():
     settings = config_manager.load_settings()
 
     st.markdown("**基本设置**")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         default_provider = st.selectbox(
             "默认供应商",
@@ -417,7 +417,7 @@ def render_system_settings():
             ),
             key="settings_currency_preference"
         )
-    
+
     with col2:
         default_model = st.text_input(
             "默认模型",
@@ -447,7 +447,7 @@ def render_system_settings():
         value=settings.get("auto_save_usage", True),
         key="settings_auto_save_usage"
     )
-    
+
     if st.button("保存设置", type="primary", key="save_system_settings"):
         new_settings = {
             "default_provider": default_provider,
@@ -458,21 +458,21 @@ def render_system_settings():
             "auto_save_usage": auto_save_usage,
             "max_usage_records": max_usage_records
         }
-        
+
         config_manager.save_settings(new_settings)
         st.success("✅ 设置已保存！")
         st.rerun()
-    
+
     # 数据管理
     st.markdown("**数据管理**")
-    
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         if st.button("导出配置", help="导出所有配置到JSON文件", key="export_config"):
             # 这里可以实现配置导出功能
             st.info("配置导出功能开发中...")
-    
+
     with col2:
         if st.button("清空使用记录", help="清空所有使用记录", key="clear_usage_records"):
             if st.session_state.get("confirm_clear", False):
@@ -483,7 +483,7 @@ def render_system_settings():
             else:
                 st.session_state.confirm_clear = True
                 st.warning("⚠️ 再次点击确认清空")
-    
+
     with col3:
         if st.button("重置配置", help="重置所有配置到默认值", key="reset_all_config"):
             if st.session_state.get("confirm_reset", False):
@@ -563,11 +563,11 @@ def render_env_status():
 def main():
     """主函数"""
     st.set_page_config(
-        page_title="配置管理 - TradingAgents",
+        page_title="配置管理 - zhitouagent",
         page_icon="⚙️",
         layout="wide"
     )
-    
+
     render_config_management()
 
 if __name__ == "__main__":

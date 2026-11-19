@@ -64,7 +64,7 @@
 def _format_models_with_pricing(self, models: list) -> list:
     """
     格式化模型列表，包含价格信息
-    
+
     OpenRouter API 返回的价格单位是 USD per token
     我们需要转换为 USD per 1K tokens
     """
@@ -72,12 +72,12 @@ def _format_models_with_pricing(self, models: list) -> list:
     for model in models:
         model_id = model.get("id", "")
         model_name = model.get("name", model_id)
-        
+
         # 获取价格信息
         pricing = model.get("pricing", {})
         prompt_price = pricing.get("prompt", "0")  # USD per token
         completion_price = pricing.get("completion", "0")  # USD per token
-        
+
         # 转换为 float 并乘以 1000（转换为 per 1K tokens）
         try:
             input_price_per_1k = float(prompt_price) * 1000 if prompt_price else None
@@ -85,14 +85,14 @@ def _format_models_with_pricing(self, models: list) -> list:
         except (ValueError, TypeError):
             input_price_per_1k = None
             output_price_per_1k = None
-        
+
         # 获取上下文长度
         context_length = model.get("context_length")
         if not context_length:
             # 尝试从 top_provider 获取
             top_provider = model.get("top_provider", {})
             context_length = top_provider.get("context_length")
-        
+
         formatted_model = {
             "id": model_id,
             "name": model_name,
@@ -100,9 +100,9 @@ def _format_models_with_pricing(self, models: list) -> list:
             "input_price_per_1k": input_price_per_1k,
             "output_price_per_1k": output_price_per_1k,
         }
-        
+
         formatted.append(formatted_model)
-    
+
     return formatted
 ```
 
@@ -141,12 +141,12 @@ if (response.success && response.models && response.models.length > 0) {
     // OpenRouter 的价格是 USD
     currency: 'USD'
   }))
-  
+
   // 统计有价格信息的模型数量
   const modelsWithPricing = formData.value.models.filter(
     m => m.input_price_per_1k || m.output_price_per_1k
   ).length
-  
+
   ElMessage.success(`成功获取 ${formData.value.models.length} 个模型（${modelsWithPricing} 个包含价格信息）`)
 }
 ```
@@ -310,7 +310,7 @@ def convert_usd_to_cny(usd_price: float, exchange_rate: float = 7.2) -> float:
 
 ---
 
-**功能开发日期**：2025-10-12  
-**开发人员**：AI Assistant  
+**功能开发日期**：2025-10-12
+**开发人员**：AI Assistant
 **需求提出人**：用户
 

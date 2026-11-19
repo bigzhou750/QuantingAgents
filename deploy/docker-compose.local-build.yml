@@ -1,0 +1,186 @@
+# zhitouagent 生产环境 Docker Compose（本地构建版）
+# 当 Docker Hub 镜像不可用时使用此文件
+#
+# 用法:
+#   docker compose -f deploy/docker-compose.local-build.yml up -d --build
+#
+# 首次构建较慢（后端约10-20分钟），后续仅重建变更部分
+
+services:
+  # MongoDB 数据库
+  mongodb:
+    image: mongo:4.4
+    container_name: zhitouagent-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - zhitouagent_mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: zhitouagent
+      TZ: "Asia/Shanghai"
+    networks:
+      - zhitouagent-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: zhitouagent-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - zhitouagent_redis_data:/data
+    environment:
+      TZ: "Asia/Shanghai"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    networks:
+      - zhitouagent-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # FastAPI 后端（本地构建）
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile.backend
+    image: zhitouagent-backend:local
+    container_name: zhitouagent-backend
+    restart: unless-stopped
+    expose:
+      - "8000"
+    volumes:
+      - ../logs:/app/logs
+      - ../data:/app/data
+    env_file:
+      - .env
+    environment:
+      # 安全配置（必须显式声明才能从 env_file 注入容器）
+      JWT_SECRET: "${JWT_SECRET}"
+      CSRF_SECRET: "${CSRF_SECRET}"
+      TZ: "Asia/Shanghai"
+      ZHITOUAGENT_LOG_LEVEL: "INFO"
+      ZHITOUAGENT_LOG_DIR: "/app/logs"
+      ZHITOUAGENT_LOG_FILE: "/app/logs/zhitouagent.log"
+      # MongoDB
+      MONGODB_ENABLED: "true"
+      MONGODB_HOST: "mongodb"
+      MONGODB_PORT: "27017"
+      MONGODB_USERNAME: "admin"
+      MONGODB_PASSWORD: "${MONGODB_PASSWORD}"
+      MONGODB_DATABASE: "zhitouagent"
+      MONGODB_AUTH_SOURCE: "admin"
+      MONGODB_URL: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
+      MONGODB_CONNECTION_STRING: "mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/zhitouagent?authSource=admin"
+      # Redis
+      REDIS_ENABLED: "true"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      DOCKER_CONTAINER: "true"
+      # 安全配置（JWT_SECRET/CSRF_SECRET 已在上方声明）
+      JWT_ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "480"
+      REFRESH_TOKEN_EXPIRE_DAYS: "30"
+      BCRYPT_ROUNDS: "12"
+      # ALLOWED_ORIGINS / ALLOWED_HOSTS 由 env_file 直接注入（含 JSON 数组格式，不能在此用 ${} 展开）
+      AUTH_REGISTRATION_ENABLED: "${AUTH_REGISTRATION_ENABLED:-true}"
+      # Waffo Pancake 支付
+      WAFFO_MERCHANT_ID: "${WAFFO_MERCHANT_ID:-}"
+      WAFFO_PRIVATE_KEY: "${WAFFO_PRIVATE_KEY:-}"
+      WAFFO_STORE_ID: "${WAFFO_STORE_ID:-}"
+      WAFFO_RECHARGE_PRODUCT_ID: "${WAFFO_RECHARGE_PRODUCT_ID:-}"
+      WAFFO_ENVIRONMENT: "${WAFFO_ENVIRONMENT:-test}"
+      WAFFO_CURRENCY: "${WAFFO_CURRENCY:-CNY}"
+      PAYMENT_MOCK: "${PAYMENT_MOCK:-false}"
+      # AI 模型 API 密钥：生产默认仅 DeepSeek
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      DEEPSEEK_ENABLED: "${DEEPSEEK_ENABLED:-true}"
+      # 数据源
+      TUSHARE_TOKEN: "${TUSHARE_TOKEN:-}"
+      TUSHARE_ENABLED: "${TUSHARE_ENABLED:-false}"
+      AKSHARE_ENABLED: "${AKSHARE_ENABLED:-true}"
+      BAOSTOCK_ENABLED: "${BAOSTOCK_ENABLED:-true}"
+      FINNHUB_API_KEY: "${FINNHUB_API_KEY:-}"
+      FINNHUB_ENABLED: "${FINNHUB_ENABLED:-false}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zhitouagent-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Vue 3 前端（本地构建）
+  frontend:
+    build:
+      context: ..
+      dockerfile: Dockerfile.frontend
+    image: zhitouagent-frontend:local
+    container_name: zhitouagent-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      TZ: "Asia/Shanghai"
+      VITE_API_BASE_URL: "/api"
+    depends_on:
+      - backend
+    networks:
+      - zhitouagent-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: zhitouagent-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - zhitouagent-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  zhitouagent_mongodb_data:
+    driver: local
+  zhitouagent_redis_data:
+    driver: local
+
+networks:
+  zhitouagent-network:
+    driver: bridge

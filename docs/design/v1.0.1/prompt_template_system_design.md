@@ -90,22 +90,22 @@ constraints:
 ```python
 class PromptTemplateManager:
     """提示词模版管理器"""
-    
+
     def __init__(self, template_dir: str):
         """初始化管理器"""
-        
+
     def load_template(self, analyst_type: str, template_name: str) -> Dict:
         """加载指定的模版"""
-        
+
     def list_templates(self, analyst_type: str) -> List[Dict]:
         """列出某个分析师的所有模版"""
-        
+
     def save_custom_template(self, analyst_type: str, template: Dict) -> str:
         """保存自定义模版"""
-        
+
     def get_template_versions(self, analyst_type: str, template_name: str) -> List[Dict]:
         """获取模版版本历史"""
-        
+
     def validate_template(self, template: Dict) -> bool:
         """验证模版格式"""
 ```

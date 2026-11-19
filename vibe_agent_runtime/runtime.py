@@ -119,7 +119,7 @@ class EmbeddedAgentRuntime:
         default_model = (
             unified_config.get_default_model()
             or unified_config.get_quick_analysis_model()
-            or "qwen-turbo"
+            or "deepseek-chat"
         ).strip()
         provider = self._default_provider_for_model(default_model)
         api_key = ""
@@ -230,6 +230,12 @@ class EmbeddedAgentRuntime:
             runtime_root = (vibe_runtime_base() / "embedded").resolve()
             runtime_root.mkdir(parents=True, exist_ok=True)
             os.environ["VIBE_TRADING_HOME"] = str(runtime_root)
+            try:
+                from app.services.evolution.artifact_publisher import evolution_artifact_runtime_root
+
+                os.environ["EVOLUTION_SKILL_RUNTIME_ROOT"] = str(evolution_artifact_runtime_root())
+            except Exception:
+                logger.debug("Evolution artifact runtime root injection skipped", exc_info=True)
             os.environ["QUANTINGAGENTS_DISABLED_VIBE_TOOLS"] = ",".join(
                 sorted(disabled_tool_names())
             )
@@ -310,6 +316,7 @@ class EmbeddedAgentRuntime:
         user_id: str,
         username: str,
         sink: EventSink,
+        session_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         current_task = asyncio.current_task()
         if current_task is None:
@@ -332,14 +339,29 @@ class EmbeddedAgentRuntime:
                     store=store_module.SessionStore(user_root / "sessions"),
                     event_bus=event_bus,
                     runs_dir=session_root / "runs",
+                    memory_dir=user_root / "memory",
+                    search_index=service_module.SessionSearchIndex(
+                        user_root / "session_search.db"
+                    ),
                 )
                 event_bus.add_listener(lambda event: self._on_event(event, task_id, sink))
                 await self.ensure_session(service, models, session_id, title, user_id, username)
+                if session_config and session_config.get("skill_eval"):
+                    session = service.store.get_session(session_id)
+                    if session is not None:
+                        session.config["skill_eval"] = session_config["skill_eval"]
+                        service.store.update_session(session)
                 self._active[session_id] = (task_id, service, event_bus, sink)
                 try:
+                    effective_prompt = prompt
+                    if session_config and session_config.get("overlay"):
+                        effective_prompt, overlay_event = self._apply_overlay_prompt(
+                            prompt, session_config["overlay"]
+                        )
+                        await sink("evolution.overlay.loaded", overlay_event)
                     result = await service.send_message(
                         session_id,
-                        prompt,
+                        effective_prompt,
                         role="user",
                         include_shell_tools=False,
                     )
@@ -379,6 +401,95 @@ class EmbeddedAgentRuntime:
                     self._active.pop(session_id, None)
         finally:
             self._pending.pop(session_id, None)
+
+    @staticmethod
+    def _apply_overlay_prompt(
+        prompt: str, overlay: dict[str, Any]
+    ) -> tuple[str, dict[str, Any]]:
+        """读取候选 overlay 内容并仅注入当前 verification prompt。"""
+        root = Path(str(overlay.get("sandbox_path", ""))).expanduser().resolve()
+        if not root.is_dir():
+            raise RuntimeError(f"candidate overlay does not exist: {root}")
+        violations = EmbeddedAgentRuntime._validate_overlay_boundary(root)
+        if violations:
+            logger.warning("Candidate overlay boundary violations: %s", violations)
+            raise RuntimeError("candidate overlay violates runtime isolation boundary")
+
+        sections: list[str] = []
+        loaded_files: list[str] = []
+        max_files = int(getattr(settings, "EVOLUTION_OVERLAY_MAX_FILES", 32) or 32)
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            for name in sorted(dirnames + filenames):
+                path = Path(dirpath) / name
+                if path.is_symlink():
+                    violation = f"symlink not allowed: {path.relative_to(root)}"
+                    logger.warning("Overlay boundary violation: %s", violation)
+                    raise RuntimeError("candidate overlay contains symlink")
+            for name in sorted(filenames):
+                path = Path(dirpath) / name
+                if path.suffix not in {".md", ".json", ".yaml", ".yml"}:
+                    continue
+                if len(loaded_files) >= max_files:
+                    raise RuntimeError(
+                        f"candidate overlay exceeds max file limit: {max_files}"
+                    )
+                relative = path.relative_to(root)
+                if len(str(relative)) > 240:
+                    continue
+                content = path.read_text(encoding="utf-8")
+                if len(content) > 12000:
+                    content = content[:12000] + "\n[overlay content truncated]"
+                sections.append(f"### Candidate artifact: {relative}\n{content}")
+                loaded_files.append(str(relative))
+
+        if not sections:
+            raise RuntimeError(f"candidate overlay is empty: {root}")
+        context = (
+            "\n\n[EVOLUTION CANDIDATE OVERLAY]\n"
+            "以下内容仅用于本次候选验证，不代表正式版本。请按候选内容执行并在结果中保留研究边界。\n"
+            + "\n\n".join(sections)
+            + "\n[END EVOLUTION CANDIDATE OVERLAY]"
+        )
+        return prompt + context, {
+            "overlay_id": overlay.get("overlay_id", ""),
+            "proposal_id": overlay.get("proposal_id", ""),
+            "artifact_id": overlay.get("artifact_id", ""),
+            "baseline_version": overlay.get("baseline_version", ""),
+            "candidate_version": overlay.get("candidate_version", ""),
+            "loaded_files": loaded_files,
+            "boundary_checks": {
+                "root": str(root),
+                "passed": True,
+                "violations": [],
+            },
+        }
+
+    @staticmethod
+    def _validate_overlay_boundary(root: Path) -> list[str]:
+        """校验候选 overlay 不指向正式 runtime 或源码树。"""
+        project_root = Path(__file__).resolve().parents[1]
+        forbidden_roots: list[Path] = [project_root]
+        try:
+            from app.services.vibe_agent.paths import vibe_runtime_base
+            forbidden_roots.append(vibe_runtime_base())
+        except Exception:
+            pass
+        try:
+            from app.services.evolution.artifact_publisher import evolution_artifact_runtime_root
+            forbidden_roots.append(evolution_artifact_runtime_root())
+        except Exception:
+            pass
+        forbidden_roots.append(Path.home() / ".zhitouagent")
+
+        violations: list[str] = []
+        resolved = root.resolve()
+        for forbidden in forbidden_roots:
+            forbidden = forbidden.resolve()
+            if resolved == forbidden or forbidden in resolved.parents:
+                violations.append(f"overlay root is inside protected root: {forbidden}")
+        if resolved.is_symlink():
+            violations.append("overlay root is a symlink")
+        return violations
 
     async def cancel(self, session_id: str) -> bool:
         active = self._active.get(session_id)

@@ -268,7 +268,7 @@ def main():
         print_info("运行一键安装脚本: python scripts/easy_install.py")
     
     print()
-    print_info("如需帮助，请访问: https://github.com/hsliuping/TradingAgents-CN/issues")
+    print_info("如需帮助，请联系产品支持邮箱 zh75067197@gmail.com")
 
 if __name__ == "__main__":
     try:
@@ -281,4 +281,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
-

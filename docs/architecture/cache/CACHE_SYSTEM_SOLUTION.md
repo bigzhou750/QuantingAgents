@@ -108,18 +108,18 @@ DEFAULT_CACHE_STRATEGY = os.getenv("TA_CACHE_STRATEGY", "file")
 def get_cache() -> Union[StockDataCache, IntegratedCacheManager]:
     """
     获取缓存实例（统一入口）
-    
+
     根据环境变量 TA_CACHE_STRATEGY 选择缓存策略：
     - "file" (默认): 使用文件缓存
     - "integrated": 使用集成缓存（自动选择 MongoDB/Redis/File）
     - "adaptive": 使用自适应缓存（同 integrated）
-    
+
     环境变量设置：
         export TA_CACHE_STRATEGY=integrated  # Linux/Mac
         set TA_CACHE_STRATEGY=integrated     # Windows
     """
     global _cache_instance
-    
+
     if _cache_instance is None:
         if DEFAULT_CACHE_STRATEGY in ["integrated", "adaptive"]:
             try:
@@ -131,7 +131,7 @@ def get_cache() -> Union[StockDataCache, IntegratedCacheManager]:
         else:
             _cache_instance = StockDataCache()
             print("✅ 使用文件缓存系统")
-    
+
     return _cache_instance
 
 # 全局缓存实例

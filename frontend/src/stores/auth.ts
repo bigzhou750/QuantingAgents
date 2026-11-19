@@ -23,10 +23,30 @@ export interface AuthState {
   redirectPath: string
 }
 
+const loadStoredUser = (): User | null => {
+  const raw = localStorage.getItem('user-info')
+  if (!raw) return null
+
+  try {
+    const user = JSON.parse(raw) as User
+    // Local storage is a cache only. Roles/permissions must come from the
+    // authenticated server response or a token-bearing /auth/me call.
+    if (user) {
+      user.is_admin = false
+      user.roles = ['user']
+    }
+    return user
+  } catch {
+    localStorage.removeItem('user-info')
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => {
     const token = useStorage('auth-token', null).value || null
     const refreshToken = useStorage('refresh-token', null).value || null
+    const storedUser = loadStoredUser()
 
     // 验证token格式
     const isValidToken = (token: string | null): boolean => {
@@ -56,10 +76,10 @@ export const useAuthStore = defineStore('auth', {
       token: validToken,
       refreshToken: validRefreshToken,
 
-      user: validToken ? (useStorage('user-info', null).value || null) : null,
+      user: validToken ? storedUser : null,
 
       permissions: [],
-      roles: [],
+      roles: validToken ? ['user'] : [],
 
       loginLoading: false,
       redirectPath: '/'
@@ -79,7 +99,7 @@ export const useAuthStore = defineStore('auth', {
     
     // 是否为管理员
     isAdmin(): boolean {
-      return this.roles.includes('admin')
+      return this.roles.includes('admin') || this.user?.is_admin === true
     },
     
     // 检查权限
@@ -198,9 +218,14 @@ export const useAuthStore = defineStore('auth', {
           // 设置认证信息
           this.setAuthInfo(access_token, refresh_token, user)
 
-          // 开源版admin用户拥有所有权限
-          this.permissions = ['*']
-          this.roles = ['admin']
+          // 根据后端返回的用户信息设置角色和权限
+          if (user?.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = user?.roles || ['user']
+          }
 
           // 同步用户偏好设置到 appStore
           this.syncUserPreferencesToAppStore()
@@ -262,6 +287,12 @@ export const useAuthStore = defineStore('auth', {
     
     // 刷新Token
     async refreshAccessToken() {
+      if ((this as any)._refreshPromise) return (this as any)._refreshPromise
+      ;(this as any)._refreshPromise = this._refreshAccessTokenOnce()
+      try { return await (this as any)._refreshPromise } finally { delete (this as any)._refreshPromise }
+    },
+
+    async _refreshAccessTokenOnce() {
       try {
         console.log('🔄 开始刷新Token...')
 
@@ -288,7 +319,11 @@ export const useAuthStore = defineStore('auth', {
         if (response.success) {
           const { access_token, refresh_token } = response.data
           console.log('✅ Token刷新成功')
-          this.setAuthInfo(access_token, refresh_token)
+          this.setAuthInfo(access_token, refresh_token || this.refreshToken)
+          if (refresh_token) {
+            this.refreshToken = refresh_token
+          }
+          await this.fetchUserInfo()
           return true
         } else {
           console.error('❌ Token刷新失败:', response.message)
@@ -298,7 +333,7 @@ export const useAuthStore = defineStore('auth', {
         console.error('❌ Token刷新异常:', error)
 
         // 如果是网络错误或服务器错误，不要立即清除认证信息
-        if (error.code === 'NETWORK_ERROR' || error.response?.status >= 500) {
+        if (error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK' || error?.message === 'Network Error' || error?.response?.status >= 500 || error?.response?.status === undefined) {
           console.warn('⚠️ 网络或服务器错误，保留认证信息')
           return false
         }
@@ -320,6 +355,13 @@ export const useAuthStore = defineStore('auth', {
 
         if (response.success) {
           this.user = response.data
+          if (this.user?.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = this.user?.roles || ['user']
+          }
           console.log('✅ 用户信息获取成功:', this.user?.username)
 
           // 同步用户偏好设置到 appStore
@@ -337,10 +379,25 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     
-    // 开源版不需要权限检查，admin拥有所有权限
+    // 根据后端返回的用户信息获取角色和权限
     async fetchUserPermissions() {
-      this.permissions = ['*']
-      this.roles = ['admin']
+      try {
+        const response = await authApi.getUserInfo()
+        if (response.success && response.data) {
+          const user = response.data
+          if (user.is_admin) {
+            this.permissions = ['*']
+            this.roles = ['admin']
+          } else {
+            this.permissions = []
+            this.roles = user.roles || ['user']
+          }
+        }
+      } catch (error) {
+        console.warn('获取用户权限失败，使用默认权限:', error)
+        this.permissions = []
+        this.roles = ['user']
+      }
       return true
     },
     
@@ -374,8 +431,9 @@ export const useAuthStore = defineStore('auth', {
 
       // 动态导入 appStore 避免循环依赖
       import('./app').then(({ useAppStore }) => {
+        const prefs = this.user?.preferences
+        if (!prefs) return
         const appStore = useAppStore()
-        const prefs = this.user!.preferences
 
         // 同步主题设置
         if (prefs.ui_theme) {

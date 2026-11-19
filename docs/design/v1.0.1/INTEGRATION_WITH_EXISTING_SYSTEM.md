@@ -64,7 +64,7 @@ class UserPreferences:
 # 在UserPreferences中添加
 class UserPreferences(BaseModel):
     # 现有字段...
-    
+
     # 新增字段 - 分析偏好
     analysis_preference_type: str = "neutral"  # 默认中性
     analysis_preference_id: Optional[str] = None  # 关联到analysis_preferences._id
@@ -317,7 +317,7 @@ python scripts/create_default_configs.py
 
 ---
 
-**版本**: v1.0.1  
-**状态**: 设计完成  
+**版本**: v1.0.1
+**状态**: 设计完成
 **下一步**: 实现集成
 

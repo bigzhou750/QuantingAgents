@@ -6,6 +6,7 @@
 
 import asyncio
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -35,30 +36,31 @@ async def migrate_config_file_auth():
     try:
         # 1. 读取现有的配置文件密码
         config_file = project_root / "config" / "admin_password.json"
-        admin_password = "admin123"  # 默认密码
+        admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
         
         if config_file.exists():
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    admin_password = config.get("password", "admin123")
+                    admin_password = admin_password or config.get("password", "")
                 logger.info(f"✅ 从配置文件读取管理员密码")
             except Exception as e:
-                logger.warning(f"⚠️ 读取配置文件失败，使用默认密码: {e}")
-        else:
-            logger.info("⚠️ 配置文件不存在，使用默认密码")
+                logger.warning(f"⚠️ 读取配置文件失败: {e}")
+
+        if not admin_password:
+            logger.warning("未配置 INITIAL_ADMIN_PASSWORD，跳过管理员创建")
+            return False
         
         # 2. 创建或更新数据库中的管理员用户
         admin_user = await user_service.create_admin_user(
             username="admin",
             password=admin_password,
-            email="admin@tradingagents.cn"
+            email="zh75067197@gmail.com"
         )
         
         if admin_user:
             logger.info("✅ 管理员用户已创建/更新到数据库")
             logger.info(f"   用户名: admin")
-            logger.info(f"   密码: {admin_password}")
         else:
             logger.error("❌ 创建管理员用户失败")
             return False
@@ -72,7 +74,6 @@ async def migrate_config_file_auth():
         logger.info("✅ 认证系统迁移完成！")
         logger.info("\n📋 迁移后的登录信息:")
         logger.info(f"- 用户名: admin")
-        logger.info(f"- 密码: {admin_password}")
         logger.info("\n⚠️  重要提醒:")
         logger.info("1. 原配置文件已备份到 config/backup/ 目录")
         logger.info("2. 现在可以使用新的基于数据库的认证 API")
@@ -127,7 +128,7 @@ async def migrate_web_users():
             
             new_user = await user_service.create_user(user_create)
             if new_user:
-                logger.info(f"✅ 用户 {username} 迁移成功，默认密码: {default_password}")
+                logger.info(f"✅ 用户 {username} 迁移成功")
             else:
                 logger.warning(f"⚠️ 用户 {username} 迁移失败")
         
@@ -186,15 +187,19 @@ async def verify_migration():
         
         # 测试认证
         config_file = project_root / "config" / "admin_password.json"
-        admin_password = "admin123"
+        admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
         
         if config_file.exists():
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    admin_password = config.get("password", "admin123")
+                    admin_password = admin_password or config.get("password", "")
             except:
                 pass
+
+        if not admin_password:
+            logger.warning("未提供 INITIAL_ADMIN_PASSWORD，跳过管理员认证测试")
+            return True
         
         auth_user = await user_service.authenticate_user("admin", admin_password)
         if auth_user:
@@ -204,9 +209,9 @@ async def verify_migration():
             return False
         
         # 获取用户列表
-        users = await user_service.list_users()
-        logger.info(f"✅ 数据库中共有 {len(users)} 个用户")
-        for user in users:
+        users_result = await user_service.list_users()
+        logger.info(f"✅ 数据库中共有 {users_result.total} 个用户")
+        for user in users_result.users:
             logger.info(f"   - {user.username} ({user.email}) - {'管理员' if user.is_admin else '普通用户'}")
         
         return True

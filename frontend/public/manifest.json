@@ -1,11 +1,11 @@
 {
-  "name": "TradingAgents-CN",
-  "short_name": "TradingAgents",
-  "description": "多智能体股票分析学习平台",
+  "name": "智投",
+  "short_name": "智投",
+  "description": "AI智能股票分析平台",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#409EFF",
+  "background_color": "#0F172A",
+  "theme_color": "#0EA5E9",
   "icons": [
     {
       "src": "/logo.svg",

@@ -1,8 +1,8 @@
 # 配置验证占位符检测修复
 
-**日期**: 2025-10-21  
-**版本**: v1.0.0-preview  
-**类型**: Bug Fix  
+**日期**: 2025-10-21
+**版本**: v1.0.0-preview
+**类型**: Bug Fix
 **优先级**: High
 
 ## 问题描述
@@ -53,7 +53,7 @@ if api_key.startswith('your_') or api_key.startswith('your-'):
 def _is_valid_api_key(self, api_key: Optional[str]) -> bool:
     """
     判断 API Key 是否有效（不是占位符）
-    
+
     有效条件：
     1. Key 不为空
     2. Key 不是占位符（不以 'your_' 或 'your-' 开头，不以 '_here' 结尾）
@@ -61,26 +61,26 @@ def _is_valid_api_key(self, api_key: Optional[str]) -> bool:
     """
     if not api_key:
         return False
-    
+
     # 去除首尾空格和引号
     api_key = api_key.strip().strip('"').strip("'")
-    
+
     # 检查是否为空
     if not api_key:
         return False
-    
+
     # 检查是否为占位符（前缀）
     if api_key.startswith('your_') or api_key.startswith('your-'):
         return False
-    
+
     # 🆕 检查是否为占位符（后缀）
     if api_key.endswith('_here') or api_key.endswith('-here'):
         return False
-    
+
     # 检查长度（大多数 API Key 都 > 10 个字符）
     if len(api_key) <= 10:
         return False
-    
+
     return True
 ```
 
@@ -173,7 +173,7 @@ python scripts/test_env_validation.py
    ```bash
    # ❌ 错误：使用占位符
    OPENAI_API_KEY=your_openai_api_key_here
-   
+
    # ✅ 正确：使用真实 API Key
    OPENAI_API_KEY=sk-proj-abc123def456...
    ```
@@ -213,7 +213,7 @@ A: 请访问对应服务商的官网：
 
 - **Issue**: 用户反馈配置验证问题
 - **Commit**: `6b100db` - fix: 修复配置验证逻辑，正确识别占位符 API Key
-- **测试脚本**: 
+- **测试脚本**:
   - `scripts/test_api_key_validation.py`
   - `scripts/test_env_validation.py`
 

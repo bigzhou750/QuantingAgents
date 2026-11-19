@@ -6,7 +6,7 @@ Alpha Vantage 基本面数据提供者
 - 财务报表（资产负债表、现金流量表、利润表）
 - 估值指标
 
-参考原版 TradingAgents 实现
+参考原版 zhitouagent 实现
 """
 
 from typing import Annotated

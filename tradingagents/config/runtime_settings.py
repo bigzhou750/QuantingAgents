@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-TradingAgents 运行时配置适配器（弱依赖）
+zhitouagent 运行时配置适配器（弱依赖）
 
 - 优先尝试从后端 app.services.config_provider 读取动态 system_settings（若可用）
 - 若不可用或在异步事件循环中无法同步等待，则回退到环境变量与默认值
-- 保持 TradingAgents 包独立性：不可用时静默回退，不引入硬依赖
+- 保持 zhitouagent 包独立性：不可用时静默回退，不引入硬依赖
 """
 
 from __future__ import annotations

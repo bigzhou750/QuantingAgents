@@ -93,6 +93,11 @@ _WRITER_PREFIXES: tuple[str, ...] = ("export_",)
 #: numbers into a context window helps nobody.
 _MAX_RESULT_LEAVES = 5000
 
+#: Maximum input series length to prevent the model from entering a death loop
+#: trying to manually construct huge data arrays. For >500 points, the agent
+#: should downsample (e.g. weekly) or split into segments first.
+_MAX_INPUT_SERIES_LENGTH = 500
+
 
 def _import_module(short_name: str) -> Any:
     """Import an allowlisted module by its short name.
@@ -404,10 +409,50 @@ class QuantlibCallTool(BaseTool):
             ensure_ascii=False,
         )
 
+    @staticmethod
+    def _validate_input_size(raw_kwargs: dict) -> str | None:
+        """Check input data sizes to prevent model death loops on huge arrays.
+
+        Returns an error message string if any input exceeds the limit, else None.
+        """
+        for key, value in raw_kwargs.items():
+            if isinstance(value, dict):
+                if "__series__" in value:
+                    length = len(value["__series__"].get("values", []))
+                    if length > _MAX_INPUT_SERIES_LENGTH:
+                        return (
+                            f"Input series '{key}' has {length} points, exceeding "
+                            f"the {_MAX_INPUT_SERIES_LENGTH} limit. Please downsample "
+                            f"(e.g. use weekly/monthly frequency) or split into segments "
+                            f"and merge results, rather than passing all daily data at once."
+                        )
+                if "__dataframe__" in value:
+                    rows = len(value["__dataframe__"].get("data", []))
+                    if rows > _MAX_INPUT_SERIES_LENGTH:
+                        return (
+                            f"Input dataframe '{key}' has {rows} rows, exceeding "
+                            f"the {_MAX_INPUT_SERIES_LENGTH} limit. Please downsample "
+                            f"or process in batches."
+                        )
+            if isinstance(value, list) and len(value) > _MAX_INPUT_SERIES_LENGTH:
+                # Plain lists that look like numeric series (not nested dicts)
+                if value and isinstance(value[0], (int, float)):
+                    return (
+                        f"Input list '{key}' has {len(value)} elements, exceeding "
+                        f"the {_MAX_INPUT_SERIES_LENGTH} limit. Please downsample "
+                        f"(e.g. weekly/monthly) or split into segments."
+                    )
+        return None
+
     def _call(self, module_name: str, function_name: str, func: Any, raw_kwargs: Any) -> str:
         """Run the function and serialize its result."""
         if not isinstance(raw_kwargs, dict):
             return self._error("'kwargs' must be an object")
+
+        size_error = self._validate_input_size(raw_kwargs)
+        if size_error:
+            return self._error(size_error)
+
         try:
             decoded = {str(k): _decode(v) for k, v in raw_kwargs.items()}
         except ValueError as exc:

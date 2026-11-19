@@ -15,7 +15,7 @@
 
 - **模型显示名称** (`model_display_name`)：用于界面显示的友好名称
   - 示例：`Qwen3系列Flash模型 - 快速经济`
-  
+
 - **模型代码** (`model_name`)：实际调用 API 时使用的模型标识符
   - 示例：`qwen-turbo`
 
@@ -107,7 +107,7 @@ const handleModelSelect = (modelCode: string) => {
     // 自动填充模型代码和显示名称
     formData.value.model_name = selectedModel.value
     formData.value.model_display_name = selectedModel.label
-    
+
     // 自动填充价格信息
     const modelInfo = getModelInfo(formData.value.provider, modelCode)
     if (modelInfo) {

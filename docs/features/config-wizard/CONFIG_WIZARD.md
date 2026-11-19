@@ -151,7 +151,7 @@ location.reload();
 onMounted(() => {
   // 强制显示配置向导（测试用）
   showConfigWizard.value = true
-  
+
   // checkFirstTimeSetup() // 注释掉原来的检查
 })
 ```

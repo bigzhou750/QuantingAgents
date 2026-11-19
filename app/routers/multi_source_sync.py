@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 from app.services.multi_source_basics_sync_service import get_multi_source_sync_service
 from app.services.data_sources.manager import DataSourceManager
+from app.routers.auth_db import get_current_admin
+from fastapi import Depends
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +153,7 @@ async def get_sync_status():
         raise HTTPException(status_code=500, detail=f"Failed to get sync status: {str(e)}")
 
 
-@router.post("/stock_basics/run")
+@router.post("/stock_basics/run", dependencies=[Depends(get_current_admin)])
 async def run_stock_basics_sync(
     force: bool = Query(False, description="是否强制运行同步"),
     preferred_sources: Optional[str] = Query(None, description="优先使用的数据源，用逗号分隔")
@@ -274,7 +276,7 @@ class TestSourceRequest(BaseModel):
     source_name: str | None = None
 
 
-@router.post("/test-sources")
+@router.post("/test-sources", dependencies=[Depends(get_current_admin)])
 async def test_data_sources(request: TestSourceRequest = TestSourceRequest()):
     """
     测试数据源的连通性
@@ -445,7 +447,7 @@ async def get_sync_history(
         raise HTTPException(status_code=500, detail=f"Failed to get sync history: {str(e)}")
 
 
-@router.delete("/cache")
+@router.delete("/cache", dependencies=[Depends(get_current_admin)])
 async def clear_sync_cache():
     """清空同步相关的缓存"""
     try:

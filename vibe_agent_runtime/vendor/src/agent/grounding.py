@@ -29,7 +29,7 @@ import re
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 
 GROUNDING_ARTIFACT = "grounding_evidence.json"
@@ -932,6 +932,7 @@ class GroundingLedger:
         run_dir: Path,
         user_message: str,
         history: Sequence[Mapping[str, Any]] | None = None,
+        event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
     ) -> None:
         """Create a ledger and seed only authoritative prior identities.
 
@@ -954,6 +955,7 @@ class GroundingLedger:
         self._price_evidence_attempts = 0
         self._ingested_csvs: set[str] = set()
         self._identity_required = bool(_ACTIONABLE_MARKET_RE.search(user_message))
+        self._event_callback = event_callback
         self._buffer_output = self._identity_required
         # Every instrument this run is entitled to write about: the ones the
         # user named, plus the ones a succeeding tool call passed in or returned.
@@ -965,6 +967,98 @@ class GroundingLedger:
 
         self._seed_symbols(user_message, source="user_message")
         self.persist()
+
+    def _emit_decision(self, payload: dict[str, Any]) -> None:
+        if self._event_callback is None:
+            return
+        try:
+            self._event_callback("decision.record", payload)
+        except Exception:
+            pass
+
+    def _emit_identity_decision(self, record: IdentityRecord) -> None:
+        status = record.status
+        selected = record.symbol or None
+        if status == "locked":
+            decision_status = "confirmed"
+        elif status in {"ambiguous", "conflicting"}:
+            decision_status = "blocked"
+        else:
+            decision_status = "unverified"
+        self._emit_decision(
+            {
+                "decision_type": "grounding",
+                "scenario": "标的识别决策",
+                "candidates": [
+                    {
+                        "id": str(item.get("symbol") or item.get("code") or index),
+                        "label": str(item.get("name") or item.get("symbol") or item.get("code") or index),
+                        "metadata": {"source": item.get("source")},
+                    }
+                    for index, item in enumerate(record.candidates or [])
+                ],
+                "selected_option": selected,
+                "selection_reason": f"grounding_status={status}; sources={','.join(record.source or []) or 'unavailable'}",
+                "conclusion": f"标的识别状态: {status}"
+                + (f"，锁定 {selected}" if selected else "，未锁定"),
+                "evidence_ids": [f"evidence_{record.source_tool_call_id}"] if record.source_tool_call_id else [],
+                "status": decision_status,
+                "confidence": 0.9 if status == "locked" else 0.5,
+                "risk_level": "low" if status == "locked" else "medium",
+                "source": "grounding",
+            }
+        )
+
+    def _emit_auth_decision(
+        self,
+        *,
+        tool_name: str,
+        call_id: str,
+        authorization: ToolAuthorization,
+    ) -> None:
+        selected = "allow" if authorization.allowed else "block"
+        self._emit_decision(
+            {
+                "decision_type": "grounding",
+                "scenario": "工具授权决策",
+                "candidates": [
+                    {"id": "allow", "label": "允许执行"},
+                    {"id": "block", "label": "阻止执行"},
+                ],
+                "selected_option": selected,
+                "selection_reason": authorization.message or "identity gate allow",
+                "conclusion": f"{tool_name} 被{'允许' if authorization.allowed else '阻止'}执行",
+                "evidence_ids": [f"evidence_{call_id}"] if call_id else [],
+                "status": "confirmed" if authorization.allowed else "blocked",
+                "confidence": 1.0,
+                "risk_level": "low" if authorization.allowed else "high",
+                "source": "grounding",
+            }
+        )
+
+    def _emit_validation_decision(self, content: str, validation: ValidationResult) -> None:
+        self._emit_decision(
+            {
+                "decision_type": "grounding",
+                "scenario": "最终回答校验决策",
+                "candidates": [
+                    {"id": "release", "label": "释放最终回答"},
+                    {"id": "reject", "label": "拒绝并纠正"},
+                ],
+                "selected_option": "release" if validation.valid else "reject",
+                "selection_reason": (
+                    "grounding 校验通过" if validation.valid
+                    else "; ".join(str(item.get("message") or item.get("code") or "grounding error") for item in validation.issues[:5])
+                ),
+                "conclusion": "最终回答通过 grounding 校验" if validation.valid else "最终回答未通过 grounding 校验",
+                "evidence_ids": [],
+                "status": "confirmed" if validation.valid else "blocked",
+                "confidence": 1.0,
+                "risk_level": "medium" if validation.valid else "high",
+                "source": "grounding",
+                "raw_reasoning_ref": hashlib.sha256(content.encode("utf-8")).hexdigest()[:24],
+            }
+        )
 
     @property
     def authorized_symbols(self) -> set[str]:
@@ -1063,15 +1157,19 @@ class GroundingLedger:
             self._identity_required = True
             self._buffer_output = True
             self._begin_resolution(str(arguments.get("query") or ""), call_id)
-            return ToolAuthorization(allowed=True)
+            result = ToolAuthorization(allowed=True)
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
 
         if self._is_private_company_skill(tool_name, arguments):
-            return self._authorize_private_company_skill()
+            result = self._authorize_private_company_skill()
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
 
         if tool_name == "load_skill" and self._identity_required:
             frozen_status = batch_identity_status or self.identity_status
             if frozen_status in _RESOLUTION_INCOMPLETE_STATUSES:
-                return ToolAuthorization(
+                result = ToolAuthorization(
                     allowed=False,
                     error_code="identity_required",
                     message=(
@@ -1080,18 +1178,24 @@ class GroundingLedger:
                         "this same batch cannot be consumed."
                     ),
                 )
-            return ToolAuthorization(allowed=True)
+                self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+                return result
+            result = ToolAuthorization(allowed=True)
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
 
         symbols = tuple(self._extract_symbol_arguments(arguments))
         if not symbols:
-            return ToolAuthorization(allowed=True)
+            result = ToolAuthorization(allowed=True)
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
 
         self._identity_required = True
         self._buffer_output = True
         authorized = {_normalize_symbol(item) for item in batch_authorized_symbols}
         frozen_status = batch_identity_status or self.identity_status
         if frozen_status != "locked" or not authorized:
-            return ToolAuthorization(
+            result = ToolAuthorization(
                 allowed=False,
                 error_code=(
                     "identity_conflict"
@@ -1105,6 +1209,8 @@ class GroundingLedger:
                 ),
                 symbols=symbols,
             )
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
 
         mismatched = tuple(
             symbol
@@ -1123,13 +1229,17 @@ class GroundingLedger:
             ]
             if hints:
                 message += " " + " ".join(hints)
-            return ToolAuthorization(
+            result = ToolAuthorization(
                 allowed=False,
                 error_code="identity_mismatch",
                 message=message,
                 symbols=mismatched,
             )
-        return ToolAuthorization(allowed=True, symbols=symbols)
+            self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+            return result
+        result = ToolAuthorization(allowed=True, symbols=symbols)
+        self._emit_auth_decision(tool_name=tool_name, call_id=call_id, authorization=result)
+        return result
 
     @staticmethod
     def _venue_mismatch_hints(
@@ -1240,6 +1350,13 @@ class GroundingLedger:
         self._track_session_symbols(arguments, result)
         if tool_name == _RESOLVER_TOOL:
             self._ingest_resolution(arguments, payload, call_id)
+            data = payload.get("data") if isinstance(payload, dict) else None
+            data = data if isinstance(data, dict) else {}
+            query = str(data.get("query") or arguments.get("query") or "")
+            key = _query_key(query) or f"call:{call_id}"
+            record = self._identities.get(key)
+            if record is not None:
+                self._emit_identity_decision(record)
         elif tool_name == "get_market_data":
             self._ingest_market_data(arguments, payload, call_id)
         elif payload is not None:
@@ -1272,6 +1389,7 @@ class GroundingLedger:
             }
         )
         self.persist()
+        self._emit_validation_decision(content, result)
         return result
 
     def correction_prompt(self, validation: ValidationResult) -> str:
@@ -1548,6 +1666,7 @@ class GroundingLedger:
             source_tool_call_id=call_id,
             version=(existing.version + 1) if existing else 1,
         )
+        self._emit_identity_decision(self._identities[key])
 
     def _ingest_resolution(
         self,
@@ -2303,6 +2422,15 @@ class GroundingLedger:
             )
         return issues
 
+    #: Keywords that unambiguously imply CNY for A-share contexts. When the
+    #: answer discusses only A-share instruments (.SH/.SZ/.BJ) and mentions
+    #: one of these terms, the currency is considered surfaced even without
+    #: an explicit "CNY" / "¥" label — A-shares are exclusively RMB-denominated.
+    _CNY_IMPLICIT_KEYWORDS = frozenset({
+        "a股", "a 股", "上证", "深证", "创业板", "科创板", "北交所",
+        "沪深", "沪指", "深指", "两市", "a股市场",
+    })
+
     @staticmethod
     def _currency_is_surfaced(currency: str, content: str) -> bool:
         """Return whether a quote currency or an unambiguous alias is visible."""
@@ -2311,7 +2439,14 @@ class GroundingLedger:
         tokens = _CURRENCY_ALIASES.get(code, (currency.casefold(),))
         if any(token.casefold() in folded for token in tokens):
             return True
-        return code == "CNY" and bool(_BARE_YUAN_RE.search(content))
+        if code == "CNY":
+            if bool(_BARE_YUAN_RE.search(content)):
+                return True
+            # A-share implicit context: if the answer discusses A-share
+            # markets using standard Chinese terminology, CNY is understood.
+            if any(kw in folded for kw in GroundingValidator._CNY_IMPLICIT_KEYWORDS):
+                return True
+        return False
 
     def _validate_price_tables(
         self,

@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30)
+    AUTH_REGISTRATION_ENABLED: bool = Field(default=True)
+    AUTH_PASSWORD_MIN_LENGTH: int = Field(default=8, ge=6, le=128)
+    AUTH_LOGIN_RATE_LIMIT: int = Field(default=10, ge=1, le=1000)
+    AUTH_REGISTER_RATE_LIMIT: int = Field(default=5, ge=1, le=1000)
+    AUTH_TOKEN_REVOCATION_ENABLED: bool = Field(default=True)
+    AUTH_TOKEN_ISSUER: str = Field(default="quantingagents")
 
     # 队列配置
     QUEUE_MAX_SIZE: int = Field(default=10000)
@@ -187,11 +193,100 @@ class Settings(BaseSettings):
 
     # Embedded Vibe Agent runtime. This is data, never source code.
     VIBE_AGENT_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/vibe-agent")
+    USER_RUNTIME_ROOT: str = Field(default="~/.quantingagents/runtime/users")
+    MULTI_ACCOUNT_ISOLATION_ENABLED: bool = Field(default=True)
+    MULTI_ACCOUNT_ISOLATION_ENFORCE: bool = Field(default=False)
+    MULTI_ACCOUNT_MIGRATION_VERSION: int = Field(default=0, ge=0)
     VIBE_AGENT_WORKER_ENABLED: bool = Field(default=True)
     VIBE_AGENT_WORKER_ID: str = Field(default="quanting-vibe-worker")
     VIBE_AGENT_WORKER_CONCURRENCY: int = Field(default=2, ge=1, le=8)
     VIBE_AGENT_TASK_TIMEOUT_SECONDS: int = Field(default=900, ge=30, le=7200)
 
+    # ==================== Agent 评测平台配置 ====================
+    EVAL_RUNNER_CONCURRENCY: int = Field(default=2, ge=1, le=8, description="评测运行并发数")
+    EVAL_TRIAL_TIMEOUT_SECONDS: int = Field(default=600, ge=60, le=3600, description="单个 trial 超时时间（秒）")
+    EVAL_MAX_TRIALS_PER_CASE: int = Field(default=10, ge=1, le=50, description="每个 case 最大 trial 次数")
+    EVAL_JUDGE_MODEL: str = Field(default="", description="LLM-as-judge 使用的模型（留空使用默认模型）")
+    EVAL_JUDGE_MODEL_DEFAULT: str = Field(default="deepseek-chat", description="LLM-as-judge 默认模型")
+    EVAL_OBSERVABILITY_BACKEND: str = Field(default="none", description="评测观测后端: none/langfuse/phoenix")
+    EVAL_OBSERVABILITY_API_KEY: str = Field(default="", description="评测观测后端 API key")
+    EVAL_OBSERVABILITY_HOST: str = Field(default="", description="评测观测后端地址")
+    EVAL_OBSERVABILITY_PROJECT: str = Field(default="quantingagents-eval", description="评测观测项目名")
+    ONLINE_BADCASE_ENABLED: bool = Field(default=False, description="是否启用线上 Bad Case 自动发现")
+    ONLINE_BADCASE_ENABLE_JUDGE: bool = Field(default=False, description="是否对线上输出启用 LLM Judge 软信号")
+    ONLINE_BADCASE_SOFT_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0, description="软质量信号采样率")
+    ONLINE_BADCASE_CONFIDENCE_THRESHOLD: float = Field(default=0.8, ge=0.0, le=1.0, description="自动确认置信度阈值")
+    ONLINE_BADCASE_JUDGE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="LLM Judge 低分阈值")
+    ONLINE_BADCASE_EVIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0, description="证据评分低分阈值")
+    ONLINE_BADCASE_MAX_CONTENT_LENGTH: int = Field(default=5000, ge=1000, le=200000, description="Bad Case 最大内容长度")
+    ONLINE_BADCASE_DATASET_PURPOSES: str = Field(
+        default="online_regression,review_queue,detector_eval,golden",
+        description="评测集分层用途（逗号分隔）",
+    )
+
+    # ==================== Agent 决策可解释与审计配置 ====================
+    EXPLAINABILITY_ENABLED: bool = Field(
+        default=True,
+        description="是否启用 Agent 决策链、解释校验与审计能力",
+    )
+    DECISION_AUDIT_ENABLED: bool = Field(
+        default=True,
+        description="是否启用按业务 ID 的统一决策审计查询",
+    )
+    EXPLAINABILITY_MODE: str = Field(
+        default="strict",
+        description="解释降级模式: strict/relaxed（strict 下高风险任务解释故障时暂停）",
+    )
+    EXPLAINABILITY_HIGH_RISK_THRESHOLD: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="高风险决策阈值",
+    )
+    EXPLAINABILITY_ALERT_THRESHOLD: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="解释不一致率或决策链完整率告警阈值",
+    )
+
+    # ==================== Agent 自进化配置 ====================
+    EVOLUTION_AUTOMATION_MODE: str = Field(default="manual", description="自动化模式: manual/semi-auto/auto")
+    EVOLUTION_TRIGGER_REGRESSION_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0, description="趋势回退触发阈值（成功率下降比例）")
+    EVOLUTION_TRIGGER_BAD_CASE_COUNT: int = Field(default=10, ge=1, description="Bad Case 阈值触发数量")
+    EVOLUTION_BUDGET_MAX_RUNS_PER_DAY: int = Field(default=5, ge=1, le=50, description="每日最大验证 run 次数")
+    EVOLUTION_HUMAN_GATE: bool = Field(default=True, description="生产环境是否要求人工审批")
+    EVOLUTION_ALLOWED_ARTIFACT_TYPES: str = Field(default="skill,prompt,rubric,policy,case", description="允许自进化的 artifact 类型（逗号分隔）")
+    EVOLUTION_FORBIDDEN_TARGETS: str = Field(default="", description="禁止修改的 artifact ID 列表（逗号分隔）")
+    EVOLUTION_SCHEDULE_CRON: str = Field(default="", description="定时触发表达式（空=禁用）")
+    EVOLUTION_COOLDOWN_MINUTES: int = Field(default=60, ge=0, le=10080, description="相同失败模式冷却时间")
+    EVOLUTION_CHANGE_BUDGET_CHARS: int = Field(default=20000, ge=100, le=200000, description="单提案最大变更字符数")
+    EVOLUTION_DAILY_COST_BUDGET_USD: float = Field(default=10.0, ge=0, le=100000, description="每日验证成本预算")
+    EVOLUTION_REQUIRE_SMOKE_TEST: bool = Field(default=True, description="发布后是否必须通过 smoke test")
+    EVOLUTION_SKILL_REGRESSION_REQUIRED: bool = Field(
+        default=True,
+        description="Skill promote 前是否必须通过配对回归 gate",
+    )
+    EVOLUTION_SKILL_REGRESSION_OVERRIDE_ALLOWED: bool = Field(
+        default=False,
+        description="是否允许管理员显式覆盖 Skill 回归门禁",
+    )
+    EVOLUTION_ARTIFACT_RUNTIME_ROOT: str = Field(
+        default="~/.quantingagents/runtime/evolution-artifacts",
+        description="自进化 artifact 的正式 materialization 根目录",
+    )
+    EVOLUTION_FOLLOW_UP_WINDOW_MINUTES: int = Field(
+        default=60,
+        ge=5,
+        le=10080,
+        description="高风险发布反馈升级统计窗口",
+    )
+    EVOLUTION_OVERLAY_MAX_FILES: int = Field(
+        default=32,
+        ge=1,
+        le=200,
+        description="候选 overlay 最大可加载文件数",
+    )
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)
@@ -307,7 +402,12 @@ class Settings(BaseSettings):
     BAOSTOCK_INIT_AUTO_START: bool = Field(default=False, description="应用启动时自动检查并初始化数据")
 
     # 数据目录配置
-    TRADINGAGENTS_DATA_DIR: str = Field(default="./data")
+    ZHITOUAGENT_DATA_DIR: str = Field(default="./data")
+
+    @property
+    def TRADINGAGENTS_DATA_DIR(self) -> str:
+        """Deprecated compatibility alias for legacy callers."""
+        return self.ZHITOUAGENT_DATA_DIR
 
     @property
     def log_dir(self) -> str:
@@ -332,6 +432,22 @@ class Settings(BaseSettings):
     NEWS_SYNC_HOURS_BACK: int = Field(default=24)
     NEWS_SYNC_MAX_PER_SOURCE: int = Field(default=50)
 
+    # ==================== 数据就绪检查配置 ====================
+    DATA_READINESS_ENABLED: bool = Field(default=True, description="启用数据就绪检查")
+    DATA_READINESS_REFRESH_CRON: str = Field(default="*/30 * * * *", description="数据就绪刷新调度")
+    DATA_READINESS_FRESHNESS_STOCK_POOL_HOURS: int = Field(default=48, ge=1, description="股票池新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_QUOTES_HOURS: int = Field(default=2, ge=1, description="行情新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_HISTORICAL_HOURS: int = Field(default=26, ge=1, description="历史行情新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_FINANCIAL_HOURS: int = Field(default=168, ge=1, description="财务数据新鲜度阈值（小时）")
+    DATA_READINESS_FRESHNESS_INDEX_HOURS: int = Field(default=26, ge=1, description="指数数据新鲜度阈值（小时）")
+    DATA_READINESS_MIN_COVERAGE_RATE: float = Field(default=0.5, ge=0.0, le=1.0, description="最低覆盖率阈值")
+
+    # ==================== 策略模拟配置 ====================
+    SIMULATION_ENABLED: bool = Field(default=True, description="启用策略模拟")
+    SIMULATION_DEFAULT_LOOKBACK_DAYS: int = Field(default=365, ge=30, le=1825, description="默认回看天数")
+    SIMULATION_MIN_COVERAGE_RATE: float = Field(default=0.5, ge=0.0, le=1.0, description="最低覆盖率以生成有效结果")
+    SIMULATION_AUTO_RUN_CRON: str = Field(default="0 20 * * 1-5", description="收盘后自动模拟调度")
+
     @property
     def is_production(self) -> bool:
         """是否为生产环境"""
@@ -344,7 +460,7 @@ settings = Settings()
 
 
 def _read_major_version() -> str:
-    v = os.getenv("TRADINGAGENTS_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
+    v = os.getenv("ZHITOUAGENT_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
     if not v:
         try:
             v = Path(__file__).resolve().parents[3].joinpath("VERSION").read_text(encoding="utf-8").strip()
@@ -356,8 +472,8 @@ def _read_major_version() -> str:
 
 
 def _default_instance_tag() -> str:
-    user = os.getenv("TRADINGAGENTS_DB_USER", "").strip() or getpass.getuser()
-    host = os.getenv("TRADINGAGENTS_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
+    user = os.getenv("ZHITOUAGENT_DB_USER", "").strip() or getpass.getuser()
+    host = os.getenv("ZHITOUAGENT_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
     tag = f"{user}-{host}" if host else user
     return _sanitize_mongo_db_name(tag).strip("_-").lower() or "local"
 

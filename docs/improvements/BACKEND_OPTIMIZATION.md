@@ -82,28 +82,28 @@ TradingAgentsCN/
 RELOAD_EXCLUDES = [
     # Python缓存
     "__pycache__", "*.pyc", "*.pyo", "*.pyd",
-    
+
     # 版本控制
     ".git", ".gitignore",
-    
+
     # 测试和缓存
     ".pytest_cache", ".coverage",
-    
+
     # 日志文件
     "*.log", "logs",
-    
+
     # 临时文件
     "*.tmp", "*.temp", "*.swp",
-    
+
     # 系统文件
     ".DS_Store", "Thumbs.db",
-    
+
     # IDE文件
     ".vscode", ".idea",
-    
+
     # 配置文件
     ".env", ".env.local",
-    
+
     # 前端文件
     "node_modules", "*.js", "*.css"
 ]
@@ -176,7 +176,7 @@ watchfiles.main | INFO | 1 change detected
 ```bash
 OSError: [Errno 98] Address already in use
 ```
-**解决**: 
+**解决**:
 ```bash
 # 查看端口占用
 lsof -i :8000
@@ -233,7 +233,7 @@ DEBUG=True python -m app
 
 ## 🎉 总结
 
-通过这次优化，TradingAgents-CN后端现在支持：
+通过这次优化，zhitouagent后端现在支持：
 
 1. **标准化启动**: `python -m app`
 2. **智能监控**: 减少不必要的文件变化检测

@@ -25,7 +25,7 @@ import logging
 import re
 from typing import Any
 
-from backtest.loaders._http import resolve_min_interval, throttled_get_json
+from backtest.loaders._http import _THROTTLE, resolve_min_interval, throttled_get_json
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +78,66 @@ def _min_interval() -> float:
     return resolve_min_interval(_MIN_INTERVAL_ENV, _DEFAULT_MIN_INTERVAL)
 
 
+def _curl_get_json(url: str, *, params: dict[str, Any], timeout: int = 15, max_retries: int = 3) -> Any:
+    """Fallback GET via ``curl`` subprocess when Python TLS is blocked.
+
+    Some providers (e.g. Eastmoney) fingerprint Python's TLS ClientHello and
+    silently drop the connection, while ``curl`` with its own TLS stack works
+    fine.  This helper shells out to ``curl`` as a last resort.
+
+    Retries up to ``max_retries`` times with exponential backoff (1s, 2s, 4s)
+    on empty responses or connection errors, since Eastmoney intermittently
+    returns HTTP 52 (empty reply) under load.
+    """
+    import subprocess
+    import time
+    from urllib.parse import urlencode
+
+    full_url = f"{url}?{urlencode(params)}"
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-S", "--max-time", str(timeout),
+                    "-H", "User-Agent: Mozilla/5.0",
+                    "-H", "Accept: */*",
+                    full_url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5,
+            )
+            if result.returncode != 0:
+                raise ConnectionError(f"curl exited {result.returncode}: {result.stderr.strip()}")
+            body = result.stdout.strip()
+            if not body:
+                raise ValueError("curl returned empty body")
+            return json.loads(body)
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"curl timed out after {timeout}s for {url}")
+        except (ValueError, ConnectionError) as exc:
+            last_error = exc
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                logger.warning(
+                    "curl attempt %d/%d failed for %s: %s; retrying in %ds",
+                    attempt + 1, max_retries, url, exc, wait_time,
+                )
+                time.sleep(wait_time)
+            else:
+                raise
+    # Should not reach here, but just in case
+    raise last_error  # type: ignore[misc]
+
+
 def get_json(url: str, *, params: dict[str, Any]) -> Any:
     """Issue a throttled Eastmoney GET and decode the body as JSON.
+
+    Tries the normal Python requests path first; on ``RemoteDisconnected`` or
+    similar connection errors, falls back to ``curl`` which uses a different
+    TLS stack that some providers accept.
 
     Args:
         url: Fully-qualified Eastmoney endpoint URL.
@@ -89,17 +147,26 @@ def get_json(url: str, *, params: dict[str, Any]) -> Any:
         The decoded JSON payload (typically a ``dict``).
 
     Raises:
-        requests.RequestException: Network failure, propagated for the caller's
-            retry policy.
-        requests.HTTPError: Non-2xx response status.
+        requests.RequestException: Network failure (only when curl also fails).
         ValueError: Body is not valid JSON.
     """
-    return throttled_get_json(
-        url,
-        host_key=_HOST_KEY,
-        min_interval=_min_interval(),
-        params=params,
-    )
+    # Try Python requests first (respects throttle / session reuse)
+    try:
+        return throttled_get_json(
+            url,
+            host_key=_HOST_KEY,
+            min_interval=_min_interval(),
+            params=params,
+        )
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        if any(kw in err_msg for kw in ("remote disconnected", "connection aborted",
+                                         "connection reset", "broken pipe")):
+            logger.debug("Python requests failed (%s), falling back to curl", exc)
+            # Still respect throttle spacing before curl call
+            _THROTTLE.wait(_HOST_KEY, _min_interval())
+            return _curl_get_json(url, params=params)
+        raise
 
 
 def _resolve_a_share_secid(code: str, suffix: str) -> str | None:
@@ -206,7 +273,7 @@ def _resolve_us_secid(code: str) -> str | None:
 
 
 def resolve_secid(symbol: str) -> str | None:
-    """Map a Vibe-Trading symbol to its Eastmoney secid.
+    """Map a zhitouagent symbol to its Eastmoney secid.
 
     Supported suffixes: ``.SH`` / ``.SZ`` / ``.BJ`` (A-share), ``.HK`` (Hong
     Kong, code zero-padded to five digits), ``.US`` (resolved via search and

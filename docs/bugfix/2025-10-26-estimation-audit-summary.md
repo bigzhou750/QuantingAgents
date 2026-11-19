@@ -1,7 +1,7 @@
 # 估算财务指标审计总结
 
-**日期**: 2025-10-26  
-**审计范围**: 全代码库  
+**日期**: 2025-10-26
+**审计范围**: 全代码库
 **审计目标**: 查找并修复所有使用估算、假设、固定值计算财务指标的代码
 
 ---
@@ -98,7 +98,7 @@ estimated_completion=None  # TODO: 可以根据历史数据估算
 
 ### 2. Token 估算
 
-**位置**: 
+**位置**:
 - `tradingagents/llm_adapters/deepseek_adapter.py:164-197`
 - `tradingagents/llm_adapters/openai_compatible_base.py:259-261`
 - `tradingagents/agents/managers/research_manager.py:77,92`
@@ -116,7 +116,7 @@ def _estimate_input_tokens(self, text: str) -> int:
 
 ### 3. 成本估算
 
-**位置**: 
+**位置**:
 - `app/services/analysis_service.py:145,842,846,848`
 - `tradingagents/config/config_manager.py:742`
 
@@ -154,7 +154,7 @@ elif analysis_type == "standard":
 
 ### 1. 报告声明
 
-**位置**: 
+**位置**:
 - `tradingagents/dataflows/optimized_china_data.py:472`
 - `tradingagents/dataflows/optimized_china_data.py:530`
 - `tradingagents/dataflows/optimized_china_data.py:637`

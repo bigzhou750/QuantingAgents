@@ -55,24 +55,24 @@
 async def get_fundamentals(code: str, current_user: dict = Depends(get_current_user)):
     """
     获取基础面快照（优先从 MongoDB 获取）
-    
+
     数据来源优先级：
     1. stock_basic_info 集合（基础信息、估值指标）
     2. stock_financial_data 集合（财务指标：ROE、负债率等）
     """
     db = get_mongo_db()
     code6 = _zfill_code(code)
-    
+
     # 1. 获取基础信息
     b = await db["stock_basic_info"].find_one({"code": code6}, {"_id": 0})
-    
+
     # 2. 获取最新财务数据
     financial_data = await db["stock_financial_data"].find_one(
         {"symbol": code6},
         {"_id": 0},
         sort=[("report_period", -1)]  # 按报告期降序
     )
-    
+
     # 3. 构建返回数据
     data = {
         "industry": b.get("industry"),  # 行业（如：银行、软件服务）
@@ -81,18 +81,18 @@ async def get_fundamentals(code: str, current_user: dict = Depends(get_current_u
         "debt_ratio": None,
         # ... 其他字段
     }
-    
+
     # 4. 从财务数据中提取 ROE 和负债率
     if financial_data:
         if financial_data.get("financial_indicators"):
             indicators = financial_data["financial_indicators"]
             data["roe"] = indicators.get("roe")
             data["debt_ratio"] = indicators.get("debt_to_assets")
-    
+
     # 5. 降级机制
     if data["roe"] is None:
         data["roe"] = b.get("roe")
-    
+
     return ok(data)
 ```
 
@@ -126,7 +126,7 @@ async def get_fundamentals(code: str, current_user: dict = Depends(get_current_u
   "report_period": "20250630",
   "report_type": "quarterly",
   "data_source": "tushare",
-  
+
   // 财务指标
   "financial_indicators": {
     "roe": 4.9497,              // 净资产收益率
@@ -137,7 +137,7 @@ async def get_fundamentals(code: str, current_user: dict = Depends(get_current_u
     "gross_margin": 75.0,       // 毛利率
     "net_margin": 36.11         // 净利率
   },
-  
+
   // 顶层字段（备用）
   "roe": 4.9497,
   "debt_to_assets": 91.318
@@ -247,7 +247,7 @@ async function fetchFundamentals() {
   try {
     const res = await stocksApi.getFundamentals(code.value)
     const f: any = (res as any)?.data || {}
-    
+
     // 基本面快照映射
     basics.industry = f.industry || basics.industry
     basics.sector = f.sector || basics.sector || '—'
@@ -267,7 +267,7 @@ async function fetchFundamentals() {
 
 ### Commit 1: 代码实现
 
-**Commit**: `18796fb`  
+**Commit**: `18796fb`
 **Message**: `feat: 优化股票详情基本面数据获取 - 优先从MongoDB获取板块、ROE、负债率`
 
 **主要改进**：
@@ -278,7 +278,7 @@ async function fetchFundamentals() {
 
 ### Commit 2: 测试脚本
 
-**Commit**: `32c4484`  
+**Commit**: `32c4484`
 **Message**: `test: 添加股票基本面数据增强功能测试脚本`
 
 **测试内容**：

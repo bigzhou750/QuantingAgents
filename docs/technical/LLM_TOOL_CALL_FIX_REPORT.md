@@ -5,7 +5,7 @@
 根据日志分析，发现了一个严重的LLM工具调用问题：
 
 ```
-2025-07-28 16:03:41,468 | analysts.news | INFO | news_analyst:news_analyst_node:156 | [新闻分析师] 使用的工具: get_realtime_stock_news 
+2025-07-28 16:03:41,468 | analysts.news | INFO | news_analyst:news_analyst_node:156 | [新闻分析师] 使用的工具: get_realtime_stock_news
 2025-07-28 16:03:41,469 | analysts.news | INFO | news_analyst:news_analyst_node:166 | [新闻分析师] 新闻分析完成，总耗时: 1.07秒
 ```
 
@@ -58,10 +58,10 @@ tool_call_failed = False
 used_tool_names = []
 
 # 检测DashScope工具调用失败的特殊情况
-if ('DashScope' in llm.__class__.__name__ and 
-    tool_call_count > 0 and 
+if ('DashScope' in llm.__class__.__name__ and
+    tool_call_count > 0 and
     'get_realtime_stock_news' in used_tool_names):
-    
+
     logger.info(f"[新闻分析师] 🔍 检测到DashScope调用了get_realtime_stock_news，验证是否真正执行...")
 ```
 
@@ -71,10 +71,10 @@ if ('DashScope' in llm.__class__.__name__ and
 try:
     logger.info(f"[新闻分析师] 🔧 强制调用get_realtime_stock_news进行验证...")
     fallback_news = toolkit.get_realtime_stock_news.invoke({"ticker": ticker})
-    
+
     if fallback_news and len(fallback_news.strip()) > 100:
         logger.info(f"[新闻分析师] ✅ 强制调用成功，获得新闻数据: {len(fallback_news)} 字符")
-        
+
         # 重新生成分析，包含获取到的新闻数据
         enhanced_prompt = f"""
 基于以下最新获取的新闻数据，请对 {ticker} 进行详细的新闻分析：
@@ -87,7 +87,7 @@ try:
 
 请基于上述新闻数据撰写详细的中文分析报告。
 """
-        
+
         enhanced_result = llm.invoke([{"role": "user", "content": enhanced_prompt}])
         report = enhanced_result.content
 ```
@@ -95,14 +95,14 @@ try:
 #### C. 备用工具机制
 ```python
 # 如果是A股且内容很短，可能是工具调用失败导致的
-if (market_info['is_china'] and content_length < 500 and 
+if (market_info['is_china'] and content_length < 500 and
     'DashScope' in llm.__class__.__name__):
-    
+
     # 尝试使用备用工具
     try:
         logger.info(f"[新闻分析师] 🔄 尝试使用备用工具获取新闻...")
         backup_news = toolkit.get_google_news.invoke({"ticker": ticker})
-        
+
         if backup_news and len(backup_news.strip()) > 100:
             # 合并原始报告和备用新闻
             enhanced_report = f"{report}\n\n=== 补充新闻信息 ===\n{backup_news}"

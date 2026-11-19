@@ -2,12 +2,18 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app.routers.auth_db import get_current_user
 from app.services.vibe_agent.models import VibeMessageCreate, VibeSessionCreate, VibeSessionUpdate
 from app.services.vibe_agent.service import api_response, vibe_agent_service
 
 router = APIRouter()
+
+
+class VibeFeedbackRequest(BaseModel):
+    feedback_type: str = Field(min_length=1, max_length=64)
+    content: str = Field(default="", max_length=2000)
 
 
 @router.get("/health")
@@ -58,6 +64,25 @@ async def list_messages(session_id: str, user: dict = Depends(get_current_user))
 @router.post("/sessions/{session_id}/messages")
 async def create_message(session_id: str, payload: VibeMessageCreate, user: dict = Depends(get_current_user)):
     return api_response(await vibe_agent_service.create_message_task(user, session_id, payload), "研究任务已入队")
+
+
+@router.post("/sessions/{session_id}/tasks/{task_id}/feedback")
+async def submit_feedback(
+    session_id: str,
+    task_id: str,
+    payload: VibeFeedbackRequest,
+    user: dict = Depends(get_current_user),
+):
+    return api_response(
+        await vibe_agent_service.submit_feedback(
+            user=user,
+            session_id=session_id,
+            task_id=task_id,
+            feedback_type=payload.feedback_type,
+            content=payload.content,
+        ),
+        "反馈已记录",
+    )
 
 
 @router.get("/sessions/{session_id}/events")

@@ -1,7 +1,7 @@
 # 数据源优先级统一与系统稳定性优化
 
-**日期**: 2025-10-30  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-30
+**作者**: zhitouagent 开发团队
 **标签**: `数据源优先级` `重试机制` `MongoDB优化` `实时行情` `代码标准化` `系统稳定性`
 
 ---
@@ -81,7 +81,7 @@ DEFAULT_PRIORITIES = {
 class BaseDataSourceAdapter(ABC):
     def __init__(self):
         self._priority = None
-    
+
     async def load_priority_from_db(self):
         """从数据库加载优先级配置"""
         db = await get_mongo_db()
@@ -101,7 +101,7 @@ class BaseDataSourceAdapter(ABC):
 async def get_stock_name(code: str) -> str:
     """按数据源优先级查询股票名称"""
     db = await get_mongo_db()
-    
+
     # 按优先级顺序尝试
     for source in ["tushare", "akshare", "baostock"]:
         doc = await db.stock_basic_info.find_one(
@@ -110,7 +110,7 @@ async def get_stock_name(code: str) -> str:
         )
         if doc:
             return doc.get("name", code)
-    
+
     # 兼容旧数据（没有 source 字段）
     doc = await db.stock_basic_info.find_one(
         {"code": code},
@@ -125,13 +125,13 @@ async def screen(self, criteria: ScreeningCriteria) -> List[Dict]:
     """股票筛选，只使用优先级最高的数据源"""
     # 获取优先级最高的数据源
     primary_source = await self._get_primary_source()
-    
+
     # 聚合查询时添加数据源过滤
     pipeline = [
         {"$match": {"source": primary_source}},  # 🔥 只查询主数据源
         # ... 其他筛选条件
     ]
-    
+
     results = await db.stock_basic_info.aggregate(pipeline).to_list(None)
     return results
 ```
@@ -141,7 +141,7 @@ async def screen(self, criteria: ScreeningCriteria) -> List[Dict]:
 ```typescript
 // frontend/src/components/Sync/DataSourceStatus.vue
 const sortedSources = computed(() => {
-  return [...dataSources.value].sort((a, b) => 
+  return [...dataSources.value].sort((a, b) =>
     b.priority - a.priority  // 🔥 降序：优先级高的在前
   );
 });
@@ -220,34 +220,34 @@ async def _execute_bulk_write_with_retry(
 ) -> int:
     """
     执行批量写入，支持重试
-    
+
     Args:
         symbol: 股票代码
         operations: 批量操作列表
         max_retries: 最大重试次数
-    
+
     Returns:
         成功写入的记录数
     """
     saved_count = 0
     retry_count = 0
-    
+
     while retry_count < max_retries:
         try:
             result = await self.collection.bulk_write(
-                operations, 
+                operations,
                 ordered=False  # 🔥 非顺序执行，最大化成功率
             )
             saved_count = result.upserted_count + result.modified_count
-            
+
             if retry_count > 0:
                 logger.info(
                     f"✅ {symbol} 重试成功 "
                     f"(第{retry_count}次重试，保存{saved_count}条)"
                 )
-            
+
             return saved_count
-            
+
         except asyncio.TimeoutError as e:
             retry_count += 1
             if retry_count < max_retries:
@@ -264,12 +264,12 @@ async def _execute_bulk_write_with_retry(
                     f"已重试{max_retries}次: {e}"
                 )
                 return 0
-                
+
         except Exception as e:
             # 🔥 非超时错误，直接返回，避免无限重试
             logger.error(f"❌ {symbol} 批量写入失败: {e}")
             return 0
-    
+
     return saved_count
 ```
 
@@ -285,7 +285,7 @@ async def save_historical_data(
 ) -> int:
     """保存历史数据，使用重试机制"""
     operations = []
-    
+
     for record in data:
         operations.append(
             UpdateOne(
@@ -294,18 +294,18 @@ async def save_historical_data(
                 upsert=True
             )
         )
-    
+
     # 🔥 使用重试机制执行批量写入
     saved_count = await self._execute_bulk_write_with_retry(
-        symbol, 
+        symbol,
         operations
     )
-    
+
     logger.info(
         f"✅ {symbol} 保存完成: "
         f"新增{saved_count}条，共{len(data)}条"
     )
-    
+
     return saved_count
 ```
 
@@ -330,7 +330,7 @@ async def save_historical_data(
 在处理大量历史数据时，频繁出现MongoDB超时错误：
 
 ```
-❌ 000597 批量写入失败: mongodb:27017: timed out 
+❌ 000597 批量写入失败: mongodb:27017: timed out
 (configured timeouts: socketTimeoutMS: 20000.0ms, connectTimeoutMS: 10000.0ms)
 ```
 

@@ -324,19 +324,19 @@ from tradingagents.dataflows.providers.base_provider import BaseStockDataProvide
 
 class MyCustomProvider(BaseStockDataProvider):
     """自定义数据提供器"""
-    
+
     def __init__(self):
         super().__init__("MyCustom")
         # 初始化代码
-    
+
     async def connect(self) -> bool:
         # 连接逻辑
         pass
-    
+
     async def disconnect(self):
         # 断开连接逻辑
         pass
-    
+
     # 实现其他必需方法...
 ```
 

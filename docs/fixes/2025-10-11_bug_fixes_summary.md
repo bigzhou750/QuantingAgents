@@ -90,7 +90,7 @@ if market_info['is_china']:  # ✅ 使用正确的字典访问
 ```
 
 ### 修复位置
-**文件**: `tradingagents/agents/analysts/fundamentals_analyst.py`  
+**文件**: `tradingagents/agents/analysts/fundamentals_analyst.py`
 **行号**: 第135行
 
 ### 修复效果
@@ -237,7 +237,7 @@ pytest tests/test_fundamentals_analyst.py -v -k "test_offline_mode"
 
 ---
 
-**修复日期**: 2025-10-11  
-**修复人员**: AI Assistant  
+**修复日期**: 2025-10-11
+**修复人员**: AI Assistant
 **审核状态**: ⏳ 待测试验证
 

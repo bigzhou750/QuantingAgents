@@ -50,7 +50,7 @@
    ```python
    quick_provider_info = get_provider_and_url_by_model_sync("qwen-plus")
    # 返回: {"provider": "dashscope", "backend_url": "https://dashscope.aliyuncs.com/api/v1"}
-   
+
    deep_provider_info = get_provider_and_url_by_model_sync("gemini-2.5-pro")
    # 返回: {"provider": "google", "backend_url": "https://generativelanguage.googleapis.com/v1"}
    ```
@@ -70,7 +70,7 @@
        backend_url="https://dashscope.aliyuncs.com/api/v1",
        ...
    )
-   
+
    # 深度模型使用 Google
    deep_thinking_llm = create_llm_by_provider(
        provider="google",

@@ -6,7 +6,7 @@
 ## 📋 设置步骤
 
 ### 1. 访问仓库设置
-1. 打开 GitHub 仓库：`https://github.com/hsliuping/TradingAgents-CN`
+1. 打开 GitHub 仓库：`mailto:zh75067197@gmail.com`
 2. 点击 **Settings** 标签页
 3. 在左侧菜单中选择 **Branches**
 
@@ -96,7 +96,7 @@ jobs:
 ### 临时禁用保护规则
 1. 访问 **Settings** > **Branches**
 2. 找到 `main` 分支规则
-3. 点击 **Edit** 
+3. 点击 **Edit**
 4. 临时取消勾选相关保护选项
 5. **操作完成后立即重新启用！**
 

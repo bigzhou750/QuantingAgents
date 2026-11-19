@@ -2,7 +2,7 @@
 
 ## 🎯 功能概述
 
-TradingAgents-CN 提供了完整的Docker容器化部署方案，支持一键启动完整的分析环境，包括Web应用、数据库、缓存系统和管理界面。
+zhitouagent 提供了完整的Docker容器化部署方案，支持一键启动完整的分析环境，包括Web应用、数据库、缓存系统和管理界面。
 
 ## 🏗️ 架构设计
 
@@ -66,8 +66,8 @@ TradingAgents-CN 提供了完整的Docker容器化部署方案，支持一键启
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -83,7 +83,7 @@ docker-compose ps
 
 ### 📦 Docker镜像构建说明
 
-**重要提醒**: TradingAgents-CN不提供预构建的Docker镜像，需要本地构建。
+**重要提醒**: zhitouagent不提供预构建的Docker镜像，需要本地构建。
 
 #### 构建过程详解
 
@@ -297,7 +297,7 @@ docker-compose up -d --build
    ```bash
    # 检查端口占用
    netstat -tulpn | grep :8501
-   
+
    # 修改端口映射
    # 编辑 docker-compose.yml 中的 ports 配置
    ```
@@ -316,7 +316,7 @@ docker-compose up -d --build
    ```bash
    # 检查数据库服务状态
    docker logs TradingAgents-mongodb
-   
+
    # 检查网络连接
    docker exec TradingAgents-web ping mongodb
    ```
@@ -358,7 +358,7 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=secure_password
-    
+
   mongo-express:
     environment:
       - ME_CONFIG_BASICAUTH_USERNAME=admin
@@ -393,10 +393,10 @@ Docker容器化功能由社区贡献者 **[@breeze303](https://github.com/breeze
 - 🔧 开发环境Volume映射配置
 - 📚 完整的部署文档和最佳实践
 
-感谢他的杰出贡献，让TradingAgents-CN拥有了专业级的容器化部署能力！
+感谢他的杰出贡献，让zhitouagent拥有了专业级的容器化部署能力！
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *功能贡献: [@breeze303](https://github.com/breeze303)*

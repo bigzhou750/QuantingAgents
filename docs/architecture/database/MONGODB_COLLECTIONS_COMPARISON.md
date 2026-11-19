@@ -128,7 +128,7 @@ QUOTES_BACKFILL_ON_OFFHOURS=true              # 非交易时段是否补数
   "trade_date": "20251016",      // 交易日期（主键之一）
   "period": "daily",             // 周期（主键之一）：daily/weekly/monthly/5min/15min/30min/60min
   "data_source": "akshare",      // 数据源（主键之一）：tushare/akshare/baostock
-  
+
   // OHLCV 数据
   "open": 45.23,                 // 开盘价
   "high": 46.78,                 // 最高价
@@ -137,15 +137,15 @@ QUOTES_BACKFILL_ON_OFFHOURS=true              # 非交易时段是否补数
   "pre_close": 45.42,            // 前收盘价
   "volume": 12345678,            // 成交量(股)
   "amount": 567890123.45,        // 成交额(元)
-  
+
   // 涨跌数据
   "change": 1.08,                // 涨跌额
   "pct_chg": 2.38,               // 涨跌幅(%)
-  
+
   // 其他指标
   "turnover_rate": 1.23,         // 换手率(%)
   "volume_ratio": 1.05,          // 量比
-  
+
   // 元数据
   "created_at": ISODate("2025-10-17T02:00:00.000Z"),
   "updated_at": ISODate("2025-10-17T02:00:00.000Z"),

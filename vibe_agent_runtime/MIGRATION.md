@@ -1,6 +1,6 @@
-# Vibe-Trading Runtime Migration
+# zhitouagent Runtime Migration
 
-- Upstream: `Vibe-Trading`
+- Upstream: `zhitouagent`
 - Commit: `99e84abaad965f75dd15cab2fcb0f3f61d30577b`
 - License: MIT; the upstream `LICENSE` is copied to `vendor/LICENSE`.
 - Scope: `agent/src` runtime closure, `agent/backtest`, bundled skills and

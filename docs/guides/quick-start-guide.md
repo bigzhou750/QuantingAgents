@@ -5,10 +5,10 @@ code_compatibility: cn-0.1.14-preview
 status: updated
 ---
 
-# TradingAgents-CN 快速开始指南
+# zhitouagent 快速开始指南
 
-> **版本说明**: 本文档基于 `cn-0.1.14-preview` 版本编写  
-> **最后更新**: 2025-01-13  
+> **版本说明**: 本文档基于 `cn-0.1.14-preview` 版本编写
+> **最后更新**: 2025-01-13
 > **状态**: ✅ 已更新 - 5分钟快速上手指南
 
 ## 🚀 5分钟快速上手
@@ -182,7 +182,7 @@ for stock in stocks:
 ### 3. 定时分析任务
 ```bash
 # 使用cron设置定时任务 (Linux/macOS)
-0 9 * * 1-5 cd /path/to/TradingAgents-CN && python scripts/daily_analysis.py
+0 9 * * 1-5 cd /path/to/zhitouagent && python scripts/daily_analysis.py
 
 # 使用任务计划程序 (Windows)
 # 创建每日9点执行的任务
@@ -233,7 +233,7 @@ DATA_CACHE_TTL=3600
 ## 🆘 常见问题
 
 ### Q: 分析结果不准确怎么办？
-A: 
+A:
 1. 检查股票代码是否正确
 2. 确认分析日期是否为交易日
 3. 尝试更换数据源或模型

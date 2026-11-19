@@ -21,17 +21,17 @@
 ```python
 def get_basics_from_cache(stock_code: str):
     """从 app 的 stock_basic_info 集合读取"""
-    
+
 def get_market_quote_dataframe(stock_code: str):
     """从 app 的 market_quotes 集合读取"""
 ```
 
-**重要性**: 
+**重要性**:
 - ✅ **必须保留**
 - ✅ 这是读取 app 层同步数据的唯一途径
 - ✅ 提供快速的数据访问（避免重复调用 API）
 
-**位置**: 
+**位置**:
 - ❓ 当前在 `cache/` 目录
 - 💡 **建议**: 可以考虑移动到 `providers/app/` 目录（因为它是数据源适配器，不是缓存）
 
@@ -53,7 +53,7 @@ def get_market_quote_dataframe(stock_code: str):
 class StockDataCache:
     def get(self, key, category, market):
         """从文件读取缓存"""
-    
+
     def set(self, key, data, category, market, ttl):
         """写入文件缓存"""
 ```
@@ -80,10 +80,10 @@ class StockDataCache:
 class DatabaseCacheManager:
     def __init__(self, mongodb_url, redis_url):
         """连接 MongoDB 和 Redis"""
-    
+
     def get(self, key):
         """先从 Redis 读，再从 MongoDB 读"""
-    
+
     def set(self, key, data, ttl):
         """同时写入 Redis 和 MongoDB"""
 ```
@@ -93,7 +93,7 @@ class DatabaseCacheManager:
 - ❓ 如果没有外部直接使用，可能只是被 adaptive_cache 调用
 - ❓ 如果 MongoDB/Redis 不可用，系统应该能降级到文件缓存
 
-**建议**: 
+**建议**:
 - 检查是否有配置启用数据库缓存
 - 如果没有启用，可以考虑暂时保留但不强制依赖
 
@@ -112,10 +112,10 @@ class DatabaseCacheManager:
 class AdaptiveCacheSystem:
     def __init__(self):
         """根据配置选择 MongoDB/Redis/File"""
-    
+
     def get(self, key):
         """从选定的后端读取"""
-    
+
     def set(self, key, data):
         """写入选定的后端"""
 ```
@@ -141,7 +141,7 @@ class IntegratedCacheManager:
     def __init__(self):
         self.legacy_cache = StockDataCache()  # 文件缓存
         self.adaptive_cache = AdaptiveCacheSystem()  # 自适应缓存
-    
+
     def get(self, key):
         """先尝试 adaptive，失败则用 legacy"""
 ```

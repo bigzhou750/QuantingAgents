@@ -312,7 +312,7 @@ python -m pytest tests/
 on:
   pull_request:
     branches: [main, develop]
-    
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -59,7 +59,7 @@ async def get_latest_news(
 ) -> List[Dict[str, Any]]:
     """获取最新新闻"""
     start_time = datetime.utcnow() - timedelta(hours=hours_back)
-    
+
     params = NewsQueryParams(
         symbol=symbol,
         start_time=start_time,  # 只查询 start_time 之后的新闻
@@ -67,7 +67,7 @@ async def get_latest_news(
         sort_by="publish_time",
         sort_order=-1
     )
-    
+
     return await self.query_news(params)
 ````
 </augment_code_snippet>
@@ -91,13 +91,13 @@ const loadMarketNews = async () => {
   try {
     // 先尝试获取最近 24 小时的新闻
     let response = await newsApi.getLatestNews(undefined, 10, 24)
-    
+
     // 如果最近 24 小时没有新闻，则获取最新的 10 条（不限时间）
     if (response.success && response.data && response.data.news.length === 0) {
       console.log('最近 24 小时没有新闻，获取最新的 10 条新闻（不限时间）')
       response = await newsApi.getLatestNews(undefined, 10, 24 * 365) // 回溯 1 年
     }
-    
+
     if (response.success && response.data) {
       marketNews.value = response.data.news.map((item: any) => ({
         id: item.id || item.title,
@@ -234,7 +234,7 @@ crontab -e
 
 **添加定时任务**（每小时同步一次）：
 ```cron
-0 * * * * cd /path/to/TradingAgents-CN && .venv/bin/python scripts/sync_market_news.py >> logs/news_sync.log 2>&1
+0 * * * * cd /path/to/zhitouagent && .venv/bin/python scripts/sync_market_news.py >> logs/news_sync.log 2>&1
 ```
 
 ### 2. 使用 Windows 任务计划程序
@@ -244,9 +244,9 @@ crontab -e
 2. 创建基本任务
 3. 触发器：每小时
 4. 操作：启动程序
-   - 程序：`d:\code\TradingAgents-CN\.venv\Scripts\python.exe`
+   - 程序：`d:\code\zhitouagent\.venv\Scripts\python.exe`
    - 参数：`scripts/sync_market_news.py`
-   - 起始于：`d:\code\TradingAgents-CN`
+   - 起始于：`d:\code\zhitouagent`
 
 ### 3. 使用后台 Worker（推荐）
 

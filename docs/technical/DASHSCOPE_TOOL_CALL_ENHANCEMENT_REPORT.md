@@ -23,8 +23,8 @@
 #### 修复前的检测逻辑
 ```python
 # 只检测DashScope声称调用了工具但可能没有真正执行的情况
-if ('DashScope' in llm.__class__.__name__ and 
-    tool_call_count > 0 and 
+if ('DashScope' in llm.__class__.__name__ and
+    tool_call_count > 0 and
     'get_realtime_stock_news' in used_tool_names):
     # 验证和补救...
 ```
@@ -33,11 +33,11 @@ if ('DashScope' in llm.__class__.__name__ and
 ```python
 # 🔧 增强的DashScope工具调用失败检测和补救机制
 if 'DashScope' in llm.__class__.__name__:
-    
+
     # 情况1：DashScope声称调用了工具但可能没有真正执行
     if (tool_call_count > 0 and 'get_realtime_stock_news' in used_tool_names):
         # 原有的验证逻辑...
-    
+
     # 情况2：DashScope完全没有调用任何工具（最常见的问题）
     elif tool_call_count == 0:
         logger.warning(f"[新闻分析师] 🚨 DashScope没有调用任何工具，这是异常情况，启动强制补救...")

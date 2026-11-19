@@ -24,8 +24,13 @@ class TagsService:
             return
         db = await self._get_db()
         # 每个用户的标签名唯一
-        await db.user_tags.create_index([("user_id", 1), ("name", 1)], unique=True, name="uniq_user_tag_name")
-        await db.user_tags.create_index([("user_id", 1), ("sort_order", 1)], name="idx_user_tag_sort")
+        # 注意：不指定 name，与 ownership.py 中 ensure_owner_indexes 保持一致，
+        # 避免同名索引冲突（IndexOptionsConflict: same fields, different name）
+        try:
+            await db.user_tags.create_index([("user_id", 1), ("name", 1)], unique=True)
+            await db.user_tags.create_index([("user_id", 1), ("sort_order", 1)])
+        except Exception:
+            pass  # 索引已存在则忽略
         self._indexes_ensured = True
 
     def _normalize_user_id(self, user_id: str) -> str:

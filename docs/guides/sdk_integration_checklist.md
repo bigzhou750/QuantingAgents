@@ -223,7 +223,7 @@
 如果在接入过程中遇到问题，请参考：
 
 1. **技术文档**: [股票数据SDK接入指南](stock_data_sdk_integration_guide.md)
-2. **示例代码**: 
+2. **示例代码**:
    - [基础提供器](../../tradingagents/dataflows/base_provider.py)
    - [示例适配器](../../tradingagents/dataflows/example_sdk_provider.py)
    - [同步服务](../../app/worker/example_sdk_sync_service.py)

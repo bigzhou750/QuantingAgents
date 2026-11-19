@@ -130,9 +130,9 @@ async def _enrich_results_with_realtime_metrics(self, items: List[Dict[str, Any]
     """为筛选结果添加实时PE/PB"""
     from tradingagents.dataflows.realtime_metrics import calculate_realtime_pe_pb
     import asyncio
-    
+
     db = get_mongo_db()
-    
+
     for item in items:
         code = item.get("code") or item.get("symbol")
         if code:
@@ -141,7 +141,7 @@ async def _enrich_results_with_realtime_metrics(self, items: List[Dict[str, Any]
                 code,
                 db.client
             )
-            
+
             if realtime_metrics:
                 item["pe"] = realtime_metrics.get("pe")
                 item["pb"] = realtime_metrics.get("pb")
@@ -264,7 +264,7 @@ pytest tests/dataflows/test_realtime_metrics.py -v
    curl -H "Authorization: Bearer <token>" \
         http://localhost:8000/api/stocks/000001/fundamentals
    ```
-   
+
    验证返回数据包含：
    - `pe_is_realtime: true`
    - `pe_source: "realtime_calculated"`

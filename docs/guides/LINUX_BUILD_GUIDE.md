@@ -1,6 +1,6 @@
 # Linux服务器构建和发布Docker镜像指南
 
-本指南介绍如何在Linux服务器上构建和发布TradingAgents-CN的Docker镜像到Docker Hub。
+本指南介绍如何在Linux服务器上构建和发布zhitouagent的Docker镜像到Docker Hub。
 
 ## 前置要求
 
@@ -16,8 +16,8 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/YOUR_USERNAME/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone https://github.com/YOUR_USERNAME/zhitouagent.git
+cd zhitouagent
 git checkout v1.0.0-preview
 
 # 2. 添加执行权限
@@ -124,8 +124,8 @@ git --version
 
 ```bash
 # 克隆仓库
-git clone https://github.com/YOUR_USERNAME/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone https://github.com/YOUR_USERNAME/zhitouagent.git
+cd zhitouagent
 
 # 切换到v1.0.0-preview分支
 git checkout v1.0.0-preview
@@ -257,7 +257,7 @@ A: 可能是网络问题。解决方案：
    # 临时设置代理
    export HTTP_PROXY=http://proxy-server:port
    export HTTPS_PROXY=http://proxy-server:port
-   
+
    # 构建时使用代理
    docker build --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY -f Dockerfile.backend -t tradingagents-backend:v1.0.0-preview .
    ```

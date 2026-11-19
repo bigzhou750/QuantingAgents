@@ -1,7 +1,7 @@
 # 合规性优化与错误修复：提升用户体验与系统稳定性
 
-**日期**: 2025-10-27  
-**作者**: TradingAgents-CN 开发团队  
+**日期**: 2025-10-27
+**作者**: zhitouagent 开发团队
 **标签**: `合规性` `用户体验` `bug-fix` `日志系统` `ARM架构`
 
 ---
@@ -90,7 +90,7 @@
       </div>
     </div>
   </el-descriptions-item>
-  
+
   <el-descriptions-item label="使用模型">
     <div style="display: flex; flex-direction: column; gap: 4px;">
       <el-tag type="info" size="small">{{ report.model }}</el-tag>
@@ -315,11 +315,11 @@ def setup_logging():
     # 创建日志目录
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    
+
     # 配置根日志记录器
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    
+
     # 🔥 控制台处理器（INFO 级别）
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
@@ -327,7 +327,7 @@ def setup_logging():
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     console_handler.setFormatter(console_formatter)
-    
+
     # 🔥 文件处理器（ERROR 级别）
     error_file_handler = RotatingFileHandler(
         log_dir / "error.log",
@@ -340,7 +340,7 @@ def setup_logging():
         '%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s'
     )
     error_file_handler.setFormatter(error_formatter)
-    
+
     # 🔥 文件处理器（INFO 级别）
     info_file_handler = RotatingFileHandler(
         log_dir / "app.log",
@@ -350,12 +350,12 @@ def setup_logging():
     )
     info_file_handler.setLevel(logging.INFO)
     info_file_handler.setFormatter(console_formatter)
-    
+
     # 添加处理器
     root_logger.addHandler(console_handler)
     root_logger.addHandler(error_file_handler)
     root_logger.addHandler(info_file_handler)
-    
+
     # 🔥 配置第三方库日志级别
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("fastapi").setLevel(logging.WARNING)
@@ -393,13 +393,13 @@ def calculate_pb(market_cap: float, net_assets: float) -> Optional[float]:
     """
     if not market_cap or not net_assets or net_assets <= 0:
         return None
-    
+
     # 🔥 将净资产转换为亿元
     net_assets_billion = net_assets / 100000000
-    
+
     # 计算市净率
     pb = market_cap / net_assets_billion
-    
+
     return round(pb, 4)
 ```
 
@@ -432,17 +432,17 @@ services:
     image: hsliup/tradingagents-backend:latest
     platform: linux/arm64  # 🔥 指定 ARM64 平台
     # ... 其他配置
-  
+
   frontend:
     image: hsliup/tradingagents-frontend:latest
     platform: linux/arm64  # 🔥 指定 ARM64 平台
     # ... 其他配置
-  
+
   mongodb:
     image: mongo:7.0
     platform: linux/arm64  # 🔥 指定 ARM64 平台
     # ... 其他配置
-  
+
   nginx:
     image: nginx:alpine
     platform: linux/arm64  # 🔥 指定 ARM64 平台
@@ -485,7 +485,7 @@ docker-compose -f docker-compose.hub.nginx.yml up -d
 # tradingagents/agents/analysts/news_analyst.py
 class NewsAnalyst(BaseAnalyst):
     """新闻分析师 - 专注于新闻事件分析"""
-    
+
     def __init__(self, llm_provider: BaseLLMProvider):
         super().__init__(
             name="新闻分析师",
@@ -493,10 +493,10 @@ class NewsAnalyst(BaseAnalyst):
             description="分析最新新闻和公告对股票的影响",
             llm_provider=llm_provider
         )
-    
+
     def get_system_prompt(self) -> str:
         return """你是一位专业的新闻分析师。
-        
+
 职责范围：
 1. 分析公司最新新闻和公告
 2. 评估新闻事件对股价的影响
@@ -513,7 +513,7 @@ class NewsAnalyst(BaseAnalyst):
 # tradingagents/agents/analysts/social_media_analyst.py
 class SocialMediaAnalyst(BaseAnalyst):
     """社媒分析师 - 专注于社交媒体情绪分析"""
-    
+
     def __init__(self, llm_provider: BaseLLMProvider):
         super().__init__(
             name="社媒分析师",
@@ -521,10 +521,10 @@ class SocialMediaAnalyst(BaseAnalyst):
             description="分析社交媒体上的市场情绪和讨论热度",
             llm_provider=llm_provider
         )
-    
+
     def get_system_prompt(self) -> str:
         return """你是一位专业的社交媒体分析师。
-        
+
 职责范围：
 1. 分析社交媒体上的讨论热度
 2. 评估市场情绪（乐观/悲观/中性）
@@ -607,8 +607,8 @@ interface CustomRequestConfig extends InternalAxiosRequestConfig {
 }
 
 // 使用
-ApiClient.post('/api/auth/login', data, { 
-  _suppressErrorMessage: true 
+ApiClient.post('/api/auth/login', data, {
+  _suppressErrorMessage: true
 })
 ```
 
@@ -666,7 +666,7 @@ pb = market_cap / net_assets_billion
 
 ---
 
-**感谢使用 TradingAgents-CN！** 🚀
+**感谢使用 zhitouagent！** 🚀
 
-如有问题或建议，欢迎在 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues) 中反馈。
+如有问题或建议，欢迎在 [GitHub Issues](mailto:zh75067197@gmail.com) 中反馈。
 

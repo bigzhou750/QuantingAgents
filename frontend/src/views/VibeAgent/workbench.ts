@@ -30,7 +30,8 @@ const INTERNAL_EVENTS = new Set([
   'error',
   'evidence',
   'react_summary',
-  'swarm_status'
+  'swarm_status',
+  'decision'
 ])
 
 const TOOL_LABELS: Record<string, string> = {
@@ -49,11 +50,16 @@ export function eventLabel(event: VibeEvent): string {
   if (type === 'tool_call') {
     return TOOL_LABELS[String(event.payload?.name || event.payload?.tool || '')] || '执行工具'
   }
+  if (type === 'decision') {
+    return String(event.payload?.scenario || '决策节点')
+  }
   return type || '事件'
 }
 
 export function eventStatusText(event: VibeEvent): string {
   const payload = event.payload || {}
+  if (payload.status === 'confirmed' || payload.status === 'completed') return '完成'
+  if (payload.status === 'unverified' || payload.status === 'requires_review') return '待复核'
   if (payload.error || payload.status === 'error' || payload.status === 'failed') return '失败'
   if (payload.phase === 'tool_result' || payload.status === 'ok' || payload.status === 'completed') return '完成'
   return '执行中'
@@ -140,7 +146,16 @@ export function summarizeEventPayload(event: VibeEvent): string {
   for (const key of ['tool', 'name', 'phase', 'status', 'tool_call_id', 'call_id', 'preview', 'error']) {
     if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') compactPayload[key] = payload[key]
   }
+  for (const key of ['scenario', 'selected_option', 'selection_reason', 'conclusion', 'candidates', 'evidence_ids']) {
+    if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') compactPayload[key] = payload[key]
+  }
   return JSON.stringify(Object.keys(compactPayload).length ? compactPayload : payload, null, 2)
+}
+
+export function buildDecisionChain(events: VibeEvent[]): VibeEvent[] {
+  return events
+    .filter(event => event.event_type === 'decision')
+    .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0))
 }
 
 function mergeResult(steps: WorkbenchStep[], indexes: Map<string, number>, event: VibeEvent): boolean {

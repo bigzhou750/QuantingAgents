@@ -104,7 +104,7 @@ class RedisService:
 class QueueService:
     def __init__(self, redis: Redis):
         self.r = redis  # 使用传入的 Redis 客户端
-    
+
     async def enqueue_task(self, ...):
         await self.r.hset(key, mapping=mapping)
         await self.r.lpush(READY_LIST, task_id)

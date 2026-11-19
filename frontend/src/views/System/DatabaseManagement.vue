@@ -212,12 +212,12 @@
                   <p style="margin: 8px 0;">由于数据量较大，Web 界面备份体验较差，建议使用 MongoDB 原生工具：</p>
                   <div style="background: #f5f7fa; padding: 12px; border-radius: 4px; margin: 8px 0;">
                     <p style="margin: 4px 0; font-weight: bold;">📦 备份命令：</p>
-                    <code style="display: block; margin: 4px 0; color: #409eff;">
-                      mongodump --uri="mongodb://localhost:27017" --db=tradingagents --out=./backup --gzip
+                    <code style="display: block; margin: 4px 0; color: #0EA5E9;">
+                      mongodump --uri="mongodb://localhost:27017" --db=zhitouagent --out=./backup --gzip
                     </code>
                     <p style="margin: 12px 0 4px 0; font-weight: bold;">🔄 还原命令：</p>
-                    <code style="display: block; margin: 4px 0; color: #409eff;">
-                      mongorestore --uri="mongodb://localhost:27017" --db=tradingagents --gzip ./backup/tradingagents
+                    <code style="display: block; margin: 4px 0; color: #0EA5E9;">
+                      mongorestore --uri="mongodb://localhost:27017" --db=zhitouagent --gzip ./backup/zhitouagent
                     </code>
                   </div>
                   <p style="margin: 8px 0; font-size: 12px; color: #909399;">
@@ -326,7 +326,7 @@ const mongoStatus = computed(() => databaseStatus.value?.mongodb || {
   connected: false,
   host: 'localhost',
   port: 27017,
-  database: 'tradingagents'
+  database: 'zhitouagent'
 })
 
 const redisStatus = computed(() => databaseStatus.value?.redis || {

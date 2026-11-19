@@ -58,7 +58,7 @@ def main():
     users_to_create = [
         {
             "username": "admin",
-            "email": "admin@tradingagents.cn",
+            "email": "zh75067197@gmail.com",
             "password": "admin123"
         },
         {

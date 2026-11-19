@@ -289,10 +289,14 @@ async def batch_init_capabilities(request: BatchInitRequest):
                 config.recommended_depths = default_config["recommended_depths"]
                 config.performance_metrics = default_config.get("performance_metrics")
 
-                # 保存到数据库
-                # TODO: 实现保存逻辑
-                updated_count += 1
-                logger.info(f"已初始化模型 {model_name} 的能力参数")
+                # 保存到配置
+                try:
+                    unified_config.save_llm_config(config)
+                    updated_count += 1
+                    logger.info(f"已初始化模型 {model_name} 的能力参数")
+                except Exception as save_err:
+                    logger.error(f"保存模型 {model_name} 能力参数失败: {save_err}")
+                    skipped_count += 1
             else:
                 logger.warning(f"模型 {model_name} 没有默认配置，跳过")
                 skipped_count += 1

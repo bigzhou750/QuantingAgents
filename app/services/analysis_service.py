@@ -1,6 +1,6 @@
 """
 股票分析服务
-将现有的TradingAgents分析功能包装成API服务
+将现有的zhitouagent分析功能包装成API服务
 """
 
 import asyncio
@@ -16,11 +16,11 @@ import sys
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 初始化TradingAgents日志系统
+# 初始化zhitouagent日志系统
 from tradingagents.utils.logging_init import init_logging
 init_logging()
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.graph.trading_graph import zhitouagentGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from app.services.simple_analysis_service import create_analysis_config, get_provider_by_model_name
 from app.models.analysis import (
@@ -61,17 +61,10 @@ class AnalysisService:
         try:
             logger.info(f"🔄 开始转换用户ID: {user_id} (类型: {type(user_id)})")
 
-            # 如果是admin用户，使用固定的ObjectId
-            if user_id == "admin":
-                # 使用固定的ObjectId作为admin用户ID
-                admin_object_id = ObjectId("507f1f77bcf86cd799439011")
-                logger.info(f"🔄 转换admin用户ID: {user_id} -> {admin_object_id}")
-                return PyObjectId(admin_object_id)
-            else:
-                # 尝试将字符串转换为ObjectId
-                object_id = ObjectId(user_id)
-                logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
-                return PyObjectId(object_id)
+            # 尝试将字符串转换为ObjectId
+            object_id = ObjectId(user_id)
+            logger.info(f"🔄 转换用户ID: {user_id} -> {object_id}")
+            return PyObjectId(object_id)
         except Exception as e:
             logger.error(f"❌ 用户ID转换失败: {user_id} -> {e}")
             # 如果转换失败，生成一个新的ObjectId
@@ -79,20 +72,20 @@ class AnalysisService:
             logger.warning(f"⚠️ 生成新的用户ID: {new_object_id}")
             return PyObjectId(new_object_id)
     
-    def _get_trading_graph(self, config: Dict[str, Any]) -> TradingAgentsGraph:
-        """获取或创建TradingAgents图实例（带缓存）- 与单股分析保持一致"""
+    def _get_trading_graph(self, config: Dict[str, Any]) -> zhitouagentGraph:
+        """获取或创建zhitouagent图实例（带缓存）- 与单股分析保持一致"""
         config_key = json.dumps(config, sort_keys=True)
 
         if config_key not in self._trading_graph_cache:
             # 直接使用完整配置，不再合并DEFAULT_CONFIG（因为create_analysis_config已经处理了）
             # 这与单股分析服务和web目录的方式一致
-            self._trading_graph_cache[config_key] = TradingAgentsGraph(
+            self._trading_graph_cache[config_key] = zhitouagentGraph(
                 selected_analysts=config.get("selected_analysts", ["market", "fundamentals"]),
                 debug=config.get("debug", False),
                 config=config
             )
 
-            logger.info(f"创建新的TradingAgents实例: {config.get('llm_provider', 'default')}")
+            logger.info(f"创建新的zhitouagent实例: {config.get('llm_provider', 'default')}")
 
         return self._trading_graph_cache[config_key]
 
@@ -195,7 +188,7 @@ class AnalysisService:
             # 启动引擎
             progress_tracker.update_progress("🚀 初始化AI分析引擎")
 
-            # 获取TradingAgents实例
+            # 获取zhitouagent实例
             trading_graph = self._get_trading_graph(config)
 
             # 执行分析
@@ -320,7 +313,7 @@ class AnalysisService:
                 deep_model_config=deep_model_config     # 传递模型配置
             )
 
-            # 获取TradingAgents实例
+            # 获取zhitouagent实例
             trading_graph = self._get_trading_graph(config)
 
             # 执行分析
@@ -368,7 +361,7 @@ class AnalysisService:
                 task_id=task.task_id,
                 analysts=task.parameters.selected_analysts or ["market", "fundamentals"],
                 research_depth=task.parameters.research_depth or "标准",
-                llm_provider="dashscope"
+                llm_provider="deepseek"
             )
 
             # 缓存进度跟踪器
@@ -404,7 +397,7 @@ class AnalysisService:
                 deep_model = getattr(task.parameters, 'deep_analysis_model', None)
 
                 # 优先使用深度分析模型，如果没有则使用快速分析模型
-                model_name = deep_model or quick_model or "qwen-plus"
+                model_name = deep_model or quick_model or "deepseek-chat"
 
                 # 根据模型名称确定供应商
                 from app.services.simple_analysis_service import get_provider_by_model_name
@@ -466,9 +459,9 @@ class AnalysisService:
             # 填充分析参数中的模型（若请求未显式提供）
             params = request.parameters or AnalysisParameters()
             if not getattr(params, 'quick_analysis_model', None):
-                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "qwen-turbo")
+                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "deepseek-chat")
             if not getattr(params, 'deep_analysis_model', None):
-                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "qwen-max")
+                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "deepseek-reasoner")
 
             # 应用系统级并发与可见性超时（若提供）
             try:
@@ -544,9 +537,9 @@ class AnalysisService:
 
             params = request.parameters or AnalysisParameters()
             if not getattr(params, 'quick_analysis_model', None):
-                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "qwen-turbo")
+                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "deepseek-chat")
             if not getattr(params, 'deep_analysis_model', None):
-                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "qwen-max")
+                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "deepseek-reasoner")
 
             try:
                 self.queue_service.user_concurrent_limit = int(effective_settings.get("max_concurrent_tasks", DEFAULT_USER_CONCURRENT_LIMIT))
@@ -694,7 +687,7 @@ class AnalysisService:
             if progress_callback:
                 progress_callback(30, "创建分析图...")
             
-            # 获取TradingAgents实例
+            # 获取zhitouagent实例
             trading_graph = self._get_trading_graph(config)
             
             if progress_callback:

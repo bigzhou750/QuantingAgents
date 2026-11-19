@@ -128,29 +128,29 @@ class AnalysisPreferenceService:
         self.client = MongoClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
         self.collection = self.db.analysis_preferences
-    
+
     async def create_preference(self, preference: AnalysisPreference) -> AnalysisPreference:
         """创建分析偏好"""
         result = self.collection.insert_one(preference.dict(exclude={"id"}))
         preference.id = str(result.inserted_id)
         return preference
-    
+
     async def get_user_preferences(self, user_id: str) -> List[AnalysisPreference]:
         """获取用户的所有偏好"""
         prefs = self.collection.find({"user_id": user_id})
         return [AnalysisPreference(**p) for p in prefs]
-    
+
     async def get_default_preference(self, user_id: str) -> Optional[AnalysisPreference]:
         """获取用户的默认偏好"""
         pref = self.collection.find_one({"user_id": user_id, "is_default": True})
         return AnalysisPreference(**pref) if pref else None
-    
+
     async def update_preference(self, preference_id: str, updates: dict) -> AnalysisPreference:
         """更新偏好"""
         self.collection.update_one({"_id": ObjectId(preference_id)}, {"$set": updates})
         pref = self.collection.find_one({"_id": ObjectId(preference_id)})
         return AnalysisPreference(**pref)
-    
+
     async def delete_preference(self, preference_id: str) -> bool:
         """删除偏好"""
         result = self.collection.delete_one({"_id": ObjectId(preference_id)})
@@ -169,19 +169,19 @@ class PromptTemplateService:
         self.client = MongoClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
         self.collection = self.db.prompt_templates
-    
+
     async def create_template(self, template: PromptTemplate) -> PromptTemplate:
         """创建模板"""
         result = self.collection.insert_one(template.dict(exclude={"id"}))
         template.id = str(result.inserted_id)
         return template
-    
+
     async def get_templates_by_agent(self, agent_type: str, agent_name: str) -> List[PromptTemplate]:
         """获取Agent的所有模板"""
         templates = self.collection.find({"agent_type": agent_type, "agent_name": agent_name})
         return [PromptTemplate(**t) for t in templates]
-    
-    async def get_template_by_preference(self, agent_type: str, agent_name: str, 
+
+    async def get_template_by_preference(self, agent_type: str, agent_name: str,
                                         preference_type: str) -> Optional[PromptTemplate]:
         """获取特定偏好的模板"""
         template = self.collection.find_one({
@@ -190,7 +190,7 @@ class PromptTemplateService:
             "preference_type": preference_type
         })
         return PromptTemplate(**template) if template else None
-    
+
     async def update_template(self, template_id: str, updates: dict) -> PromptTemplate:
         """更新模板"""
         self.collection.update_one({"_id": ObjectId(template_id)}, {"$set": updates})
@@ -210,18 +210,18 @@ class TemplateHistoryService:
         self.client = MongoClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
         self.collection = self.db.template_history
-    
+
     async def record_change(self, history: TemplateHistory) -> TemplateHistory:
         """记录模板修改"""
         result = self.collection.insert_one(history.dict(exclude={"id"}))
         history.id = str(result.inserted_id)
         return history
-    
+
     async def get_template_history(self, template_id: str) -> List[TemplateHistory]:
         """获取模板的修改历史"""
         histories = self.collection.find({"template_id": template_id}).sort("version", -1)
         return [TemplateHistory(**h) for h in histories]
-    
+
     async def get_version(self, template_id: str, version: int) -> Optional[TemplateHistory]:
         """获取特定版本"""
         history = self.collection.find_one({"template_id": template_id, "version": version})
@@ -369,7 +369,7 @@ class MarketAnalyst:
         self.preference_service = AnalysisPreferenceService()
         self.user_id = user_id
         self.preference_type = preference_type
-    
+
     async def get_system_prompt(self):
         """获取系统提示词"""
         template = await self.template_service.get_template_by_preference(
@@ -382,7 +382,7 @@ class MarketAnalyst:
 
 ---
 
-**版本**: v1.0.1  
-**状态**: 实现指南  
+**版本**: v1.0.1
+**状态**: 实现指南
 **下一步**: 开始实现
 

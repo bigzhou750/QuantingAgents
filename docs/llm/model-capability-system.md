@@ -270,7 +270,7 @@ frontend/src/
 ```python
 DEFAULT_MODEL_CAPABILITIES = {
     # ... 现有配置
-    
+
     "your-new-model": {
         "capability_level": 3,
         "suitable_roles": [ModelRole.BOTH],

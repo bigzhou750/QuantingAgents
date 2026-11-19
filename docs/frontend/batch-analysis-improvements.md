@@ -59,7 +59,7 @@
 1. **从后端获取模型列表**：
    ```typescript
    const availableModels = ref<any[]>([])
-   
+
    const initializeModelSettings = async () => {
      // 获取默认模型
      const defaultModels = await configApi.getDefaultModels()

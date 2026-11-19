@@ -6,10 +6,10 @@
 
 ### 原始问题调用链
 ```
-interface.py (1063-1265行) 
+interface.py (1063-1265行)
     ↓ 调用 tushare_adapter
-tushare_adapter.py 
-    ↓ 
+tushare_adapter.py
+    ↓
 data_source_manager.py (276行)
     ↓ 又调用回 interface.get_china_stock_data_tushare
 interface.py (1063行开始)
@@ -43,7 +43,7 @@ def get_china_stock_data_tushare(self, symbol: str, start_date: str, end_date: s
     # 临时切换到Tushare数据源
     original_source = self.current_source
     self.current_source = ChinaDataSource.TUSHARE
-    
+
     try:
         result = self._get_tushare_data(symbol, start_date, end_date)
         return result
@@ -71,10 +71,10 @@ def _get_tushare_data(self, symbol: str, start_date: str, end_date: str) -> str:
     try:
         # 直接调用适配器，避免循环调用interface
         from .tushare_adapter import get_tushare_adapter
-        
+
         adapter = get_tushare_adapter()
         data = adapter.get_stock_data(symbol, start_date, end_date)
-        
+
         # 格式化数据并返回
         # ...
 ```
@@ -85,7 +85,7 @@ def get_china_stock_data_tushare(ticker: str, start_date: str, end_date: str) ->
     """重定向到data_source_manager，避免循环调用"""
     try:
         from .data_source_manager import get_data_source_manager
-        
+
         manager = get_data_source_manager()
         return manager.get_china_stock_data_tushare(ticker, start_date, end_date)
     except Exception as e:

@@ -1,5 +1,21 @@
 <template>
   <div class="header-actions">
+    <!-- 算力余额 -->
+    <el-tooltip content="算力余额" placement="bottom">
+      <button class="balance-entry" type="button" @click="goRecharge" :aria-label="`算力余额 ${balanceText}`">
+        <el-icon><Wallet /></el-icon>
+        <span class="balance-label">算力余额</span>
+        <span class="balance-value">{{ balanceText }}</span>
+      </button>
+    </el-tooltip>
+
+    <!-- 首页 -->
+    <el-tooltip content="工作台" placement="bottom">
+      <el-button type="text" @click="goHome" class="action-btn">
+        <el-icon><HomeFilled /></el-icon>
+      </el-button>
+    </el-tooltip>
+
     <!-- 主题切换 -->
     <el-tooltip content="切换主题" placement="bottom">
       <el-button type="text" @click="toggleTheme" class="action-btn">
@@ -19,21 +35,14 @@
 
     <!-- 通知 -->
     <el-tooltip content="通知" placement="bottom">
-      <el-badge :value="unreadCount" :hidden="unreadCount === 0">
+      <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notif-badge">
         <el-button type="text" @click="openDrawer" class="action-btn">
           <el-icon><Bell /></el-icon>
         </el-button>
       </el-badge>
     </el-tooltip>
 
-    <!-- 帮助 -->
-    <el-tooltip content="帮助" placement="bottom">
-      <el-button type="text" @click="showHelp" class="action-btn">
-        <el-icon><QuestionFilled /></el-icon>
-      </el-button>
-    </el-tooltip>
-
-    <!-- 通知抽屉（方案B） -->
+    <!-- 通知抽屉 -->
     <el-drawer v-model="drawerVisible" direction="rtl" size="360px" :with-header="true" title="消息中心">
       <div class="notif-toolbar">
         <el-segmented v-model="filter" :options="[{label: '全部', value: 'all'}, {label: '未读', value: 'unread'}]" size="small" />
@@ -61,21 +70,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNotificationStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { useTokenBillingStore } from '@/stores/tokenBilling'
+import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
   Sunny,
   Moon,
   FullScreen,
   Bell,
-  QuestionFilled
+  HomeFilled,
+  Wallet
 } from '@element-plus/icons-vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const billingStore = useTokenBillingStore()
+const router = useRouter()
 const notifStore = useNotificationStore()
 const { unreadCount, items } = storeToRefs(notifStore)
 const drawerVisible = ref(false)
@@ -83,11 +97,18 @@ const filter = ref<'all' | 'unread'>('all')
 let timerCount: any = null
 let timerList: any = null
 
+const balanceText = computed(() => {
+  if (billingStore.balanceLoading || billingStore.balanceError) return '--'
+  return billingStore.balanceDisplay
+})
+
 const toggleTheme = () => { appStore.toggleTheme() }
 const toggleFullscreen = () => {
   if (document.fullscreenElement) document.exitFullscreen()
   else document.documentElement.requestFullscreen()
 }
+const goHome = () => { router.push('/dashboard') }
+const goRecharge = () => { router.push('/token-recharge') }
 
 function openDrawer() {
   drawerVisible.value = true
@@ -101,9 +122,10 @@ function toLocal(iso: string) { try { return new Date(iso).toLocaleString() } ca
 function go(n: any) { if (n.link) window.open(n.link, '_blank') }
 
 onMounted(() => {
-  notifStore.refreshUnreadCount()
-  // 🔥 建立 WebSocket 连接（优先），失败自动降级到 SSE
-  notifStore.connect()
+  if (authStore.isAuthenticated) {
+    notifStore.refreshUnreadCount()
+    notifStore.connect()
+  }
 
   timerCount = setInterval(() => notifStore.refreshUnreadCount(), 30000)
   watch(drawerVisible, (v) => {
@@ -121,25 +143,25 @@ onMounted(() => {
   watch(() => authStore.token, () => {
     notifStore.connect()
   })
+  watch(() => authStore.isAuthenticated, (authenticated) => {
+    if (authenticated) {
+      billingStore.fetchAccount()
+    }
+  }, { immediate: true })
 })
 
 onUnmounted(() => {
   if (timerCount) clearInterval(timerCount)
   if (timerList) clearInterval(timerList)
-  // 🔥 断开所有连接（WebSocket 和 SSE）
   notifStore.disconnect()
 })
-
-function showHelp() {
-  window.open('https://mp.weixin.qq.com/s/ppsYiBncynxlsfKFG8uEbw', '_blank')
-}
 </script>
 
 <style lang="scss" scoped>
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 
   .action-btn {
     width: 36px;
@@ -148,8 +170,59 @@ function showHelp() {
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--el-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--el-fill-color-light);
+      color: var(--el-text-color-primary);
+    }
 
     .el-icon { font-size: 18px; }
+  }
+
+  .notif-badge {
+    :deep(.el-badge__content) {
+      border: 2px solid var(--el-bg-color);
+      padding: 0 4px;
+      height: 16px;
+      line-height: 14px;
+      font-size: 10px;
+    }
+  }
+
+  .balance-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 18px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-primary);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+
+    &:hover {
+      background: var(--el-fill-color-light);
+      border-color: var(--el-color-primary-light-5);
+    }
+
+    .el-icon {
+      font-size: 16px;
+      color: var(--el-color-primary);
+    }
+
+    .balance-label {
+      color: var(--el-text-color-secondary);
+    }
+
+    .balance-value {
+      font-weight: 600;
+    }
   }
 }
 
@@ -163,4 +236,10 @@ function showHelp() {
 .notif-item .title:hover { text-decoration: underline; }
 .notif-item .content { font-size: 12px; color: var(--el-text-color-regular); }
 .notif-item .ops { display: flex; gap: 8px; margin-top: 6px; }
+
+@media (max-width: 640px) {
+  .balance-entry .balance-label {
+    display: none;
+  }
+}
 </style>

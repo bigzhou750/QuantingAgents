@@ -5,7 +5,7 @@
 当前港股数据获取存在以下问题：
 
 1. **基础信息 (`_get_hk_info`)**: 直接使用 yfinance，遇到 Rate Limit 就失败
-2. **K线数据 (`_get_hk_kline`)**: 直接使用 yfinance，遇到 Rate Limit 就失败  
+2. **K线数据 (`_get_hk_kline`)**: 直接使用 yfinance，遇到 Rate Limit 就失败
 3. **新闻数据 (`get_hk_news`)**: 刚添加的使用 Finnhub，但应该优先使用 AKShare
 
 **核心问题**: 港股的实现没有参考美股的数据源优先级模式，导致单点失败。

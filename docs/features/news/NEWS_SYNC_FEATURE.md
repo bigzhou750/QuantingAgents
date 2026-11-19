@@ -79,7 +79,7 @@
   "full_symbol": "000001.SZ",   // 完整代码
   "market": "CN",               // 市场
   "symbols": ["000001"],        // 相关股票列表
-  
+
   // 新闻内容
   "title": "新闻标题",
   "content": "新闻正文内容",
@@ -87,10 +87,10 @@
   "url": "https://...",         // 新闻链接
   "source": "sina",             // 新闻来源
   "author": "作者名",
-  
+
   // 时间信息
   "publish_time": "2025-09-30 12:00:00",  // 发布时间
-  
+
   // 分类和标签
   "category": "general",        // 分类
   "sentiment": "neutral",       // 情绪 (positive/negative/neutral)
@@ -98,7 +98,7 @@
   "keywords": ["关键词1", "关键词2"],  // 关键词
   "importance": "medium",       // 重要性 (high/medium/low)
   "language": "zh-CN",          // 语言
-  
+
   // 元数据
   "data_source": "tushare",     // 数据源
   "created_at": "2025-09-30 12:00:00",

@@ -38,7 +38,7 @@
             <span>{{ fmtPercent(quote.changePercent) }}</span>
           </div>
           <el-tag type="info" size="small">{{ refreshText }}</el-tag>
-          <el-button text size="small" @click="refreshMockQuote" :icon="Refresh">刷新</el-button>
+          <el-button text size="small" @click="refreshQuote" :icon="Refresh">刷新</el-button>
         </div>
         <div class="stats">
           <div class="item"><span>今开</span><b>{{ fmtPrice(quote.open) }}</b></div>
@@ -230,6 +230,11 @@
                 <div class="right">{{ formatNewsTime(n.time) }}</div>
               </div>
               <div class="meta">{{ n.source || '-' }} · {{ newsSource || '-' }}</div>
+              <div class="news-actions">
+                <el-button size="small" link type="primary" @click="collectNewsToWatch(n)">
+                  收集新闻
+                </el-button>
+              </div>
             </div>
           </div>
         </el-card>
@@ -275,6 +280,7 @@
           <div class="quick-actions">
             <el-button type="primary" @click="onAnalyze" :icon="TrendCharts" plain>发起分析</el-button>
             <el-button @click="onToggleFavorite" :icon="Star">{{ isFav ? '移出自选' : '加入自选' }}</el-button>
+            <el-button @click="collectToWatch" :icon="View">加入关注</el-button>
             <el-button type="success" :icon="CreditCard" @click="goPaperTrading">模拟交易</el-button>
           </div>
         </el-card>
@@ -359,13 +365,14 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { TrendCharts, Star, Refresh, Link, Document, Clock, Reading, CreditCard, Delete } from '@element-plus/icons-vue'
+import { TrendCharts, Star, Refresh, Link, Document, Clock, Reading, CreditCard, Delete, View } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { stocksApi } from '@/api/stocks'
 import { analysisApi } from '@/api/analysis'
 import { ApiClient } from '@/api/request'
 import { stockSyncApi } from '@/api/stockSync'
 import { clearAllCache } from '@/api/cache'
+import { newsWatchApi } from '@/api/newsWatch'
 import { use as echartsUse } from 'echarts/core'
 import { CandlestickChart } from 'echarts/charts'
 
@@ -608,8 +615,7 @@ async function handleSync() {
   }
 }
 
-async function refreshMockQuote() {
-  // 改为调用后端接口获取真实数据
+async function refreshQuote() {
   await fetchQuote()
 }
 
@@ -887,7 +893,7 @@ const filteredNews = computed(() => {
   return newsItems.value
 })
 
-// 基本面（mock）
+// 基本面数据
 const basics = reactive({
   industry: '-',
   sector: '-',
@@ -906,6 +912,36 @@ const basics = reactive({
 function onAnalyze() {
   router.push({ name: 'SingleAnalysis', query: { stock: code.value } })
 }
+// 加入关注工作台（仅收集用于研究，不构成投资建议）
+async function collectToWatch() {
+  try {
+    await newsWatchApi.collect({
+      item_type: 'stock',
+      symbol: code.value,
+      source_page: 'stock_detail',
+      title: stockName.value || code.value,
+    })
+    ElMessage.success('已加入关注工作台')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '加入关注失败')
+  }
+}
+
+async function collectNewsToWatch(news: any) {
+  try {
+    await newsWatchApi.collect({
+      item_type: 'news',
+      symbol: code.value,
+      news_id: news.url || news.title,
+      source_page: 'stock_detail',
+      title: news.title || '',
+    })
+    ElMessage.success('新闻已收集')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '收集新闻失败')
+  }
+}
+
 async function onToggleFavorite() {
   try {
     if (!isFav.value) {
@@ -1442,7 +1478,8 @@ function exportReport() {
 
 /* 投资建议盒子 - 重点突出 */
 .recommendation-box {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--zt-gradient-hero);
+  color: #fff;
   border-radius: 12px;
   padding: 20px 24px;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);

@@ -101,18 +101,18 @@ if tool_call_count > 0:
 ```python
 else:
     logger.info(f"📊 [基本面分析师] ===== 强制工具调用检查开始 =====")
-    
+
     # 检查消息历史
     messages = state.get("messages", [])
     logger.info(f"🔍 [消息历史] 当前消息总数: {len(messages)}")
-    
+
     ai_message_count = sum(1 for msg in messages if isinstance(msg, AIMessage))
     tool_message_count = sum(1 for msg in messages if isinstance(msg, ToolMessage))
     logger.info(f"🔍 [消息历史] AIMessage数量: {ai_message_count}, ToolMessage数量: {tool_message_count}")
-    
+
     has_tool_result = any(isinstance(msg, ToolMessage) for msg in messages)
     logger.info(f"🔍 [检查结果] 是否有工具返回结果: {has_tool_result}")
-    
+
     # 检查分析内容
     has_analysis_content = False
     if hasattr(result, 'content') and result.content:
@@ -120,11 +120,11 @@ else:
         if content_length > 500:
             has_analysis_content = True
             logger.info(f"✅ [内容检查] LLM已返回有效分析内容")
-    
+
     # 统计工具调用次数
     tool_call_count = sum(1 for msg in messages if isinstance(msg, ToolMessage))
     logger.info(f"🔍 [统计] 历史工具调用次数: {tool_call_count}")
-    
+
     logger.info(f"🔍 [重复调用检查] 汇总 - 工具结果数: {tool_call_count}, 已有工具结果: {has_tool_result}, 已有分析内容: {has_analysis_content}")
 ```
 
@@ -137,11 +137,11 @@ if has_tool_result or has_analysis_content:
         logger.info(f"⚠️ [决策原因] 检测到已有 {tool_call_count} 次工具调用结果，避免重复调用")
     if has_analysis_content:
         logger.info(f"⚠️ [决策原因] LLM已返回有效分析内容，无需强制工具调用")
-    
+
     report = str(result.content) if hasattr(result, 'content') else "基本面分析完成"
     logger.info(f"📊 [返回结果] 使用LLM返回的分析内容，报告长度: {len(report)}字符")
     logger.info(f"✅ [决策] 基本面分析完成，跳过重复调用成功")
-    
+
     return {
         "fundamentals_report": report,
         "messages": [result]
@@ -158,9 +158,9 @@ logger.info(f"🔧 [决策原因] 未检测到工具结果或分析内容，需�
 if unified_tool:
     logger.info(f"🔍 [工具调用] 找到统一工具，准备强制调用")
     logger.info(f"🔍 [工具调用] 传入参数 - ticker: '{ticker}', start_date: {start_date}, end_date: {current_date}")
-    
+
     combined_data = unified_tool.invoke({...})
-    
+
     logger.info(f"✅ [工具调用] 统一工具调用成功")
     logger.info(f"📊 [工具调用] 返回数据长度: {len(combined_data)}字符")
 ```

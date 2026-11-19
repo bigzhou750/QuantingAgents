@@ -1,6 +1,6 @@
 """
 阿里百炼 OpenAI兼容适配器
-为 TradingAgents 提供阿里百炼大模型的 OpenAI 兼容接口
+为 zhitouagent 提供阿里百炼大模型的 OpenAI 兼容接口
 利用百炼模型的原生 OpenAI 兼容性，无需额外的工具转换
 """
 

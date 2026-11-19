@@ -1,10 +1,10 @@
-# TradingAgents-CN v1.0.0-preview Docker部署指南
+# zhitouagent v1.0.0-preview Docker部署指南
 
-> 🐳 使用Docker快速部署TradingAgents-CN（前后端分离架构）
+> 🐳 使用Docker快速部署zhitouagent（前后端分离架构）
 
 ## 📋 架构说明
 
-TradingAgents-CN v1.0.0-preview采用**前后端分离架构**：
+zhitouagent v1.0.0-preview采用**前后端分离架构**：
 
 - **后端**: FastAPI + Python 3.10 (端口: 8000)
 - **前端**: Vue 3 + Vite + Nginx (端口: 5173)
@@ -53,8 +53,8 @@ docker-compose --version
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -69,8 +69,8 @@ chmod +x scripts/docker-init.sh
 
 ```powershell
 # 1. 克隆仓库
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 2. 配置环境变量
 Copy-Item .env.example .env
@@ -84,8 +84,8 @@ notepad .env  # 编辑配置文件
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/hsliuping/TradingAgents-CN.git
-cd TradingAgents-CN
+git clone mailto:zh75067197@gmail.com.git
+cd zhitouagent
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -438,13 +438,13 @@ command: redis-server --appendonly yes --save 60 1000
 
 ## 🤝 获取帮助
 
-- **GitHub Issues**: https://github.com/hsliuping/TradingAgents-CN/issues
+- **GitHub Issues**: mailto:zh75067197@gmail.com
 - **QQ群**: 782124367
-- **邮箱**: hsliup@163.com
+- **邮箱**: zh75067197@gmail.com
 
 ---
 
-**版本**: v1.0.0-preview  
-**更新日期**: 2025-10-15  
-**维护者**: TradingAgents-CN Team
+**版本**: v1.0.0-preview
+**更新日期**: 2025-10-15
+**维护者**: zhitouagent Team
 

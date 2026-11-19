@@ -118,7 +118,7 @@ def _ensure_registered() -> None:
 
 # Sources that must NEVER silently fall through to a network loader when the
 # caller asked for them explicitly. ``local`` reads the user's own configured
-# files (``~/.vibe-trading/data-bridge/config.yaml``); its ``markets`` set spans
+# files (``~/.zhitouagent/data-bridge/config.yaml``); its ``markets`` set spans
 # every market only so the cross-market auto-resolver can *reach* it, not so an
 # unavailable ``local`` request can degrade into an unrelated network source.
 # An explicit ``local`` request that is unavailable is a config problem the user
@@ -232,7 +232,7 @@ def get_loader_cls_with_fallback(source: str) -> Type[Any]:
     if source in _NO_NETWORK_FALLBACK_SOURCES:
         hint = {
             "local": "Check your Data Bridge config "
-                     "(~/.vibe-trading/data-bridge/config.yaml) — it must exist and "
+                     "(~/.zhitouagent/data-bridge/config.yaml) — it must exist and "
                      "list at least one source.",
             "tickerall": "Set TICKERALL_API_KEY and TICKERALL_ACCOUNT_ID.",
         }.get(source, "")

@@ -13,7 +13,7 @@
 - **网络**: 稳定的互联网连接 (用于API调用和数据获取)
 
 ### 软件要求
-- **操作系统**: 
+- **操作系统**:
   - Windows 10/11 (64位)
   - macOS 10.15 (Catalina) 或更高版本
   - Linux (Ubuntu 18.04+, CentOS 7+, 或其他主流发行版)
@@ -95,7 +95,7 @@ pip3.11 --version
 
 ```bash
 # 克隆项目仓库
-git clone https://github.com/TauricResearch/TradingAgents.git
+git clone mailto:zh75067197@gmail.com.git
 
 # 进入项目目录
 cd TradingAgents
@@ -282,9 +282,9 @@ import os
 
 def test_installation():
     """测试安装是否成功"""
-    
+
     print("=== TradingAgents 安装验证 ===\n")
-    
+
     # 1. Python 版本检查
     print(f"Python 版本: {sys.version}")
     if sys.version_info < (3, 10):
@@ -292,7 +292,7 @@ def test_installation():
         return False
     else:
         print("✅ Python 版本符合要求")
-    
+
     # 2. 依赖包检查
     required_packages = [
         'langchain_openai',
@@ -301,7 +301,7 @@ def test_installation():
         'pandas',
         'requests'
     ]
-    
+
     missing_packages = []
     for package in required_packages:
         try:
@@ -310,23 +310,23 @@ def test_installation():
         except ImportError:
             print(f"❌ {package} 未安装")
             missing_packages.append(package)
-    
+
     if missing_packages:
         print(f"\n缺少依赖包: {missing_packages}")
         return False
-    
+
     # 3. API 密钥检查
     api_keys = {
         'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
         'FINNHUB_API_KEY': os.getenv('FINNHUB_API_KEY')
     }
-    
+
     for key_name, key_value in api_keys.items():
         if key_value:
             print(f"✅ {key_name} 已设置")
         else:
             print(f"❌ {key_name} 未设置")
-    
+
     # 4. TradingAgents 导入测试
     try:
         from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -335,7 +335,7 @@ def test_installation():
     except ImportError as e:
         print(f"❌ TradingAgents 导入失败: {e}")
         return False
-    
+
     print("\n🎉 安装验证完成!")
     return True
 

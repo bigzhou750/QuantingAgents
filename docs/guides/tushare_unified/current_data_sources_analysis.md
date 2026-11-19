@@ -11,23 +11,23 @@ class DataSourceAdapter(ABC):
     @property
     @abstractmethod
     def name(self) -> str: pass
-    
-    @property  
+
+    @property
     @abstractmethod
     def priority(self) -> int: pass
-    
+
     @abstractmethod
     def is_available(self) -> bool: pass
-    
+
     @abstractmethod
     def get_stock_list(self) -> Optional[pd.DataFrame]: pass
-    
+
     @abstractmethod
     def get_daily_basic(self, trade_date: str) -> Optional[pd.DataFrame]: pass
-    
+
     @abstractmethod
     def find_latest_trade_date(self) -> Optional[str]: pass
-    
+
     @abstractmethod
     def get_realtime_quotes(self) -> Optional[Dict[str, Dict[str, Optional[float]]]]: pass
 ```
@@ -39,7 +39,7 @@ class DataSourceManager:
     def __init__(self):
         self.adapters = [
             TushareAdapter(),
-            AKShareAdapter(), 
+            AKShareAdapter(),
             BaoStockAdapter(),
         ]
         self.adapters.sort(key=lambda x: x.priority)
@@ -47,7 +47,7 @@ class DataSourceManager:
 
 **实现的适配器**:
 - ✅ `TushareAdapter` - 完整实现
-- ✅ `AKShareAdapter` - 完整实现  
+- ✅ `AKShareAdapter` - 完整实现
 - ✅ `BaoStockAdapter` - 完整实现
 - ✅ `DataConsistencyChecker` - 数据一致性检查
 
@@ -59,16 +59,16 @@ class DataSourceManager:
 class BaseStockDataProvider(ABC):
     @abstractmethod
     async def connect(self) -> bool: pass
-    
+
     @abstractmethod
     async def get_stock_basic_info(self, symbol: str = None): pass
-    
+
     @abstractmethod
     async def get_stock_quotes(self, symbol: str): pass
-    
+
     @abstractmethod
     async def get_historical_data(self, symbol: str, start_date, end_date): pass
-    
+
     # 数据标准化方法
     def standardize_basic_info(self, raw_data): pass
     def standardize_quotes(self, raw_data): pass
@@ -107,7 +107,7 @@ def find_latest_trade_date(self) -> Optional[str]
 **tradingagents层接口** (异步):
 ```python
 async def get_stock_basic_info(self, symbol: str = None)
-async def get_stock_quotes(self, symbol: str)  
+async def get_stock_quotes(self, symbol: str)
 async def get_historical_data(self, symbol: str, start_date, end_date)
 ```
 
@@ -203,7 +203,7 @@ from tradingagents.dataflows.interface import get_china_stock_data_unified
 ### 低优先级 (最后处理)
 
 1. **Yahoo Finance**: 只在tradingagents层，无冲突
-2. **Finnhub**: 只在tradingagents层，无冲突  
+2. **Finnhub**: 只在tradingagents层，无冲突
 3. **通达信**: 只在tradingagents层，无冲突
 
 ## 📋 迁移建议
@@ -219,7 +219,7 @@ from tradingagents.dataflows.interface import get_china_stock_data_unified
 
 **保留app层的优势**:
 1. 🔄 数据一致性检查 → 迁移到tradingagents
-2. 🔄 优先级管理 → 迁移到tradingagents  
+2. 🔄 优先级管理 → 迁移到tradingagents
 3. 🔄 故障转移 → 迁移到tradingagents
 4. 🔄 同步服务 → 保留在app层，调用tradingagents
 
@@ -255,17 +255,17 @@ class BaseStockDataProvider(ABC):
     # 保留tradingagents的异步接口
     @abstractmethod
     async def get_stock_basic_info(self, symbol: str = None): pass
-    
+
     # 添加app层需要的方法
-    @abstractmethod  
+    @abstractmethod
     async def get_daily_basic(self, trade_date: str): pass
-    
+
     @abstractmethod
     async def find_latest_trade_date(self): pass
-    
+
     @abstractmethod
     async def get_realtime_quotes(self): pass
-    
+
     # 保留数据标准化
     def standardize_basic_info(self, raw_data): pass
     def standardize_quotes(self, raw_data): pass
@@ -278,10 +278,10 @@ class BaseStockDataProvider(ABC):
 class SyncDataSourceAdapter:
     def __init__(self, async_provider):
         self.async_provider = async_provider
-    
+
     def get_stock_list(self):
         return asyncio.run(self.async_provider.get_stock_basic_info())
-    
+
     def get_daily_basic(self, trade_date):
         return asyncio.run(self.async_provider.get_daily_basic(trade_date))
 ```

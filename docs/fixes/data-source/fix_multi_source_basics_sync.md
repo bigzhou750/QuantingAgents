@@ -258,7 +258,7 @@ TUSHARE_ENABLED=false
 
 ### 问题解决
 
-✅ **问题**：`TUSHARE_ENABLED=false` 时系统仍然尝试连接 Tushare  
+✅ **问题**：`TUSHARE_ENABLED=false` 时系统仍然尝试连接 Tushare
 ✅ **解决**：切换到多数据源同步服务，支持自动切换到 AKShare/BaoStock
 
 ### 优势

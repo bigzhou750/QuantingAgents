@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-App 缓存读取适配器（TradingAgents -> app MongoDB 集合）
+App 缓存读取适配器（zhitouagent -> app MongoDB 集合）
 - 基本信息集合：stock_basic_info
 - 行情集合：market_quotes
 

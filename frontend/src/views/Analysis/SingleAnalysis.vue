@@ -356,8 +356,8 @@
             </template>
 
             <div class="config-content">
-              <!-- AI模型配置 -->
-              <div class="config-section">
+              <!-- AI模型配置，仅管理员可编辑 -->
+              <div v-if="authStore.isAdmin" class="config-section">
                 <h4 class="config-title">🤖 AI模型配置</h4>
                 <div class="model-config">
                   <div class="model-item">
@@ -783,8 +783,8 @@ const generateStepsFromBackend = (backendSteps: any[]) => {
 
 // 模型设置
 const modelSettings = ref({
-  quickAnalysisModel: 'qwen-turbo',
-  deepAnalysisModel: 'qwen-max'
+  quickAnalysisModel: 'deepseek-chat',
+  deepAnalysisModel: 'deepseek-reasoner'
 })
 
 // 可用的模型列表（从配置中获取）
@@ -886,8 +886,18 @@ const validateStockCodeInput = () => {
 }
 
 // 获取股票信息
-const fetchStockInfo = () => {
-  // TODO: 实现股票信息获取
+const fetchStockInfo = async () => {
+  const code = analysisForm.stockCode.trim()
+  if (!code) return
+  try {
+    const res = await stocksApi.getQuote(code)
+    const data = res.data
+    if (data?.name) {
+      stockCodeHelp.value = `${code} - ${data.name}`
+    }
+  } catch {
+    // 静默处理，不影响主流程
+  }
 }
 
 // 切换分析师
@@ -947,6 +957,7 @@ const submitAnalysis = async () => {
         include_sentiment: analysisForm.includeSentiment,
         include_risk: analysisForm.includeRisk,
         language: analysisForm.language,
+        custom_prompt: qObservationContextPrompt(),
         quick_analysis_model: modelSettings.value.quickAnalysisModel,
         deep_analysis_model: modelSettings.value.deepAnalysisModel
       }
@@ -1017,6 +1028,12 @@ const submitAnalysis = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+function qObservationContextPrompt(): string | undefined {
+  const q = route.query as any
+  if (!q?.observation_id) return undefined
+  return `本次分析来自观察记录 ${q.observation_id}。来源策略：${q.strategy_id || '未知'}；来源任务：${q.task_id || '未知'}。请将该观察来源作为研究上下文说明，不将其视为交易建议。`
 }
 
 // 轮询任务状态
@@ -1671,7 +1688,7 @@ const goSimOrder = async () => {
           ]),
           h('p', [
             h('strong', '预计金额：'),
-            h('span', { style: 'color: #409EFF; font-weight: bold;' }, `${estimatedAmount.value}元`)
+            h('span', { style: 'color: #0EA5E9; font-weight: bold;' }, `${estimatedAmount.value}元`)
           ]),
           h('p', [
             h('strong', '置信度：'),
@@ -1899,20 +1916,9 @@ const initializeModelSettings = async () => {
       llmConfigs.filter((config: any) => config.enabled)
     )
 
-    console.log('✅ 加载模型配置成功:', {
-      quick: modelSettings.value.quickAnalysisModel,
-      deep: modelSettings.value.deepAnalysisModel,
-      available: availableModels.value.length
-    })
-    console.log('🔍 可用模型详细信息:', availableModels.value.map(m => ({
-      model_name: m.model_name,
-      model_display_name: m.model_display_name,
-      provider: m.provider
-    })))
   } catch (error) {
-    console.error('加载默认模型配置失败:', error)
-    modelSettings.value.quickAnalysisModel = 'qwen-turbo'
-    modelSettings.value.deepAnalysisModel = 'qwen-max'
+    modelSettings.value.quickAnalysisModel = 'deepseek-chat'
+    modelSettings.value.deepAnalysisModel = 'deepseek-reasoner'
   }
 }
 
@@ -2245,6 +2251,14 @@ onMounted(async () => {
   }
   if (q?.market) analysisForm.market = normalizeMarketForAnalysis(q.market) as MarketType
 
+  if (q?.observation_id) {
+    console.log('🔗 已携带观察上下文:', {
+      observation_id: q.observation_id,
+      strategy_id: q.strategy_id,
+      task_id: q.task_id,
+    })
+  }
+
   // 尝试恢复任务状态（仅当没有新股票代码时）
   if (!hasNewStock) {
     await restoreTaskFromCache()
@@ -2301,7 +2315,7 @@ onMounted(async () => {
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 
       :deep(.el-card__header) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--zt-gradient-hero);
         color: white;
         border-radius: 16px 16px 0 0;
         padding: 20px 24px;
@@ -3241,9 +3255,9 @@ onMounted(async () => {
     }
 
     &.is-active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: var(--zt-gradient-hero) !important;
       color: white !important;
-      border-color: #667eea !important;
+      border-color: #0EA5E9 !important;
       box-shadow: 0 6px 20px rgba(102,126,234,0.4) !important;
       transform: translateY(-3px) scale(1.05) !important;
 
@@ -3282,7 +3296,7 @@ onMounted(async () => {
   padding: 20px;
   background: var(--el-fill-color-light);
   border-radius: 15px;
-  border-left: 5px solid #667eea;
+  border-left: 5px solid #0EA5E9;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 
   .report-title {

@@ -14,6 +14,7 @@ Uses progressive disclosure at two levels:
 from __future__ import annotations
 
 import re
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -94,7 +95,14 @@ def _load_skill_dir(dir_path: Path) -> Optional[Skill]:
     )
 
 
-USER_SKILLS_DIR = Path.home() / ".vibe-trading" / "skills" / "user"
+USER_SKILLS_DIR = Path.home() / ".zhitouagent" / "skills" / "user"
+
+
+def _configured_user_skills_dir() -> Path:
+    configured = os.getenv("EVOLUTION_SKILL_RUNTIME_ROOT", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve() / "skills" / "user"
+    return USER_SKILLS_DIR
 
 
 class SkillsLoader:
@@ -105,15 +113,26 @@ class SkillsLoader:
     """
 
     def __init__(self, skills_dir: Optional[Path] = None,
-                 user_skills_dir: Optional[Path] = None) -> None:
+                 user_skills_dir: Optional[Path] = None,
+                 exclude_skills: Optional[set[str]] = None,
+                 include_skills: Optional[set[str]] = None) -> None:
         """Initialize SkillsLoader.
 
         Args:
             skills_dir: Bundled skills directory path; defaults to agent/skills/.
-            user_skills_dir: User-created skills directory; defaults to ~/.vibe-trading/skills/user/.
+            user_skills_dir: User-created skills directory; defaults to ~/.zhitouagent/skills/user/.
+            exclude_skills: Optional skill names to exclude from this loader.
+            include_skills: Optional allowlist; when non-empty only these skills load.
         """
         self.skills_dir = skills_dir or Path(__file__).resolve().parents[1] / "skills"
-        self._user_skills_dir = user_skills_dir or USER_SKILLS_DIR
+        self._exclude_skills = set(exclude_skills or set())
+        self._include_skills = set(include_skills or set())
+        if user_skills_dir is None:
+            self._user_skills_dir = _configured_user_skills_dir()
+            self._legacy_user_skills_dir = USER_SKILLS_DIR
+        else:
+            self._user_skills_dir = Path(user_skills_dir)
+            self._legacy_user_skills_dir = None
         self.skills: List[Skill] = []
         self._load()
 
@@ -124,13 +143,19 @@ class SkillsLoader:
         (e.g. after patch_skill copies and modifies a bundled skill).
         """
         seen_names: set[str] = set()
-        for directory in (self._user_skills_dir, self.skills_dir):
+        for directory in (self._user_skills_dir, self._legacy_user_skills_dir, self.skills_dir):
             if not directory or not directory.exists():
                 continue
             for path in sorted(directory.iterdir()):
                 if path.is_dir() and (path / "SKILL.md").exists():
                     skill = _load_skill_dir(path)
-                    if skill and skill.name not in seen_names:
+                    if not skill:
+                        continue
+                    if skill.name in self._exclude_skills:
+                        continue
+                    if self._include_skills and skill.name not in self._include_skills:
+                        continue
+                    if skill.name not in seen_names:
                         self.skills.append(skill)
                         seen_names.add(skill.name)
 
@@ -179,8 +204,10 @@ class SkillsLoader:
                 return f'<skill name="{name}">\n{skill.body}\n</skill>'
 
         # Fallback: check user skills directory on disk (mid-session created skills)
-        if self._user_skills_dir:
-            skill = _load_skill_dir(self._user_skills_dir / name)
+        for directory in (self._user_skills_dir, self._legacy_user_skills_dir):
+            if not directory:
+                continue
+            skill = _load_skill_dir(directory / name)
             if skill:
                 self.skills.append(skill)
                 return f'<skill name="{name}">\n{skill.body}\n</skill>'

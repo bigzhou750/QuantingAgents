@@ -19,51 +19,51 @@ TradingAgents 基于 LangGraph 构建了一个复杂的多智能体协作图结�
 ```mermaid
 graph TD
     START([开始]) --> INIT[状态初始化]
-    
+
     INIT --> PARALLEL_ANALYSIS{并行分析层}
-    
+
     subgraph "分析师团队 (并行执行)"
         MARKET[市场分析师]
         SOCIAL[社交媒体分析师]
         NEWS[新闻分析师]
         FUNDAMENTALS[基本面分析师]
-        
+
         MARKET --> MARKET_TOOLS[市场工具]
         SOCIAL --> SOCIAL_TOOLS[社交工具]
         NEWS --> NEWS_TOOLS[新闻工具]
         FUNDAMENTALS --> FUND_TOOLS[基本面工具]
-        
+
         MARKET_TOOLS --> MARKET_CLEAR[市场清理]
         SOCIAL_TOOLS --> SOCIAL_CLEAR[社交清理]
         NEWS_TOOLS --> NEWS_CLEAR[新闻清理]
         FUND_TOOLS --> FUND_CLEAR[基本面清理]
     end
-    
+
     PARALLEL_ANALYSIS --> MARKET
     PARALLEL_ANALYSIS --> SOCIAL
     PARALLEL_ANALYSIS --> NEWS
     PARALLEL_ANALYSIS --> FUNDAMENTALS
-    
+
     MARKET_CLEAR --> RESEARCH_DEBATE
     SOCIAL_CLEAR --> RESEARCH_DEBATE
     NEWS_CLEAR --> RESEARCH_DEBATE
     FUND_CLEAR --> RESEARCH_DEBATE
-    
+
     subgraph "研究辩论层"
         RESEARCH_DEBATE[研究辩论开始]
         BULL[看涨研究员]
         BEAR[看跌研究员]
         RESEARCH_MGR[研究经理]
     end
-    
+
     RESEARCH_DEBATE --> BULL
     BULL --> BEAR
     BEAR --> BULL
     BULL --> RESEARCH_MGR
     BEAR --> RESEARCH_MGR
-    
+
     RESEARCH_MGR --> TRADER[交易员]
-    
+
     subgraph "风险评估层"
         TRADER --> RISK_DEBATE[风险辩论开始]
         RISK_DEBATE --> RISKY[激进分析师]
@@ -74,10 +74,10 @@ graph TD
         SAFE --> RISK_JUDGE
         NEUTRAL --> RISK_JUDGE
     end
-    
+
     RISK_JUDGE --> SIGNAL[信号处理]
     SIGNAL --> END([结束])
-    
+
     %% 样式定义
     classDef startEnd fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px
     classDef analysisNode fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
@@ -86,7 +86,7 @@ graph TD
     classDef riskNode fill:#ffebee,stroke:#c62828,stroke-width:2px
     classDef toolNode fill:#f1f8e9,stroke:#689f38,stroke-width:1px
     classDef processNode fill:#fafafa,stroke:#424242,stroke-width:1px
-    
+
     class START,END startEnd
     class MARKET,SOCIAL,NEWS,FUNDAMENTALS analysisNode
     class BULL,BEAR,RESEARCH_MGR researchNode
@@ -105,7 +105,7 @@ graph TD
 ```python
 class TradingAgentsGraph:
     """交易智能体图的主要编排类"""
-    
+
     def __init__(
         self,
         selected_analysts=["market", "social", "news", "fundamentals"],
@@ -115,10 +115,10 @@ class TradingAgentsGraph:
         """初始化交易智能体图和组件"""
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
-        
+
         # 初始化LLM
         self._initialize_llms()
-        
+
         # 初始化核心组件
         self.setup = GraphSetup(
             quick_thinking_llm=self.quick_thinking_llm,
@@ -133,30 +133,30 @@ class TradingAgentsGraph:
             conditional_logic=self.conditional_logic,
             config=self.config
         )
-        
+
         # 构建图
         self.graph = self.setup.setup_graph(selected_analysts)
-    
+
     def propagate(self, company_name: str, trade_date: str):
         """执行完整的交易分析流程"""
         # 创建初始状态
         initial_state = self.propagator.create_initial_state(
             company_name, trade_date
         )
-        
+
         # 执行图
         graph_args = self.propagator.get_graph_args()
-        
+
         for step in self.graph.stream(initial_state, **graph_args):
             if self.debug:
                 print(step)
-        
+
         # 处理最终信号
         final_signal = step.get("final_trade_decision", "")
         decision = self.signal_processor.process_signal(
             final_signal, company_name
         )
-        
+
         return step, decision
 ```
 
@@ -167,25 +167,25 @@ class TradingAgentsGraph:
 ```python
 class GraphSetup:
     """负责构建和配置LangGraph工作流"""
-    
+
     def setup_graph(self, selected_analysts=["market", "social", "news", "fundamentals"]):
         """设置和编译智能体工作流图"""
         workflow = StateGraph(AgentState)
-        
+
         # 1. 添加分析师节点
         analyst_nodes = {}
         tool_nodes = {}
         delete_nodes = {}
-        
+
         if "market" in selected_analysts:
             analyst_nodes["market"] = create_market_analyst(
                 self.quick_thinking_llm, self.toolkit
             )
             tool_nodes["market"] = self.tool_nodes["market"]
             delete_nodes["market"] = create_msg_delete()
-        
+
         # 类似地添加其他分析师...
-        
+
         # 2. 添加研究员节点
         bull_researcher_node = create_bull_researcher(
             self.quick_thinking_llm, self.bull_memory
@@ -196,25 +196,25 @@ class GraphSetup:
         research_manager_node = create_research_manager(
             self.deep_thinking_llm, self.invest_judge_memory
         )
-        
+
         # 3. 添加交易员和风险管理节点
         trader_node = create_trader(
             self.quick_thinking_llm, self.trader_memory
         )
-        
+
         risky_analyst_node = create_risky_analyst(self.quick_thinking_llm)
         safe_analyst_node = create_safe_analyst(self.quick_thinking_llm)
         neutral_analyst_node = create_neutral_analyst(self.quick_thinking_llm)
         risk_judge_node = create_risk_judge(
             self.deep_thinking_llm, self.risk_manager_memory
         )
-        
+
         # 4. 将节点添加到工作流
         for name, node in analyst_nodes.items():
             workflow.add_node(name, node)
             workflow.add_node(f"tools_{name}", tool_nodes[name])
             workflow.add_node(f"Msg Clear {name.title()}", delete_nodes[name])
-        
+
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
         workflow.add_node("Research Manager", research_manager_node)
@@ -223,10 +223,10 @@ class GraphSetup:
         workflow.add_node("Safe Analyst", safe_analyst_node)
         workflow.add_node("Neutral Analyst", neutral_analyst_node)
         workflow.add_node("Risk Judge", risk_judge_node)
-        
+
         # 5. 定义边和条件路由
         self._define_edges(workflow, selected_analysts)
-        
+
         return workflow.compile()
 ```
 
@@ -237,20 +237,20 @@ class GraphSetup:
 ```python
 class ConditionalLogic:
     """处理图流程的条件逻辑"""
-    
+
     def __init__(self, max_debate_rounds=1, max_risk_discuss_rounds=1):
         self.max_debate_rounds = max_debate_rounds
         self.max_risk_discuss_rounds = max_risk_discuss_rounds
-    
+
     def should_continue_market(self, state: AgentState):
         """判断市场分析是否应该继续"""
         messages = state["messages"]
         last_message = messages[-1]
-        
+
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
             return "tools_market"
         return "Msg Clear Market"
-    
+
     def should_continue_debate(self, state: AgentState) -> str:
         """判断辩论是否应该继续"""
         if state["investment_debate_state"]["count"] >= 2 * self.max_debate_rounds:
@@ -258,12 +258,12 @@ class ConditionalLogic:
         if state["investment_debate_state"]["current_response"].startswith("Bull"):
             return "Bear Researcher"
         return "Bull Researcher"
-    
+
     def should_continue_risk_analysis(self, state: AgentState) -> str:
         """判断风险分析是否应该继续"""
         if state["risk_debate_state"]["count"] >= 3 * self.max_risk_discuss_rounds:
             return "Risk Judge"
-        
+
         latest_speaker = state["risk_debate_state"]["latest_speaker"]
         if latest_speaker.startswith("Risky"):
             return "Safe Analyst"
@@ -283,18 +283,18 @@ class AgentState(MessagesState):
     company_of_interest: Annotated[str, "我们感兴趣交易的公司"]
     trade_date: Annotated[str, "交易日期"]
     sender: Annotated[str, "发送此消息的智能体"]
-    
+
     # 分析报告
     market_report: Annotated[str, "市场分析师的报告"]
     sentiment_report: Annotated[str, "社交媒体分析师的报告"]
     news_report: Annotated[str, "新闻研究员的报告"]
     fundamentals_report: Annotated[str, "基本面研究员的报告"]
-    
+
     # 研究团队讨论状态
     investment_debate_state: Annotated[InvestDebateState, "投资辩论的当前状态"]
     investment_plan: Annotated[str, "分析师生成的计划"]
     trader_investment_plan: Annotated[str, "交易员生成的计划"]
-    
+
     # 风险管理团队讨论状态
     risk_debate_state: Annotated[RiskDebateState, "风险评估辩论的当前状态"]
     final_trade_decision: Annotated[str, "风险分析师做出的最终决策"]
@@ -329,10 +329,10 @@ class RiskDebateState(TypedDict):
 ```python
 class Propagator:
     """处理状态初始化和在图中的传播"""
-    
+
     def __init__(self, max_recur_limit=100):
         self.max_recur_limit = max_recur_limit
-    
+
     def create_initial_state(self, company_name: str, trade_date: str) -> Dict[str, Any]:
         """为智能体图创建初始状态"""
         return {
@@ -356,7 +356,7 @@ class Propagator:
             "sentiment_report": "",
             "news_report": "",
         }
-    
+
     def get_graph_args(self) -> Dict[str, Any]:
         """获取图调用的参数"""
         return {
@@ -372,17 +372,17 @@ class Propagator:
 ```python
 class SignalProcessor:
     """处理交易信号以提取可操作的决策"""
-    
+
     def __init__(self, quick_thinking_llm: ChatOpenAI):
         self.quick_thinking_llm = quick_thinking_llm
-    
+
     def process_signal(self, full_signal: str, stock_symbol: str = None) -> dict:
         """处理完整的交易信号以提取结构化决策信息"""
-        
+
         # 检测股票类型和货币
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(stock_symbol)
-        
+
         messages = [
             ("system", f"""您是一位专业的金融分析助手，负责从交易员的分析报告中提取结构化的投资决策信息。
 
@@ -398,7 +398,7 @@ class SignalProcessor:
 """),
             ("human", full_signal),
         ]
-        
+
         try:
             result = self.quick_thinking_llm.invoke(messages).content
             # 解析JSON并返回结构化决策
@@ -415,26 +415,26 @@ class SignalProcessor:
 ```python
 class Reflector:
     """处理决策反思和记忆更新"""
-    
+
     def __init__(self, quick_thinking_llm: ChatOpenAI):
         self.quick_thinking_llm = quick_thinking_llm
         self.reflection_system_prompt = self._get_reflection_prompt()
-    
+
     def reflect_bull_researcher(self, current_state, returns_losses, bull_memory):
         """反思看涨研究员的分析并更新记忆"""
         situation = self._extract_current_situation(current_state)
         bull_debate_history = current_state["investment_debate_state"]["bull_history"]
-        
+
         result = self._reflect_on_component(
             "BULL", bull_debate_history, situation, returns_losses
         )
         bull_memory.add_situations([(situation, result)])
-    
+
     def reflect_trader(self, current_state, returns_losses, trader_memory):
         """反思交易员的决策并更新记忆"""
         situation = self._extract_current_situation(current_state)
         trader_decision = current_state["trader_investment_plan"]
-        
+
         result = self._reflect_on_component(
             "TRADER", trader_decision, situation, returns_losses
         )
@@ -456,46 +456,46 @@ sequenceDiagram
     participant T as 交易员
     participant Risk as 风险团队
     participant SP as SignalProcessor
-    
+
     User->>TG: propagate("NVDA", "2024-05-10")
     TG->>P: create_initial_state()
     P-->>TG: initial_state
-    
+
     TG->>G: stream(initial_state)
-    
+
     par 并行分析阶段
         G->>A: 市场分析师
         G->>A: 社交媒体分析师
         G->>A: 新闻分析师
         G->>A: 基本面分析师
     end
-    
+
     A-->>G: 分析报告
-    
+
     loop 研究辩论
         G->>R: 看涨研究员
         G->>R: 看跌研究员
     end
-    
+
     G->>R: 研究经理
     R-->>G: 投资计划
-    
+
     G->>T: 交易员
     T-->>G: 交易计划
-    
+
     loop 风险辩论
         G->>Risk: 激进分析师
         G->>Risk: 保守分析师
         G->>Risk: 中性分析师
     end
-    
+
     G->>Risk: 风险经理
     Risk-->>G: 最终决策
-    
+
     G-->>TG: final_state
     TG->>SP: process_signal()
     SP-->>TG: structured_decision
-    
+
     TG-->>User: (final_state, decision)
 ```
 
@@ -618,7 +618,7 @@ def should_continue_market(self, state: AgentState):
     """基于最后消息是否包含工具调用来决定路由"""
     messages = state["messages"]
     last_message = messages[-1]
-    
+
     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
         return "tools_market"  # 执行工具
     return "Msg Clear Market"  # 清理消息并继续
@@ -631,7 +631,7 @@ def should_continue_debate(self, state: AgentState) -> str:
     # 检查是否达到最大轮次
     if state["investment_debate_state"]["count"] >= 2 * self.max_debate_rounds:
         return "Research Manager"  # 结束辩论
-    
+
     # 基于当前发言者决定下一个发言者
     if state["investment_debate_state"]["current_response"].startswith("Bull"):
         return "Bear Researcher"
@@ -699,13 +699,13 @@ from tradingagents.utils.tool_logging import log_graph_module
 @log_graph_module("graph_execution")
 def propagate(self, company_name: str, trade_date: str):
     start_time = time.time()
-    
+
     # 执行图
     result = self.graph.stream(initial_state, **graph_args)
-    
+
     execution_time = time.time() - start_time
     logger.info(f"图执行完成，耗时: {execution_time:.2f}秒")
-    
+
     return result
 ```
 
@@ -770,16 +770,16 @@ class CustomDebateState(TypedDict):
 # 实现自定义辩论逻辑
 def should_continue_custom_debate(self, state: AgentState) -> str:
     debate_state = state["custom_debate_state"]
-    
+
     if debate_state["rounds"] >= debate_state["max_rounds"]:
         return "END_DEBATE"
-    
+
     # 轮换发言者逻辑
     current_idx = debate_state["participants"].index(
         debate_state["current_speaker"]
     )
     next_idx = (current_idx + 1) % len(debate_state["participants"])
-    
+
     return debate_state["participants"][next_idx]
 ```
 
@@ -790,17 +790,17 @@ class DynamicGraphSetup(GraphSetup):
     def build_dynamic_graph(self, config: Dict[str, Any]):
         """基于配置动态构建图结构"""
         workflow = StateGraph(AgentState)
-        
+
         # 基于配置添加节点
         for node_config in config["nodes"]:
             node_type = node_config["type"]
             node_name = node_config["name"]
-            
+
             if node_type == "analyst":
                 workflow.add_node(node_name, self._create_analyst(node_config))
             elif node_type == "researcher":
                 workflow.add_node(node_name, self._create_researcher(node_config))
-        
+
         # 基于配置添加边
         for edge_config in config["edges"]:
             if edge_config["type"] == "conditional":
@@ -811,7 +811,7 @@ class DynamicGraphSetup(GraphSetup):
                 )
             else:
                 workflow.add_edge(edge_config["from"], edge_config["to"])
-        
+
         return workflow.compile()
 ```
 

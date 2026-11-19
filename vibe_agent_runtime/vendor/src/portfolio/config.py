@@ -218,7 +218,7 @@ class PortfolioSettingsStore:
 
         Args:
             path: Settings file path. Defaults to ``portfolio.json`` under the
-                runtime root (``~/.vibe-trading``).
+                runtime root (``~/.zhitouagent``).
             connection_store: Local connection registry. When omitted, one is
                 created next to ``path`` so tests stay isolated from the
                 user's real registry.

@@ -152,7 +152,7 @@ db_cache_manager.DatabaseCacheManager ❌ 完全没用
 
 #### 1. 文件缓存 ✅
 - **文件**: `cache_manager.py` (file_cache.py)
-- **原因**: 
+- **原因**:
   - 被业务代码广泛使用
   - 最基础、最稳定
   - 不依赖外部服务

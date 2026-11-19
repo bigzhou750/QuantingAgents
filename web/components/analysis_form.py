@@ -38,7 +38,7 @@ def render_analysis_form():
         # 在表单开始时保存当前配置（用于检测变化）
         initial_config = cached_config.copy() if cached_config else {}
         col1, col2 = st.columns(2)
-        
+
         with col1:
             # 市场选择（使用缓存的值）
             market_options = ["美股", "A股", "港股"]
@@ -93,14 +93,14 @@ def render_analysis_form():
                 ).strip()
 
                 logger.debug(f"🔍 [FORM DEBUG] A股text_input返回值: '{stock_symbol}'")
-            
+
             # 分析日期
             analysis_date = st.date_input(
                 "分析日期 📅",
                 value=datetime.date.today(),
                 help="选择分析的基准日期"
             )
-        
+
         with col2:
             # 研究深度（使用缓存的值）
             cached_depth = cached_config.get('research_depth', 3) if cached_config else 3
@@ -117,7 +117,7 @@ def render_analysis_form():
                 }[x],
                 help="选择分析的深度级别，级别越高分析越详细但耗时更长"
             )
-        
+
         # 分析师团队选择
         st.markdown("### 👥 选择分析师团队")
 
@@ -190,13 +190,13 @@ def render_analysis_form():
             selected_analysts.append(("news", "新闻分析师"))
         if fundamentals_analyst:
             selected_analysts.append(("fundamentals", "基本面分析师"))
-        
+
         # 显示选择摘要
         if selected_analysts:
             st.success(f"已选择 {len(selected_analysts)} 个分析师: {', '.join([a[1] for a in selected_analysts])}")
         else:
             st.warning("请至少选择一个分析师")
-        
+
         # 高级选项
         with st.expander("🔧 高级选项"):
             include_sentiment = st.checkbox(
@@ -204,13 +204,13 @@ def render_analysis_form():
                 value=True,
                 help="是否包含市场情绪和投资者情绪分析"
             )
-            
+
             include_risk_assessment = st.checkbox(
                 "包含风险评估",
                 value=True,
                 help="是否包含详细的风险因素评估"
             )
-            
+
             custom_prompt = st.text_area(
                 "自定义分析要求",
                 placeholder="输入特定的分析要求或关注点...",

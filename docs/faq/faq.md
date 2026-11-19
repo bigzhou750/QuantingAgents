@@ -125,7 +125,7 @@ class BudgetController:
     def __init__(self, daily_budget=50):
         self.daily_budget = daily_budget
         self.current_usage = 0
-    
+
     def check_budget(self, estimated_cost):
         if self.current_usage + estimated_cost > self.daily_budget:
             raise Exception("Daily budget exceeded")
@@ -289,7 +289,7 @@ def check_data_availability(symbol):
         print(f"FinnHub: {symbol} - OK")
     except:
         print(f"FinnHub: {symbol} - Failed")
-    
+
     try:
         # 检查 Yahoo Finance
         import yfinance as yf
@@ -364,7 +364,7 @@ class CustomAnalyst(BaseAnalyst):
     def __init__(self, llm, config):
         super().__init__(llm, config)
         self.custom_tools = self._initialize_custom_tools()
-    
+
     def perform_analysis(self, data: Dict) -> Dict:
         # 实现自定义分析逻辑
         return {
@@ -393,7 +393,7 @@ config = {
 class CustomDataProvider:
     def __init__(self, api_key):
         self.api_key = api_key
-    
+
     def get_data(self, symbol):
         # 实现数据获取逻辑
         return {"custom_metric": 0.85}
@@ -449,7 +449,7 @@ ta = TradingAgentsGraph(debug=True, config=config)
 **A:** 多种获取帮助的渠道：
 
 1. **官方文档**: [docs/README.md](../README.md)
-2. **GitHub Issues**: [提交问题](https://github.com/TauricResearch/TradingAgents/issues)
+2. **GitHub Issues**: [提交问题](mailto:zh75067197@gmail.com)
 3. **Discord 社区**: [加入讨论](https://discord.com/invite/hk9PGKShPK)
 4. **邮箱支持**: support@tauric.ai
 

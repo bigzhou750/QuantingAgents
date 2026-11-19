@@ -7,7 +7,7 @@
     ↓
 👥 分析师团队 (并行执行)
 ├── 📈 市场分析师      ← get_stock_market_data_unified
-├── 📊 基本面分析师    ← get_stock_fundamentals_unified  
+├── 📊 基本面分析师    ← get_stock_fundamentals_unified
 ├── 📰 新闻分析师      ← get_realtime_stock_news
 └── 💬 社交媒体分析师  ← get_stock_news_openai
     ↓
@@ -104,7 +104,7 @@ get_chinese_social_sentiment(symbol, platform)             # 中国社交媒体
 # 快速分析 (1-2分钟)
 selected_analysts = ["market"]
 
-# 基础分析 (3-5分钟)  
+# 基础分析 (3-5分钟)
 selected_analysts = ["market", "fundamentals"]
 
 # 完整分析 (5-10分钟)
@@ -132,7 +132,7 @@ llm_provider = "google"       # Google Gemini (质量高)
 ```
 1️⃣ 分析师节点
     ↓ (决定需要什么数据)
-2️⃣ 条件判断 
+2️⃣ 条件判断
     ↓ (检查是否有工具调用)
 3️⃣ 工具节点
     ↓ (执行数据获取)
@@ -146,7 +146,7 @@ llm_provider = "google"       # Google Gemini (质量高)
 **日志示例**:
 ```
 📊 [模块开始] market_analyst - 股票: 000858
-📊 [市场分析师] 工具调用: ['get_stock_market_data_unified']  
+📊 [市场分析师] 工具调用: ['get_stock_market_data_unified']
 📊 [模块完成] market_analyst - ✅ 成功 - 耗时: 41.73s
 ```
 
@@ -174,7 +174,7 @@ python web/run_web.py
 
 # 访问 http://localhost:8501
 # 1. 输入股票代码
-# 2. 选择分析师和研究深度  
+# 2. 选择分析师和研究深度
 # 3. 点击"开始分析"
 # 4. 查看实时进度和结果
 ```
@@ -219,7 +219,7 @@ python web/run_web.py
     "action": "买入/持有/卖出",
     "confidence": 8.5,
     "target_price": "45.80",
-    "stop_loss": "38.20", 
+    "stop_loss": "38.20",
     "position_size": "中等仓位",
     "time_horizon": "3-6个月",
     "reasoning": "详细分析理由..."
@@ -230,12 +230,12 @@ python web/run_web.py
 ```
 📈 市场分析报告
 ├── 股票基本信息
-├── 技术指标分析  
+├── 技术指标分析
 ├── 价格趋势分析
 ├── 成交量分析
 └── 投资建议
 
-📊 基本面分析报告  
+📊 基本面分析报告
 ├── 财务状况分析
 ├── 估值分析
 ├── 行业对比

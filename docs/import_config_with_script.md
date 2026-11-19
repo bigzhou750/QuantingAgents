@@ -58,7 +58,7 @@
 
 ```bash
 # 使用 scp
-scp database_export_config_2025-10-16.json user@new-server:/path/to/TradingAgents-CN/
+scp database_export_config_2025-10-16.json user@new-server:/path/to/zhitouagent/
 
 # 或使用其他方式（FTP、云存储等）
 ```
@@ -67,7 +67,7 @@ scp database_export_config_2025-10-16.json user@new-server:/path/to/TradingAgent
 
 ```bash
 # 进入项目目录
-cd /path/to/TradingAgents-CN
+cd /path/to/zhitouagent
 
 # 激活虚拟环境（如果使用）
 source .venv/bin/activate  # Linux/Mac
@@ -462,11 +462,11 @@ docker exec -it tradingagents-mongodb mongo tradingagents \
 
 使用 Python 脚本导入配置数据的优势：
 
-✅ **自动化**：无需手动操作前端界面  
-✅ **批量处理**：一次导入多个集合  
-✅ **灵活控制**：支持增量/覆盖模式  
-✅ **默认用户**：自动创建管理员账号  
-✅ **易于集成**：可集成到部署脚本中  
+✅ **自动化**：无需手动操作前端界面
+✅ **批量处理**：一次导入多个集合
+✅ **灵活控制**：支持增量/覆盖模式
+✅ **默认用户**：自动创建管理员账号
+✅ **易于集成**：可集成到部署脚本中
 
 现在您可以使用 Python 脚本快速在新服务器上部署演示系统了！🚀
 

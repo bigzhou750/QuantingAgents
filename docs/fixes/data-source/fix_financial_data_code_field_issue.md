@@ -5,8 +5,8 @@
 保存财务数据时出现 MongoDB 唯一索引冲突错误：
 
 ```
-E11000 duplicate key error collection: tradingagents.stock_financial_data 
-index: code_period_source_unique 
+E11000 duplicate key error collection: tradingagents.stock_financial_data
+index: code_period_source_unique
 dup key: { code: null, report_period: "20251231", data_source: "akshare" }
 ```
 
@@ -99,7 +99,7 @@ def _standardize_akshare_data(
         "updated_at": now,
         "version": 1
     }
-    
+
     # 提取关键财务指标
     base_data.update(self._extract_akshare_indicators(financial_data))
     return base_data
@@ -132,13 +132,13 @@ def _standardize_tushare_data(
         "updated_at": now,
         "version": 1
     }
-    
+
     # 合并Tushare标准化后的财务数据
     exclude_fields = {'symbol', 'data_source', 'updated_at'}
     for key, value in financial_data.items():
         if key not in exclude_fields:
             base_data[key] = value
-    
+
     return base_data
 ```
 </augment_code_snippet>
@@ -169,7 +169,7 @@ def _standardize_baostock_data(
         "updated_at": now,
         "version": 1
     }
-    
+
     # 合并BaoStock财务数据
     base_data.update(financial_data)
     return base_data

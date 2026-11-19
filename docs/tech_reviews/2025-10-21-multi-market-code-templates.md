@@ -1,7 +1,7 @@
 # 多市场数据架构 - 代码模板补充
 
-> **配套文档**: [多市场数据架构开发指南](./2025-10-21-multi-market-data-architecture-guide.md)  
-> **文档版本**: v1.0  
+> **配套文档**: [多市场数据架构开发指南](./2025-10-21-multi-market-data-architecture-guide.md)
+> **文档版本**: v1.0
 > **创建日期**: 2025-10-21
 
 本文档提供多市场数据架构的详细代码模板，包括服务层、API层、测试等。
@@ -40,20 +40,20 @@ logger = logging.getLogger("webapi")
 
 class UnifiedMarketDataService:
     """统一市场数据服务"""
-    
+
     def __init__(self):
         # 延迟导入，避免循环依赖
         self._cn_service = None
         self._hk_service = None
         self._us_service = None
-    
+
     @property
     def cn_service(self):
         """A股数据服务"""
         if self._cn_service is None:
             self._cn_service = get_stock_data_service()
         return self._cn_service
-    
+
     @property
     def hk_service(self):
         """港股数据服务"""
@@ -61,7 +61,7 @@ class UnifiedMarketDataService:
             from app.services.hk_stock_data_service import get_hk_stock_data_service
             self._hk_service = get_hk_stock_data_service()
         return self._hk_service
-    
+
     @property
     def us_service(self):
         """美股数据服务"""
@@ -69,14 +69,14 @@ class UnifiedMarketDataService:
             from app.services.us_stock_data_service import get_us_stock_data_service
             self._us_service = get_us_stock_data_service()
         return self._us_service
-    
+
     async def get_stock_info(self, full_symbol: str) -> Optional[Dict]:
         """
         统一获取股票信息
-        
+
         Args:
             full_symbol: 完整标识符（如 "XSHE:000001", "XHKG:0700", "XNAS:AAPL"）
-        
+
         Returns:
             标准化的股票信息
         """
@@ -84,9 +84,9 @@ class UnifiedMarketDataService:
             parsed = parse_full_symbol(full_symbol)
             market = parsed["market"]
             symbol = parsed["symbol"]
-            
+
             logger.info(f"📊 获取股票信息: {full_symbol} (市场: {market}, 代码: {symbol})")
-            
+
             if market == "CN":
                 return await self.cn_service.get_stock_info(symbol)
             elif market == "HK":
@@ -95,11 +95,11 @@ class UnifiedMarketDataService:
                 return await self.us_service.get_stock_info(symbol)
             else:
                 raise ValueError(f"不支持的市场: {market}")
-        
+
         except Exception as e:
             logger.error(f"❌ 获取股票信息失败: {full_symbol}, 错误: {e}")
             raise
-    
+
     async def get_historical_data(
         self,
         full_symbol: str,
@@ -109,13 +109,13 @@ class UnifiedMarketDataService:
     ) -> pd.DataFrame:
         """
         统一获取历史数据
-        
+
         Args:
             full_symbol: 完整标识符
             start_date: 开始日期 (YYYY-MM-DD)
             end_date: 结束日期 (YYYY-MM-DD)
             period: 数据周期 (daily/weekly/monthly)
-        
+
         Returns:
             标准化的历史数据DataFrame
         """
@@ -123,9 +123,9 @@ class UnifiedMarketDataService:
             parsed = parse_full_symbol(full_symbol)
             market = parsed["market"]
             symbol = parsed["symbol"]
-            
+
             logger.info(f"📈 获取历史数据: {full_symbol} ({start_date} ~ {end_date})")
-            
+
             if market == "CN":
                 data = await self.cn_service.get_historical_data(symbol, start_date, end_date, period)
             elif market == "HK":
@@ -134,14 +134,14 @@ class UnifiedMarketDataService:
                 data = await self.us_service.get_historical_data(symbol, start_date, end_date, period)
             else:
                 raise ValueError(f"不支持的市场: {market}")
-            
+
             # 标准化DataFrame字段
             return self._normalize_dataframe(data, market)
-        
+
         except Exception as e:
             logger.error(f"❌ 获取历史数据失败: {full_symbol}, 错误: {e}")
             raise
-    
+
     async def search_stocks(
         self,
         keyword: str,
@@ -150,41 +150,41 @@ class UnifiedMarketDataService:
     ) -> List[Dict]:
         """
         跨市场搜索股票
-        
+
         Args:
             keyword: 搜索关键词（代码或名称）
             market: 市场筛选（CN/HK/US），None表示全市场
             limit: 返回数量限制
-        
+
         Returns:
             股票列表
         """
         results = []
-        
+
         try:
             if market is None or market == "CN":
                 cn_results = await self.cn_service.search_stocks(keyword, limit)
                 results.extend(cn_results)
-            
+
             if market is None or market == "HK":
                 hk_results = await self.hk_service.search_stocks(keyword, limit)
                 results.extend(hk_results)
-            
+
             if market is None or market == "US":
                 us_results = await self.us_service.search_stocks(keyword, limit)
                 results.extend(us_results)
-            
+
             # 按相关度排序并限制数量
             return results[:limit]
-        
+
         except Exception as e:
             logger.error(f"❌ 搜索股票失败: {keyword}, 错误: {e}")
             return []
-    
+
     def _normalize_dataframe(self, df: pd.DataFrame, market: str) -> pd.DataFrame:
         """
         标准化DataFrame字段
-        
+
         确保所有市场返回统一的字段名：
         - date: 交易日期
         - open, high, low, close: OHLC
@@ -193,22 +193,22 @@ class UnifiedMarketDataService:
         """
         if df is None or df.empty:
             return df
-        
+
         # 字段映射（根据市场调整）
         column_mapping = {
             "trade_date": "date",
             "vol": "volume",
             "turnover": "amount"
         }
-        
+
         df = df.rename(columns=column_mapping)
-        
+
         # 确保必需字段存在
         required_columns = ["date", "open", "high", "low", "close", "volume"]
         for col in required_columns:
             if col not in df.columns:
                 df[col] = None
-        
+
         return df
 
 
@@ -246,13 +246,13 @@ logger = logging.getLogger("webapi")
 
 class HKStockDataService:
     """港股数据服务"""
-    
+
     def __init__(self):
         self.db = None
         self.basic_info_collection = None
         self.daily_quotes_collection = None
         self.market_quotes_collection = None
-    
+
     async def initialize(self):
         """初始化数据库连接"""
         if self.db is None:
@@ -261,36 +261,36 @@ class HKStockDataService:
             self.daily_quotes_collection = self.db.stock_daily_quotes_hk
             self.market_quotes_collection = self.db.market_quotes_hk
             logger.info("✅ 港股数据服务初始化完成")
-    
+
     async def get_stock_info(self, symbol: str) -> Optional[Dict]:
         """
         获取港股基础信息
-        
+
         Args:
             symbol: 港股代码（如 "0700"）
-        
+
         Returns:
             股票基础信息
         """
         await self.initialize()
-        
+
         # 标准化代码
         normalized = normalize_symbol("yfinance", symbol, "HK")
         symbol = normalized["symbol"]
-        
+
         logger.info(f"📊 查询港股信息: {symbol}")
-        
+
         # 查询数据库
         doc = await self.basic_info_collection.find_one({"symbol": symbol})
-        
+
         if doc:
             doc["_id"] = str(doc["_id"])
             logger.info(f"✅ 找到港股信息: {symbol} - {doc.get('name', 'N/A')}")
             return doc
-        
+
         logger.warning(f"⚠️ 未找到港股信息: {symbol}")
         return None
-    
+
     async def get_historical_data(
         self,
         symbol: str,
@@ -300,24 +300,24 @@ class HKStockDataService:
     ) -> pd.DataFrame:
         """
         获取港股历史数据
-        
+
         Args:
             symbol: 港股代码
             start_date: 开始日期 (YYYY-MM-DD)
             end_date: 结束日期 (YYYY-MM-DD)
             period: 数据周期
-        
+
         Returns:
             历史数据DataFrame
         """
         await self.initialize()
-        
+
         # 标准化代码
         normalized = normalize_symbol("yfinance", symbol, "HK")
         symbol = normalized["symbol"]
-        
+
         logger.info(f"📈 查询港股历史数据: {symbol} ({start_date} ~ {end_date})")
-        
+
         # 构建查询条件
         query = {
             "symbol": symbol,
@@ -327,38 +327,38 @@ class HKStockDataService:
                 "$lte": end_date.replace("-", "")
             }
         }
-        
+
         # 查询数据
         cursor = self.daily_quotes_collection.find(query).sort("trade_date", 1)
         docs = await cursor.to_list(length=None)
-        
+
         if not docs:
             logger.warning(f"⚠️ 港股历史数据为空: {symbol}")
             return pd.DataFrame()
-        
+
         logger.info(f"✅ 获取港股历史数据: {symbol}, {len(docs)}条记录")
-        
+
         # 转换为DataFrame
         df = pd.DataFrame(docs)
         df = df.drop(columns=["_id"], errors="ignore")
-        
+
         return df
-    
+
     async def search_stocks(self, keyword: str, limit: int = 20) -> List[Dict]:
         """
         搜索港股
-        
+
         Args:
             keyword: 搜索关键词
             limit: 返回数量
-        
+
         Returns:
             股票列表
         """
         await self.initialize()
-        
+
         logger.info(f"🔍 搜索港股: {keyword}")
-        
+
         # 构建查询条件（代码或名称）
         query = {
             "$or": [
@@ -367,23 +367,23 @@ class HKStockDataService:
                 {"name_en": {"$regex": keyword, "$options": "i"}}
             ]
         }
-        
+
         cursor = self.basic_info_collection.find(query).limit(limit)
         docs = await cursor.to_list(length=limit)
-        
+
         # 转换_id
         for doc in docs:
             doc["_id"] = str(doc["_id"])
-        
+
         logger.info(f"✅ 搜索港股结果: {len(docs)}条")
         return docs
-    
+
     async def sync_basic_info(self):
         """同步港股基础信息"""
         logger.info("🔄 开始同步港股基础信息...")
         # TODO: 实现从Yahoo Finance同步
         pass
-    
+
     async def sync_historical_data(self, symbol: str, start_date: str, end_date: str):
         """同步港股历史数据"""
         logger.info(f"🔄 开始同步港股历史数据: {symbol}")
@@ -425,13 +425,13 @@ logger = logging.getLogger("webapi")
 
 class USStockDataService:
     """美股数据服务"""
-    
+
     def __init__(self):
         self.db = None
         self.basic_info_collection = None
         self.daily_quotes_collection = None
         self.market_quotes_collection = None
-    
+
     async def initialize(self):
         """初始化数据库连接"""
         if self.db is None:
@@ -440,26 +440,26 @@ class USStockDataService:
             self.daily_quotes_collection = self.db.stock_daily_quotes_us
             self.market_quotes_collection = self.db.market_quotes_us
             logger.info("✅ 美股数据服务初始化完成")
-    
+
     async def get_stock_info(self, symbol: str) -> Optional[Dict]:
         """获取美股基础信息"""
         await self.initialize()
-        
+
         normalized = normalize_symbol("yfinance", symbol, "US")
         symbol = normalized["symbol"]
-        
+
         logger.info(f"📊 查询美股信息: {symbol}")
-        
+
         doc = await self.basic_info_collection.find_one({"symbol": symbol})
-        
+
         if doc:
             doc["_id"] = str(doc["_id"])
             logger.info(f"✅ 找到美股信息: {symbol} - {doc.get('name', 'N/A')}")
             return doc
-        
+
         logger.warning(f"⚠️ 未找到美股信息: {symbol}")
         return None
-    
+
     async def get_historical_data(
         self,
         symbol: str,
@@ -469,12 +469,12 @@ class USStockDataService:
     ) -> pd.DataFrame:
         """获取美股历史数据"""
         await self.initialize()
-        
+
         normalized = normalize_symbol("yfinance", symbol, "US")
         symbol = normalized["symbol"]
-        
+
         logger.info(f"📈 查询美股历史数据: {symbol} ({start_date} ~ {end_date})")
-        
+
         query = {
             "symbol": symbol,
             "period": period,
@@ -483,40 +483,40 @@ class USStockDataService:
                 "$lte": end_date.replace("-", "")
             }
         }
-        
+
         cursor = self.daily_quotes_collection.find(query).sort("trade_date", 1)
         docs = await cursor.to_list(length=None)
-        
+
         if not docs:
             logger.warning(f"⚠️ 美股历史数据为空: {symbol}")
             return pd.DataFrame()
-        
+
         logger.info(f"✅ 获取美股历史数据: {symbol}, {len(docs)}条记录")
-        
+
         df = pd.DataFrame(docs)
         df = df.drop(columns=["_id"], errors="ignore")
-        
+
         return df
-    
+
     async def search_stocks(self, keyword: str, limit: int = 20) -> List[Dict]:
         """搜索美股"""
         await self.initialize()
-        
+
         logger.info(f"🔍 搜索美股: {keyword}")
-        
+
         query = {
             "$or": [
                 {"symbol": {"$regex": keyword, "$options": "i"}},
                 {"name": {"$regex": keyword, "$options": "i"}}
             ]
         }
-        
+
         cursor = self.basic_info_collection.find(query).limit(limit)
         docs = await cursor.to_list(length=limit)
-        
+
         for doc in docs:
             doc["_id"] = str(doc["_id"])
-        
+
         logger.info(f"✅ 搜索美股结果: {len(docs)}条")
         return docs
 

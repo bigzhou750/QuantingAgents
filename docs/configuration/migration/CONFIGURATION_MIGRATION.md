@@ -1,9 +1,9 @@
 # 配置迁移实施文档
 
 > **实施日期**: 2025-10-05
-> 
+>
 > **实施阶段**: Phase 2 - 迁移和整合（第2-3周）
-> 
+>
 > **相关文档**: `docs/configuration_optimization_plan.md`
 
 ---
@@ -317,7 +317,7 @@ warnings.warn(
 ```bash
 .\.venv\Scripts\python scripts/migrate_config_to_db.py
 ```
-**预期结果**: 
+**预期结果**:
 - 在 `config/backup/YYYYMMDD_HHMMSS/` 创建备份
 - 备份包含所有 JSON 配置文件
 

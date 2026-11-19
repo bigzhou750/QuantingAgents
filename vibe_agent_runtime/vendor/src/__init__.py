@@ -1,1 +1,1 @@
-"""Vibe-Trading core package."""
+"""zhitouagent core package."""

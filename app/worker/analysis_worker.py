@@ -1,6 +1,6 @@
 """
 分析任务Worker进程
-消费队列中的分析任务，调用TradingAgents进行股票分析
+消费队列中的分析任务，调用zhitouagent进行股票分析
 """
 
 import asyncio
@@ -135,6 +135,13 @@ class AnalysisWorker:
         task_id = task_data.get("id")
         stock_code = task_data.get("symbol")
         user_id = task_data.get("user")
+        owner_id = task_data.get("owner_id", user_id)
+
+        if not user_id or str(owner_id) != str(user_id):
+            from app.core.isolation_metrics import record_queue_missing_owner
+            record_queue_missing_owner(str(task_id))
+            logger.error("拒绝处理缺少或不一致 owner 的队列任务: %s", task_id)
+            return
 
         logger.info(f"📊 开始处理任务: {task_id} - {stock_code}")
 
@@ -174,7 +181,7 @@ class AnalysisWorker:
         finally:
             # 确认任务完成
             try:
-                await self.queue_service.ack_task(task_id, success)
+                await self.queue_service.ack_task(task_id, success, user_id=user_id)
             except Exception as e:
                 logger.error(f"确认任务失败: {task_id} - {e}")
 

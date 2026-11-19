@@ -2,7 +2,7 @@
 
 ## 📁 目录组织原则
 
-TradingAgents-CN 项目遵循清晰的目录结构规范，确保代码组织有序、易于维护。
+zhitouagent 项目遵循清晰的目录结构规范，确保代码组织有序、易于维护。
 
 ## 🏗️ 项目根目录结构
 
@@ -147,10 +147,10 @@ tradingagents/
 ```python
 def check_no_tests_in_root():
     """检查根目录没有测试文件"""
-    
+
 def check_no_tests_in_scripts():
     """检查scripts目录没有测试文件"""
-    
+
 def check_all_tests_in_tests_dir():
     """检查所有测试文件都在tests目录"""
 ```

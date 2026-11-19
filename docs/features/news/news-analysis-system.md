@@ -234,14 +234,14 @@ def create_news_analyst(llm, toolkit):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
         session_id = state.get("session_id", "未知会话")
-        
+
         # 2. 股票类型识别
         market_info = StockUtils.get_market_info(ticker)
         is_china = market_info['is_china']
-        
+
         # 3. 工具选择
         tools = select_tools_by_market(is_china, toolkit.config["online_tools"])
-        
+
         # 4. 提示词构建
         prompt = build_prompt_template(system_message, tools, current_date, ticker)
 ```
@@ -255,17 +255,17 @@ def get_realtime_stock_news(ticker: str, hours_back: int = 6):
     av_news = _get_alpha_vantage_news(ticker, hours_back)
     newsapi_news = _get_newsapi_news(ticker, hours_back)
     chinese_news = _get_chinese_finance_news(ticker, hours_back)
-    
+
     # 2. 新闻聚合
     all_news = finnhub_news + av_news + newsapi_news + chinese_news
-    
+
     # 3. 去重和排序
     unique_news = _deduplicate_news(all_news)
     sorted_news = sorted(unique_news, key=lambda x: x.publish_time, reverse=True)
-    
+
     # 4. 格式化报告
     report = format_news_report(sorted_news, ticker)
-    
+
     return report
 ```
 
@@ -275,10 +275,10 @@ def get_realtime_stock_news(ticker: str, hours_back: int = 6):
 def analyze_news_with_llm(llm, prompt, tools, state):
     # 1. 工具绑定
     chain = prompt | llm.bind_tools(tools)
-    
+
     # 2. LLM调用
     result = chain.invoke(state["messages"])
-    
+
     # 3. 工具调用处理
     if hasattr(result, 'tool_calls') and len(result.tool_calls) > 0:
         # 处理工具调用结果
@@ -287,7 +287,7 @@ def analyze_news_with_llm(llm, prompt, tools, state):
     else:
         # 直接使用LLM生成的内容
         report = result.content
-    
+
     return report
 ```
 
@@ -298,21 +298,21 @@ def format_news_report(news_items: List[NewsItem], ticker: str) -> str:
     report = f"# {ticker} 实时新闻分析报告\n\n"
     report += f"📅 **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
     report += f"📊 **新闻总数**: {len(news_items)} 条\n\n"
-    
+
     # 紧急新闻优先显示
     urgent_news = [item for item in news_items if item.urgency == 'high']
     if urgent_news:
         report += "## 🚨 紧急新闻\n\n"
         for item in urgent_news:
             report += format_news_item(item)
-    
+
     # 一般新闻
     normal_news = [item for item in news_items if item.urgency != 'high']
     if normal_news:
         report += "## 📰 最新新闻\n\n"
         for item in normal_news[:10]:  # 限制显示数量
             report += format_news_item(item)
-    
+
     return report
 ```
 

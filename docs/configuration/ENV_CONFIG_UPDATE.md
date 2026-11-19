@@ -4,7 +4,7 @@
 
 本次更新为聚合渠道添加了环境变量配置支持，允许通过 `.env` 文件或系统环境变量配置聚合渠道的 API Key，简化配置流程。
 
-**更新日期**: 2025-01-XX  
+**更新日期**: 2025-01-XX
 **版本**: v1.1.0
 
 ## 🎯 更新内容
@@ -59,12 +59,12 @@ env_key_mapping = {
 async def init_aggregator_providers(self) -> Dict[str, Any]:
     # 从环境变量获取 API Key
     api_key = self._get_env_api_key(provider_name)
-    
+
     # 如果已存在但没有 API Key，且环境变量中有，则更新
     if not existing.get("api_key") and api_key:
         # 更新 API Key
         # 自动启用
-    
+
     # 创建新配置时，如果有 API Key 则自动启用
     provider_data = {
         "api_key": api_key or "",

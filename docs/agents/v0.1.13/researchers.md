@@ -61,18 +61,18 @@ def create_bull_researcher(llm, memory=None):
         # 获取基础信息
         company_name = state["company_of_interest"]
         debate_state = state.get("debate_state", "")
-        
+
         # 获取股票市场信息
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(company_name)
-        
+
         # 安全检查
         if memory is None:
             logger.warning(f"⚠️ [DEBUG] memory为None，跳过历史记忆检索")
-        
+
         # 构建看涨论证
         messages = state.get("messages", [])
-        
+
         # 分析各类报告并提出看涨观点
         market_report = state.get("market_report", "")
         sentiment_report = state.get("sentiment_report", "")
@@ -104,18 +104,18 @@ def create_bear_researcher(llm, memory=None):
         # 获取基础信息
         company_name = state["company_of_interest"]
         debate_state = state.get("debate_state", "")
-        
+
         # 获取股票市场信息
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(company_name)
-        
+
         # 安全检查
         if memory is None:
             logger.warning(f"⚠️ [DEBUG] memory为None，跳过历史记忆检索")
-        
+
         # 构建看跌论证
         messages = state.get("messages", [])
-        
+
         # 分析各类报告并提出看跌观点
         market_report = state.get("market_report", "")
         sentiment_report = state.get("sentiment_report", "")
@@ -137,16 +137,16 @@ def create_bear_researcher(llm, memory=None):
 graph TB
     A[分析师报告] --> B[看涨研究员分析]
     A --> C[看跌研究员分析]
-    
+
     B --> D[看涨观点]
     C --> E[看跌观点]
-    
+
     D --> F[辩论交锋]
     E --> F
-    
+
     F --> G[观点完善]
     G --> H[最终辩论结果]
-    
+
     H --> I[传递给管理层]
 ```
 
@@ -363,7 +363,7 @@ import asyncio
 async def parallel_research(state):
     bull_task = asyncio.create_task(bull_researcher(state))
     bear_task = asyncio.create_task(bear_researcher(state))
-    
+
     bull_result, bear_result = await asyncio.gather(bull_task, bear_task)
     return bull_result, bear_result
 ```
@@ -434,10 +434,10 @@ researchers = {
 class DebateStrategy:
     def generate_arguments(self, reports, market_info):
         pass
-    
+
     def evaluate_counterarguments(self, opponent_args):
         pass
-    
+
     def synthesize_conclusion(self, all_arguments):
         pass
 ```

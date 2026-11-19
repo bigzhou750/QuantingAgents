@@ -28,7 +28,7 @@ analysis_date = datetime.now().strftime("%Y-%m-%d")
 **实际情况**：
 - 查询日期：`2025-10-11` 到 `2025-10-13`
 - 2025-10-11（周六）- ❌ 无交易
-- 2025-10-12（周日）- ❌ 无交易  
+- 2025-10-12（周日）- ❌ 无交易
 - 2025-10-13（周一）- ✅ 有交易（但数据可能还未更新）
 
 **结果**：所有数据源都返回空数据，因为周末没有交易！
@@ -80,13 +80,13 @@ else:
 def get_next_weekday(date_input):
     """
     获取下一个工作日（跳过周末）
-    
+
     Args:
         date_input: 日期对象或日期字符串（YYYY-MM-DD）
-        
+
     Returns:
         datetime: 下一个工作日的日期对象
-        
+
     Example:
         >>> get_next_weekday("2025-10-04")  # 周六
         datetime(2025, 10, 6)  # 返回周一
@@ -110,38 +110,38 @@ def get_next_weekday(date_input):
 def get_latest_trading_day(date_input=None):
     """
     获取最近的交易日（向前查找）
-    
+
     如果指定日期是周末或未来日期，则返回最近的交易日
-    
+
     Args:
         date_input: 日期对象或日期字符串（YYYY-MM-DD），默认为今天
-        
+
     Returns:
         str: 最近交易日的日期字符串（YYYY-MM-DD）
-        
+
     Example:
         >>> get_latest_trading_day("2025-10-12")  # 周日
         "2025-10-10"  # 返回周五
-        
+
         >>> get_latest_trading_day("2025-10-13")  # 周一（未来）
         "2025-10-10"  # 返回上周五
     """
     from datetime import datetime, timedelta
-    
+
     if date_input is None:
         date_input = datetime.now()
     elif isinstance(date_input, str):
         date_input = datetime.strptime(date_input, "%Y-%m-%d")
-    
+
     # 如果是未来日期，使用今天
     today = datetime.now()
     if date_input.date() > today.date():
         date_input = today
-    
+
     # 向前查找最近的工作日
     while date_input.weekday() >= 5:  # 周六(5)或周日(6)
         date_input = date_input - timedelta(days=1)
-    
+
     return date_input.strftime("%Y-%m-%d")
 ```
 
@@ -192,7 +192,7 @@ const disabledDate = (time: Date) => {
   const day = time.getDay()
   const isFuture = time.getTime() > Date.now()
   const isWeekend = day === 0 || day === 6
-  
+
   return isFuture || isWeekend
 }
 </script>

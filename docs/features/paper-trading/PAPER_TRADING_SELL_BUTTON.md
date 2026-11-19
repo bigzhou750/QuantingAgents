@@ -51,7 +51,7 @@
 // 卖出持仓
 async function sellPosition(position: any) {
   if (!position || !position.code) return
-  
+
   try {
     // 确认卖出
     await ElMessageBox.confirm(
@@ -63,14 +63,14 @@ async function sellPosition(position: any) {
         type: 'warning'
       }
     )
-    
+
     // 提交卖出订单
     const payload = {
       side: 'sell' as const,
       code: position.code,
       quantity: position.quantity
     }
-    
+
     const res = await paperApi.placeOrder(payload)
     if (res.success) {
       ElMessage.success('卖出成功')

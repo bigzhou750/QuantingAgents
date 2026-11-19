@@ -2,7 +2,7 @@
 
 ## 📋 概述
 
-DeepSeek V3 是TradingAgents-CN v0.1.7新集成的成本优化AI模型，专为中文金融场景设计。相比GPT-4，DeepSeek V3在保持优秀分析质量的同时，成本降低90%以上，是进行股票分析的理想选择。
+DeepSeek V3 是zhitouagent v0.1.7新集成的成本优化AI模型，专为中文金融场景设计。相比GPT-4，DeepSeek V3在保持优秀分析质量的同时，成本降低90%以上，是进行股票分析的理想选择。
 
 ## 🎯 DeepSeek V3 特色
 
@@ -111,7 +111,7 @@ streamlit run web/app.py
 1. 输入股票代码 (如: 000001, AAPL)
 2. 选择分析深度:
    - 快速分析 (2-3分钟)
-   - 标准分析 (5-8分钟)  
+   - 标准分析 (5-8分钟)
    - 深度分析 (10-15分钟)
 3. 选择分析师类型:
    - 技术分析师
@@ -220,7 +220,7 @@ LLM_CACHE_TTL=3600  # 1小时缓存
 # 优化的提示词示例:
 "请分析A股股票{股票代码}的投资价值，重点关注：
 1. 技术指标趋势
-2. 基本面财务状况  
+2. 基本面财务状况
 3. 行业地位和竞争优势
 4. 近期新闻和政策影响
 5. 风险因素和投资建议
@@ -234,7 +234,7 @@ LLM_CACHE_TTL=3600  # 1小时缓存
 "Please analyze the US stock {symbol} focusing on:
 1. Technical indicators and trends
 2. Fundamental analysis and financials
-3. Market position and competitive advantages  
+3. Market position and competitive advantages
 4. Recent news and market sentiment
 5. Risk assessment and investment recommendations
 
@@ -353,7 +353,7 @@ deepseek_template = """
 - 支撑位和阻力位
 - 成交量分析
 
-## 基本面分析  
+## 基本面分析
 - 财务指标评估
 - 行业地位分析
 - 竞争优势评估
@@ -361,7 +361,7 @@ deepseek_template = """
 
 ## 风险评估
 - 市场风险
-- 行业风险  
+- 行业风险
 - 公司特定风险
 - 政策风险
 
@@ -378,7 +378,7 @@ from tradingagents.llm_adapters.deepseek_adapter import ChatDeepSeek
 async def batch_analysis(symbols):
     llm = ChatDeepSeek()
     results = {}
-    
+
     for symbol in symbols:
         try:
             result = await llm.analyze_stock(symbol)
@@ -386,7 +386,7 @@ async def batch_analysis(symbols):
             print(f"✅ {symbol} 分析完成")
         except Exception as e:
             print(f"❌ {symbol} 分析失败: {e}")
-    
+
     return results
 
 # 使用示例
@@ -403,13 +403,13 @@ results = asyncio.run(batch_analysis(symbols))
 - 📚 [DeepSeek文档](https://platform.deepseek.com/docs)
 - 💬 [DeepSeek社区](https://github.com/deepseek-ai)
 
-### TradingAgents-CN支持
-- 🐛 [GitHub Issues](https://github.com/hsliuping/TradingAgents-CN/issues)
-- 💬 [GitHub Discussions](https://github.com/hsliuping/TradingAgents-CN/discussions)
-- 📚 [完整文档](https://github.com/hsliuping/TradingAgents-CN/tree/main/docs)
+### zhitouagent支持
+- 🐛 [GitHub Issues](mailto:zh75067197@gmail.com)
+- 💬 [GitHub Discussions](mailto:zh75067197@gmail.com)
+- 📚 [完整文档](mailto:zh75067197@gmail.com/tree/main/docs)
 
 ---
 
-*最后更新: 2025-07-13*  
-*版本: cn-0.1.7*  
+*最后更新: 2025-07-13*
+*版本: cn-0.1.7*
 *模型版本: DeepSeek V3*

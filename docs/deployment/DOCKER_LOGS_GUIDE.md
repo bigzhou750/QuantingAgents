@@ -148,7 +148,7 @@ docker logs --tail 100 TradingAgents-web
 
 1. **主日志文件**: `logs/tradingagents.log`
 2. **错误日志文件**: `logs/tradingagents_error.log` (如果存在)
-3. **Docker日志**: 
+3. **Docker日志**:
    ```bash
    docker logs TradingAgents-web > docker_logs.txt 2>&1
    ```

@@ -16,6 +16,9 @@
         <span>{{ capabilities.tool_count }} tools</span>
         <span>{{ capabilities.skill_count }} skills</span>
         <span>{{ capabilities.swarm_count }} Swarm</span>
+        <span class="balance-chip" :class="{ low: billingStore.isLowBalance, empty: billingStore.isEmptyBalance }">
+          {{ billingStore.balanceDisplay }}
+        </span>
       </div>
 
       <el-scrollbar class="session-scroll">
@@ -58,13 +61,35 @@
           <p>{{ activeSession?.title || '从输入框进入 Vibe 风格的金融研究 Agent' }}</p>
         </div>
         <div class="head-actions">
-          <el-button :icon="Refresh" @click="reconnectStream" :disabled="!activeSessionId">重连</el-button>
-          <el-button :icon="List" @click="router.push('/tasks?tab=running')">任务中心</el-button>
+          <!-- 投资画像设置 -->
+          <div class="profile-settings" v-if="investmentContextEnabled">
+            <el-checkbox v-model="useProfileContext" size="small">
+              <el-icon><UserFilled /></el-icon>
+              投资画像
+            </el-checkbox>
+            <el-select
+              v-model="selectedStrategyId"
+              placeholder="选择策略"
+              clearable
+              size="small"
+              style="width: 140px;"
+            >
+              <el-option
+                v-for="strategy in availableStrategies"
+                :key="strategy.strategy_id"
+                :label="strategy.name"
+                :value="strategy.strategy_id"
+              />
+            </el-select>
+          </div>
+          <el-button :icon="Refresh" @click="reconnectStream" :disabled="!activeSessionId" size="small">重连</el-button>
+          <el-button :icon="List" @click="router.push('/tasks?tab=running')" size="small">任务中心</el-button>
           <el-button
             v-if="activeTask && canCancel(activeTask.status)"
             type="danger"
             :icon="Close"
             @click="cancelTask"
+            size="small"
           >
             取消
           </el-button>
@@ -73,6 +98,7 @@
             type="warning"
             :icon="Refresh"
             @click="retryTask"
+            size="small"
           >
             重试
           </el-button>
@@ -86,11 +112,23 @@
         </div>
         <div>
           <span class="band-label">任务</span>
-          <strong>{{ activeTask?.status || 'idle' }}</strong>
+          <strong>{{ taskStatusLabel(activeTask?.status) }}</strong>
         </div>
         <div>
           <span class="band-label">游标</span>
           <strong>{{ lastSequence || 0 }}</strong>
+        </div>
+        <div v-if="activeSessionId" class="id-band">
+          <div class="id-item">
+            <span class="band-label">会话 ID</span>
+            <code :title="activeSessionId">{{ activeSessionId }}</code>
+            <el-button text size="small" :icon="DocumentCopy" aria-label="复制会话 ID" @click="copyId(activeSessionId)" />
+          </div>
+          <div v-if="displayTask" class="id-item">
+            <span class="band-label">本轮对话 ID</span>
+            <code :title="displayTask.task_id">{{ displayTask.task_id }}</code>
+            <el-button text size="small" :icon="DocumentCopy" aria-label="复制本轮对话 ID" @click="copyId(displayTask.task_id)" />
+          </div>
         </div>
         <div v-if="activeTask?.error_message" class="band-error">
           {{ activeTask.error_message }}
@@ -132,10 +170,45 @@
                     <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
                   </div>
                 </div>
+                <div v-if="isActivityOpen(activityFor(message.task_id)) && decisionChainFor(message.task_id).length" class="decision-panel">
+                  <div class="decision-panel-title">决策依据</div>
+                  <div v-for="item in decisionChainFor(message.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                    <div class="decision-row-head">
+                      <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                      <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                    </div>
+                    <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                    <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                    <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
+                  </div>
+                </div>
               </div>
               <div class="message-bubble">
                 <div class="message-role">{{ message.role === 'user' ? '你' : 'Agent' }}</div>
                 <div class="message-content markdown-body" v-html="renderMarkdown(message.content)"></div>
+                <div
+                  v-if="message.role === 'assistant' && message.task_id"
+                  class="message-actions"
+                >
+                  <el-button
+                    text
+                    size="small"
+                    :icon="CircleClose"
+                    :disabled="Boolean(feedbackedMessages[message.message_id])"
+                    @click="submitFeedback(message, 'wrong_answer')"
+                  >
+                    {{ feedbackedMessages[message.message_id] ? '已反馈' : '回答错误' }}
+                  </el-button>
+                  <el-button
+                    v-if="!feedbackedMessages[message.message_id]"
+                    text
+                    size="small"
+                    :icon="ChatLineSquare"
+                    @click="submitFeedback(message, 'not_useful')"
+                  >
+                    内容无用
+                  </el-button>
+                </div>
               </div>
             </div>
 
@@ -164,6 +237,18 @@
                   <span v-if="stepElapsedText(step)" class="step-elapsed">{{ stepElapsedText(step) }}</span>
                 </div>
               </div>
+              <div v-if="isActivityOpen(activityFor(activeTask.task_id)) && decisionChainFor(activeTask.task_id).length" class="decision-panel">
+                <div class="decision-panel-title">决策依据</div>
+                <div v-for="item in decisionChainFor(activeTask.task_id)" :key="item.event_id || item.sequence" class="decision-row">
+                  <div class="decision-row-head">
+                    <strong>{{ item.payload?.scenario || '决策节点' }}</strong>
+                    <span :class="['decision-status', item.payload?.status || '']">{{ item.payload?.status || '' }}</span>
+                  </div>
+                  <div v-if="item.payload?.selected_option" class="decision-line">选择：{{ item.payload.selected_option }}</div>
+                  <div v-if="item.payload?.selection_reason" class="decision-line">依据：{{ item.payload.selection_reason }}</div>
+                  <div v-if="item.payload?.conclusion" class="decision-line">结论：{{ item.payload.conclusion }}</div>
+                </div>
+              </div>
               <div v-if="streamTextFor(activeTask.task_id)" class="streaming-response">
                 <div class="markdown-body" v-html="renderMarkdown(streamTextFor(activeTask.task_id))"></div>
               </div>
@@ -171,24 +256,39 @@
           </el-scrollbar>
 
           <form class="composer" @submit.prevent="sendMessage">
-            <el-input
-              v-model="prompt"
-              type="textarea"
-              :autosize="{ minRows: 2, maxRows: 6 }"
-              resize="none"
-              placeholder="输入你的金融研究问题..."
-              :disabled="sending || !activeSessionId"
-            />
-            <el-button
-              type="primary"
-              :icon="Promotion"
-              native-type="submit"
-              :loading="sending"
-              :disabled="!prompt.trim() || !activeSessionId || hasRunningTask"
-            >
-              发送
-            </el-button>
-            <div v-if="hasRunningTask" class="composer-lock">
+            <div class="composer-card">
+              <el-input
+                v-model="prompt"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 6 }"
+                resize="none"
+                placeholder="输入消息，或直接发指令... (Enter 发送，Shift+Enter 换行)"
+                :disabled="sending || !activeSessionId"
+                class="composer-input"
+                @keydown.enter.exact.prevent="sendMessage"
+              />
+              <div class="composer-actions">
+                <button type="button" class="attach-btn" title="附件">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+                <button
+                  type="submit"
+                  class="send-btn"
+                  :disabled="!prompt.trim() || !activeSessionId || hasRunningTask || sending || billingStore.isEmptyBalance"
+                  title="发送"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div v-if="billingStore.isEmptyBalance" class="composer-lock balance-empty">
+              额度不足，请 <router-link to="/token-recharge">充值</router-link> 后继续
+            </div>
+            <div v-else-if="hasRunningTask" class="composer-lock">
               当前有研究任务执行中，请等待完成或先取消任务
             </div>
           </form>
@@ -201,9 +301,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Delete, List, Plus, Promotion, Refresh } from '@element-plus/icons-vue'
+import { ChatLineSquare, CircleClose, Close, Delete, DocumentCopy, List, Plus, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
-import { vibeAgentApi,
+import { useTokenBillingStore } from '@/stores/tokenBilling'
+import {
+  vibeAgentApi,
   type VibeEvent,
   type VibeMessage,
   type VibeSession,
@@ -213,20 +315,29 @@ import { streamVibeEvents, VibeAgentUnauthorizedError } from '@/api/vibeAgentStr
 import { formatDateTime } from '@/utils/datetime'
 import {
   buildWorkbenchActivity,
+  buildDecisionChain,
   formatActivityElapsed,
   stepElapsedText
 } from './workbench'
 
 const router = useRouter()
 const route = useRoute()
+const billingStore = useTokenBillingStore()
 
 const sessions = ref<VibeSession[]>([])
 const activeSessionId = ref('')
 const messages = ref<VibeMessage[]>([])
 const events = ref<VibeEvent[]>([])
 const prompt = ref('')
+
+// 个人投资助手上下文注入
+const investmentContextEnabled = ref(false)
+const useProfileContext = ref(false)
+const selectedStrategyId = ref<string | undefined>(undefined)
+const availableStrategies = ref<any[]>([])
 const sending = ref(false)
 const activeTask = ref<VibeTask | null>(null)
+const lastTaskBySession = ref<Record<string, VibeTask>>({})
 const tasksBySession = ref<Record<string, VibeTask>>({})
 const health = ref({ available: false, status: 'unknown', diagnostics: {} as Record<string, any> })
 const capabilities = ref({ tool_count: 0, skill_count: 0, swarm_count: 0, error: '' })
@@ -235,6 +346,7 @@ const streamError = ref('')
 const authRequired = ref(false)
 const chatScroll = ref()
 const activityOpen = ref<Record<string, boolean>>({})
+const feedbackedMessages = ref<Record<string, string>>({})
 let controller: AbortController | null = null
 let reconnectTimer: number | null = null
 let sessionLoadVersion = 0
@@ -258,6 +370,7 @@ const renderMarkdown = (content: string) => {
 }
 
 const activeSession = computed(() => sessions.value.find(item => item.session_id === activeSessionId.value))
+const displayTask = computed(() => activeTask.value || lastTaskBySession.value[activeSessionId.value] || null)
 const runningTask = computed(() => (
   Object.values(tasksBySession.value).find(task => canCancel(task.status)) || null
 ))
@@ -276,6 +389,9 @@ const activityFor = (taskId: string) => buildWorkbenchActivity(
   events.value,
   activeTask.value?.task_id === taskId ? activeTask.value.status : undefined
 )
+
+const decisionChainFor = (taskId: string) => buildDecisionChain(events.value)
+  .filter(event => String(event.task_id || '') === taskId)
 
 const isActivityOpen = (activity: ReturnType<typeof buildWorkbenchActivity>) => (
   activity.state === 'running' || activityOpen.value[activity.taskId] === true
@@ -353,6 +469,13 @@ const loadRunningTasks = async () => {
   tasksBySession.value = next
 }
 
+const createDefaultSession = async (title = '研究会话') => {
+  const res = await vibeAgentApi.createSession({ title })
+  const session = (res as any).data as VibeSession
+  sessions.value.unshift(session)
+  await selectSession(session.session_id)
+}
+
 const createSession = async () => {
   try {
     const { value } = await ElMessageBox.prompt('请输入会话名称', '新建研究会话', {
@@ -362,10 +485,7 @@ const createSession = async () => {
       inputPlaceholder: '例如：格力电器分钟线回测',
       inputValidator: (input: string) => input.trim() ? true : '会话名称不能为空'
     })
-    const res = await vibeAgentApi.createSession({ title: value.trim() })
-    const session = (res as any).data as VibeSession
-    sessions.value.unshift(session)
-    await selectSession(session.session_id)
+    await createDefaultSession(value.trim())
   } catch (error: any) {
     if (error !== 'cancel' && error !== 'close') {
       ElMessage.error(error?.message || '创建会话失败')
@@ -402,7 +522,7 @@ const deleteSession = async (session: VibeSession) => {
       if (nextSession) {
         await selectSession(nextSession.session_id)
       } else {
-        await createSession()
+        await createDefaultSession()
       }
     }
     ElMessage.success('会话已删除')
@@ -426,6 +546,7 @@ const loadSessionState = async (sessionId: string) => {
   activityOpen.value = {}
   const sessionTasks = (((tasksRes as any).data?.tasks || []) as VibeTask[])
   const currentTask = sessionTasks.find(task => canCancel(task.status)) || null
+  if (sessionTasks[0]) lastTaskBySession.value[sessionId] = sessionTasks[0]
   activeTask.value = currentTask
   if (currentTask) tasksBySession.value[currentTask.session_id] = currentTask
   else delete tasksBySession.value[sessionId]
@@ -535,6 +656,7 @@ const handleEvent = (event: VibeEvent) => {
           activeTask.value = null
         }
       }
+      lastTaskBySession.value[task.session_id] = task
     }
     if (event.payload.status === 'failed') {
       streamState.value = 'disconnected'
@@ -544,6 +666,20 @@ const handleEvent = (event: VibeEvent) => {
   if (event.event_type === 'error' && event.payload?.error) {
     streamError.value = event.payload.error
     scheduleReconnect(streamGeneration)
+  }
+  // Token计费：余额更新（后端推送 balance 单位为元）
+  if (event.event_type === 'balance_update' && event.payload) {
+    billingStore.updateBalanceFromSSE(event.payload.balance)
+  }
+  // Token计费：余额耗尽熔断
+  if (event.event_type === 'balance_exhausted') {
+    ElMessageBox.confirm('额度已用完，请充值后继续使用', '余额不足', {
+      confirmButtonText: '去充值',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      router.push('/token-recharge')
+    }).catch(() => {})
   }
   nextTick(scrollToBottom)
 }
@@ -560,20 +696,55 @@ const sendMessage = async () => {
       content,
       created_at: new Date().toISOString()
     })
-    const res = await vibeAgentApi.sendMessage(activeSessionId.value, {
+
+    // 构建消息 payload，包含可选的上下文注入参数
+    const messagePayload: any = {
       content,
       idempotency_key: `web_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    })
+    }
+
+    // 如果启用了投资画像上下文注入
+    if (investmentContextEnabled.value && useProfileContext.value) {
+      messagePayload.profile_id = 'current_user_profile' // 使用当前用户的画像
+    }
+
+    // 如果选择了策略
+    if (selectedStrategyId.value) {
+      messagePayload.strategy_id = selectedStrategyId.value
+    }
+
+    const res = await vibeAgentApi.sendMessage(activeSessionId.value, messagePayload)
     activeTask.value = (res as any).data as VibeTask
+    lastTaskBySession.value[activeTask.value.session_id] = activeTask.value
     tasksBySession.value[activeTask.value.session_id] = activeTask.value
     streamState.value = 'reconnecting'
     await loadSessions()
     await nextTick(scrollToBottom)
     reconnectStream()
   } catch (error: any) {
-    ElMessage.error(error?.message || '发送失败')
+    // 402 余额不足 → 引导充值
+    if (error?.status === 402 || error?.code === 40201) {
+      ElMessageBox.confirm('额度不足，无法发起研究任务', '余额不足', {
+        confirmButtonText: '去充值',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        router.push('/token-recharge')
+      }).catch(() => {})
+    } else {
+      ElMessage.error(error?.message || '发送失败')
+    }
   } finally {
     sending.value = false
+  }
+}
+
+const copyId = async (value: string) => {
+  try {
+    await navigator.clipboard.writeText(value)
+    ElMessage.success('ID 已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择 ID')
   }
 }
 
@@ -591,6 +762,31 @@ const retryTask = async () => {
   prompt.value = activeTask.value.prompt
   await sendMessage()
 }
+
+const submitFeedback = async (message: VibeMessage, feedbackType: string) => {
+  if (!message.task_id || feedbackedMessages.value[message.message_id]) return
+  try {
+    await vibeAgentApi.submitFeedback(activeSessionId.value, message.task_id, {
+      feedback_type: feedbackType,
+    })
+    feedbackedMessages.value[message.message_id] = feedbackType
+    ElMessage.success('反馈已记录')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '反馈提交失败')
+  }
+}
+
+const taskStatusMap: Record<string, string> = {
+  idle: '空闲',
+  queued: '排队中',
+  pending: '等待中',
+  processing: '处理中',
+  running: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已取消'
+}
+const taskStatusLabel = (status?: string) => taskStatusMap[status || ''] || status || '空闲'
 
 const canCancel = (status: string) => ['queued', 'processing', 'pending', 'running'].includes(status)
 const formatTime = (value: string) => (value ? formatDateTime(value) : '-')
@@ -618,7 +814,7 @@ watch(
 )
 
 onMounted(async () => {
-  if (!await loadHealth() || authRequired.value) return
+  billingStore.fetchAccount()
   try {
     await loadSessions()
   } catch {
@@ -626,12 +822,43 @@ onMounted(async () => {
     ElMessage.error('会话列表加载失败')
     return
   }
+  // Session history is persisted independently of runtime capability health.
+  // Load it first so a temporary Agent health failure does not hide existing
+  // sessions after a page refresh.
+  await loadHealth()
+  if (authRequired.value) return
   await openSessionFromRoute()
   if (!activeSessionId.value && sessions.value.length === 0) {
-    await createSession()
+    await createDefaultSession()
   }
   if (activeSessionId.value && streamState.value === 'idle') {
     reconnectStream()
+  }
+
+  // 加载个人投资助手上下文选项
+  try {
+    const token = localStorage.getItem('auth-token')
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+    const profileResponse = await fetch('/api/investment/profile', { headers })
+    if (profileResponse.ok) {
+      const profileData = await profileResponse.json()
+      if (profileData.success && profileData.data?.context_injection_enabled !== false) {
+        investmentContextEnabled.value = true
+        // Personal context is deliberately opt-in for each request.
+        useProfileContext.value = false
+      }
+    }
+
+    const strategiesResponse = await fetch('/api/investment/strategies?limit=20', { headers })
+    if (strategiesResponse.ok) {
+      const strategiesData = await strategiesResponse.json()
+      if (strategiesData.success) {
+        availableStrategies.value = strategiesData.data.items || []
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load investment context:', error)
   }
 })
 
@@ -810,22 +1037,25 @@ onUnmounted(() => {
 }
 
 .workbench-head {
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .workbench-head h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .workbench-head p {
-  margin: 6px 0 0;
-  color: var(--el-text-color-regular);
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .head-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -907,6 +1137,14 @@ onUnmounted(() => {
 .message-row.user .message-bubble {
   background: var(--el-color-primary);
   color: #fff;
+}
+
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 4px;
 }
 
 .activity-line {
@@ -1095,10 +1333,21 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
-.markdown-body :deep(h1) { font-size: 20px; }
-.markdown-body :deep(h2) { font-size: 18px; }
-.markdown-body :deep(h3) { font-size: 16px; }
-.markdown-body :deep(h4) { font-size: 14px; }
+.markdown-body :deep(h1) {
+  font-size: 20px;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 18px;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 16px;
+}
+
+.markdown-body :deep(h4) {
+  font-size: 14px;
+}
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
@@ -1172,30 +1421,230 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
+.profile-settings {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.profile-settings .el-checkbox {
+  margin-right: 0;
+}
+
 .composer {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 12px;
-  border-top: 1px solid var(--el-border-color-light);
+  padding: 16px;
   background: var(--el-bg-color);
 }
 
+.composer-card {
+  position: relative;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.composer-card:focus-within {
+  border-color: var(--el-color-primary-light-3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.composer-input :deep(.el-textarea__inner) {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 14px 16px 50px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  background: transparent;
+}
+
+.composer-actions {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attach-btn,
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attach-btn {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+}
+
+.attach-btn:hover {
+  background: var(--el-fill-color);
+  color: var(--el-text-color-primary);
+}
+
+.send-btn {
+  background: #10b981;
+  color: white;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-placeholder);
+  cursor: not-allowed;
+}
+
 .composer-lock {
-  grid-column: 1 / -1;
+  margin-top: 8px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
   text-align: center;
+}
+
+.id-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+}
+
+.id-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.id-item code {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-secondary);
 }
 
 .compact-section {
   margin-top: 18px;
 }
 
+.decision-panel {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.decision-panel-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.decision-row+.decision-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+}
+
+.decision-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.decision-status {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+}
+
+.decision-status.requires_review {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.decision-line {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-regular);
+  word-break: break-all;
+}
+
 @keyframes activity-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+
+.balance-chip.low {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.balance-chip.empty {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.balance-empty {
+  grid-column: 1 / -1;
+  padding: 8px 0;
+  color: var(--el-color-danger);
+  font-size: 13px;
+  text-align: center;
+
+  a {
+    color: var(--el-color-primary);
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 @media (max-width: 960px) {

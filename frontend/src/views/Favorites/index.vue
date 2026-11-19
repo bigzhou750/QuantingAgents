@@ -189,7 +189,7 @@
               type="text"
               size="small"
               @click="showSingleSyncDialog(row)"
-              style="color: #409EFF;"
+              style="color: #0EA5E9;"
             >
               同步
             </el-button>
@@ -199,6 +199,13 @@
               @click="analyzeFavorite(row)"
             >
               分析
+            </el-button>
+            <el-button
+              type="text"
+              size="small"
+              @click="collectToWatch(row)"
+            >
+              加入关注
             </el-button>
             <el-button
               type="text"
@@ -512,6 +519,7 @@ import {
 import { favoritesApi } from '@/api/favorites'
 import { tagsApi } from '@/api/tags'
 import { stockSyncApi } from '@/api/stockSync'
+import { newsWatchApi } from '@/api/newsWatch'
 import { normalizeMarketForAnalysis } from '@/utils/market'
 import { ApiClient } from '@/api/request'
 
@@ -521,7 +529,7 @@ import { useAuthStore } from '@/stores/auth'
 
 // 颜色可选项（20种预设颜色）
 const COLOR_PALETTE = [
-  '#409EFF', '#1677FF', '#2F88FF', '#52C41A', '#67C23A',
+  '#0EA5E9', '#1677FF', '#2F88FF', '#52C41A', '#67C23A',
   '#13C2C2', '#FA8C16', '#E6A23C', '#F56C6C', '#EB2F96',
   '#722ED1', '#8E44AD', '#00BFBF', '#1F2D3D', '#606266',
   '#909399', '#C0C4CC', '#FF7F50', '#A0CFFF', '#2C3E50'
@@ -760,7 +768,7 @@ const loadUserTags = async () => {
 const tagDialogVisible = ref(false)
 const tagLoading = ref(false)
 const tagList = ref<any[]>([])
-const newTag = ref({ name: '', color: '#409EFF', sort_order: 0 })
+const newTag = ref({ name: '', color: '#0EA5E9', sort_order: 0 })
 
 const loadTagList = async () => {
   tagLoading.value = true
@@ -788,7 +796,7 @@ const createTag = async () => {
   try {
     await tagsApi.create({ ...newTag.value })
     ElMessage.success('创建成功')
-    newTag.value = { name: '', color: '#409EFF', sort_order: 0 }
+    newTag.value = { name: '', color: '#0EA5E9', sort_order: 0 }
     await loadTagList()
     await loadUserTags()
   } catch (e: any) {
@@ -981,6 +989,21 @@ const editFavorite = (row: any) => {
     notes: row.notes || ''
   }
   editDialogVisible.value = true
+}
+
+// 加入关注工作台（仅收集用于研究，不构成投资建议）
+const collectToWatch = async (row: any) => {
+  try {
+    await newsWatchApi.collect({
+      item_type: 'stock',
+      symbol: row.stock_code,
+      source_page: 'favorites',
+      title: row.stock_name || row.stock_code,
+    })
+    ElMessage.success('已加入关注工作台')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '加入关注失败')
+  }
 }
 
 const analyzeFavorite = (row: any) => {

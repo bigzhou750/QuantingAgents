@@ -8,9 +8,9 @@
     >
       <div class="sidebar-header">
         <div class="logo">
-          <img src="/logo.svg" alt="TradingAgents-CN" />
+          <img src="/logo.svg" alt="智投" />
           <span v-show="!appStore.sidebarCollapsed" class="logo-text">
-            TradingAgents-CN
+            智投
           </span>
         </div>
       </div>
@@ -20,11 +20,25 @@
       </nav>
       
       <div class="sidebar-footer">
+        <div class="sidebar-recharge-action">
+          <el-tooltip content="算力充值" placement="top" :show-after="300">
+            <el-button
+              class="recharge-button"
+              :class="{ collapsed: appStore.sidebarCollapsed }"
+              type="primary"
+              plain
+              @click="goRecharge"
+            >
+              <el-icon><Wallet /></el-icon>
+              <span v-if="!appStore.sidebarCollapsed">算力充值</span>
+            </el-button>
+          </el-tooltip>
+        </div>
         <UserProfile />
       </div>
     </aside>
 
-    <!-- 点击蒙层：移动端展开时，点击空白处收起侧边栏 -->
+    <!-- 点击蒙层 -->
     <div
       v-if="isMobile && !appStore.sidebarCollapsed"
       class="sidebar-overlay"
@@ -56,18 +70,12 @@
       <main class="main-content">
         <div class="content-wrapper">
           <router-view v-slot="{ Component, route }">
-            <transition
-              :name="route.meta.transition || 'fade'"
-              mode="out-in"
-              appear
-            >
-              <keep-alive :include="keepAliveComponents">
-                <component
-                  :is="Component"
-                  :key="route.path === '/research-agent' ? route.path : route.fullPath"
-                />
-              </keep-alive>
-            </transition>
+            <keep-alive :include="keepAliveComponents">
+              <component
+                :is="Component"
+                :key="route.name || route.path"
+              />
+            </keep-alive>
           </router-view>
         </div>
       </main>
@@ -80,6 +88,11 @@
 
     <!-- 回到顶部 -->
     <el-backtop :right="40" :bottom="40" />
+
+    <!-- CI/CD 部署版本标记 -->
+    <div class="build-marker">
+      Build: {{ buildTimestamp }}
+    </div>
   </div>
 </template>
 
@@ -91,11 +104,20 @@ import UserProfile from '@/components/Layout/UserProfile.vue'
 import Breadcrumb from '@/components/Layout/Breadcrumb.vue'
 import HeaderActions from '@/components/Layout/HeaderActions.vue'
 import AppFooter from '@/components/Layout/AppFooter.vue'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Expand, Fold, Wallet } from '@element-plus/icons-vue'
 
 const appStore = useAppStore()
 const route = useRoute()
+const router = useRouter()
 const { width } = useWindowSize()
+
+// CI/CD 构建时间戳 (YYYY-MM-DD hh:mm:ss)
+const buildTimestamp = (() => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+})()
 
 // 需要缓存的组件
 const keepAliveComponents = computed(() => [
@@ -115,7 +137,11 @@ const handleMainClick = () => {
   }
 }
 
-// 监听窗口大小变化：在小屏幕上自动折叠侧边栏
+const goRecharge = () => {
+  router.push('/token-recharge')
+}
+
+// 监听窗口大小变化
 watch(width, (newWidth) => {
   if (newWidth < 768 && !appStore.sidebarCollapsed) {
     appStore.setSidebarCollapsed(true)
@@ -139,8 +165,9 @@ watch(() => route.fullPath, () => {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 950; // 低于侧边栏(1000)，高于内容区
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(2px);
+  z-index: 950;
 }
 
 .sidebar {
@@ -150,20 +177,25 @@ watch(() => route.fullPath, () => {
   height: 100vh;
   background-color: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color-light);
-  transition: width 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
   display: flex;
   flex-direction: column;
 
   &.collapsed {
     width: 64px !important;
+
+    .sidebar-header {
+      padding: 0 16px;
+      justify-content: center;
+    }
   }
 
   .sidebar-header {
-    height: 60px;
+    height: 64px;
     display: flex;
     align-items: center;
-    padding: 0 16px;
+    padding: 0 20px;
     border-bottom: 1px solid var(--el-border-color-lighter);
 
     .logo {
@@ -172,15 +204,19 @@ watch(() => route.fullPath, () => {
       gap: 12px;
 
       img {
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
       }
 
       .logo-text {
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--el-text-color-primary);
+        font-size: 20px;
+        font-weight: 700;
+        background: var(--zt-gradient-hero);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         white-space: nowrap;
+        letter-spacing: -0.5px;
       }
     }
   }
@@ -188,12 +224,30 @@ watch(() => route.fullPath, () => {
   .sidebar-nav {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 0;
+    padding: 12px 0;
   }
 
   .sidebar-footer {
     border-top: 1px solid var(--el-border-color-lighter);
-    padding: 8px;
+    padding: 10px;
+
+    .sidebar-recharge-action {
+      padding: 0 2px 8px;
+
+      .recharge-button {
+        width: 100%;
+        height: 38px;
+        border-radius: 8px;
+        justify-content: center;
+        white-space: nowrap;
+
+        &.collapsed {
+          width: 48px;
+          padding: 0;
+          margin: 0 auto;
+        }
+      }
+    }
   }
 }
 
@@ -201,12 +255,13 @@ watch(() => route.fullPath, () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.3s ease;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .header {
-  height: 60px;
-  background-color: var(--el-bg-color);
+  height: 64px;
+  background-color: rgba(var(--el-bg-color), 0.85);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--el-border-color-light);
   display: flex;
   align-items: center;
@@ -222,7 +277,16 @@ watch(() => route.fullPath, () => {
     gap: 16px;
 
     .sidebar-toggle {
-      padding: 8px;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      padding: 0;
+      color: var(--el-text-color-secondary);
+
+      &:hover {
+        background: var(--el-fill-color-light);
+        color: var(--el-text-color-primary);
+      }
       
       .el-icon {
         font-size: 18px;
@@ -240,18 +304,17 @@ watch(() => route.fullPath, () => {
 .main-content {
   flex: 1;
   padding: 24px;
-  min-height: calc(100vh - 60px - 60px); // 减去header和footer高度
+  min-height: calc(100vh - 64px - 48px);
 
   .content-wrapper {
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
   }
 }
 
 .footer {
-  height: 60px;
-  background-color: var(--el-bg-color);
-  border-top: 1px solid var(--el-border-color-light);
+  height: 48px;
+  background-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -280,10 +343,21 @@ watch(() => route.fullPath, () => {
   }
 }
 
+.build-marker {
+  position: fixed;
+  bottom: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  z-index: 9999;
+  pointer-events: none;
+  user-select: none;
+}
+
 // 路由过渡动画
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .fade-enter-from,
@@ -293,16 +367,16 @@ watch(() => route.fullPath, () => {
 
 .slide-left-enter-active,
 .slide-left-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
 .slide-left-enter-from {
-  transform: translateX(30px);
+  transform: translateX(16px);
   opacity: 0;
 }
 
 .slide-left-leave-to {
-  transform: translateX(-30px);
+  transform: translateX(-16px);
   opacity: 0;
 }
 </style>

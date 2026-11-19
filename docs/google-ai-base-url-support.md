@@ -22,14 +22,14 @@ class ChatGoogleOpenAI(ChatGoogleGenerativeAI):
     def __init__(self, base_url: Optional[str] = None, **kwargs):
         """
         初始化 Google AI OpenAI 兼容客户端
-        
+
         Args:
             base_url: 自定义 API 端点（可选）
                      例如：https://generativelanguage.googleapis.com/v1beta
                           https://generativelanguage.googleapis.com/v1
                           https://your-proxy.com
         """
-        
+
         # 处理自定义 base_url
         if base_url:
             # 提取域名部分（移除 /v1 或 /v1beta 后缀）
@@ -39,11 +39,11 @@ class ChatGoogleOpenAI(ChatGoogleGenerativeAI):
                 api_endpoint = base_url[:-3]
             else:
                 api_endpoint = base_url
-            
+
             # 通过 client_options 传递域名
             # SDK 会自动添加 /v1beta 路径
             kwargs["client_options"] = {"api_endpoint": api_endpoint}
-        
+
         super().__init__(**kwargs)
 ```
 
@@ -78,7 +78,7 @@ if provider.lower() == "google":
 elif self.config["llm_provider"].lower() == "google":
     # 获取 backend_url
     backend_url = self.config.get("backend_url")
-    
+
     self.deep_thinking_llm = ChatGoogleOpenAI(
         model=self.config["deep_think_llm"],
         google_api_key=google_api_key,

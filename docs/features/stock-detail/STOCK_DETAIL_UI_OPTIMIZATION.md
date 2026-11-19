@@ -87,7 +87,7 @@ function formatAnalysisTime(dateStr: any): string {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     const hours = Math.floor(diff / (1000 * 60 * 60))
     const minutes = Math.floor(diff / (1000 * 60))
-    
+
     // 格式化日期时间
     const formatted = date.toLocaleString('zh-CN', {
       year: 'numeric',
@@ -96,7 +96,7 @@ function formatAnalysisTime(dateStr: any): string {
       hour: '2-digit',
       minute: '2-digit'
     })
-    
+
     // 添加相对时间
     let relative = ''
     if (days > 0) {
@@ -108,7 +108,7 @@ function formatAnalysisTime(dateStr: any): string {
     } else {
       relative = '（刚刚）'
     }
-    
+
     return formatted + ' ' + relative
   } catch (e) {
     return String(dateStr)
@@ -154,8 +154,8 @@ function openReport(reportKey: string) {
 ```
 
 ```vue
-<el-tag 
-  v-for="(content, key) in lastAnalysis.reports" 
+<el-tag
+  v-for="(content, key) in lastAnalysis.reports"
   :key="key"
   size="small"
   effect="plain"

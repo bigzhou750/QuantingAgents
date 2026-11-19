@@ -97,7 +97,7 @@
 const parseRecommendation = () => {
   const rec = report.value.recommendation || ''
   const traderPlan = report.value.reports?.trader_investment_plan || ''
-  
+
   // 解析操作类型
   let action: 'buy' | 'sell' | null = null
   if (rec.includes('买入') || rec.toLowerCase().includes('buy')) {
@@ -105,11 +105,11 @@ const parseRecommendation = () => {
   } else if (rec.includes('卖出') || rec.toLowerCase().includes('sell')) {
     action = 'sell'
   }
-  
+
   // 解析目标价格
   const priceMatch = rec.match(/目标价[格]?[：:]\s*([0-9.]+)/)
   const targetPrice = priceMatch ? parseFloat(priceMatch[1]) : null
-  
+
   return { action, targetPrice, confidence, riskLevel }
 }
 ```
@@ -369,5 +369,5 @@ POST /api/paper/order
 
 **版本**：v0.1.16
 **更新日期**：2025-10-04
-**作者**：TradingAgents-CN Team
+**作者**：zhitouagent Team
 

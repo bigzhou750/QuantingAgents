@@ -541,7 +541,7 @@ def test_openai_compatible_adapters():
                 cls(model="gpt-3.5-turbo", api_key="test", base_url="https://api.openai.com/v1")
             elif provider == "qianfan":
                 # 千帆新一代API仅需QIANFAN_API_KEY，格式: bce-v3/ALTAK-xxx/xxx
-                cls(model="ernie-3.5-8k", api_key="bce-v3/test-key/test-secret")
+                cls(model="ernie-3.5-8k", api_key="bce-v3")
             else:
                 cls(model=list(info["models"].keys())[0], api_key="test")
             logger.info(f"✅ 适配器实例化成功: {provider}")

@@ -195,7 +195,7 @@ print(f"✅ 分析完成: {decision}")
 如果问题仍未解决，请：
 
 1. **检查日志**：查看完整的错误堆栈
-2. **提交 Issue**：https://github.com/hsliuping/TradingAgents-CN/issues
+2. **提交 Issue**：mailto:zh75067197@gmail.com
 3. **提供信息**：
    - Python 版本
    - `langchain-google-genai` 版本
@@ -204,6 +204,6 @@ print(f"✅ 分析完成: {decision}")
 
 ---
 
-**最后更新**：2025-01-17  
+**最后更新**：2025-01-17
 **状态**：已修复（升级到 2.1.12+）
 

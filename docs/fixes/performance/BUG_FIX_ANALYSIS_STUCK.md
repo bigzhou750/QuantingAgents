@@ -14,7 +14,7 @@
 
 ### 1. 日志分析
 
-通过分析 `D:\code\TradingAgents-CN\logs\tradingagents.log`，发现关键错误：
+通过分析 `D:\code\zhitouagent\logs\tradingagents.log`，发现关键错误：
 
 ```
 2025-09-30 20:47:23,666 | app.services.simple_analysis_service | INFO | ✅ [线程池] 分析完成: 81976089-8296-4f75-8c51-172a9507b80b - 耗时249.11秒
@@ -28,8 +28,8 @@
 
 #### 错误调用位置
 
-**文件**：`app/services/simple_analysis_service.py`  
-**行号**：449  
+**文件**：`app/services/simple_analysis_service.py`
+**行号**：449
 **代码**：
 ```python
 progress_tracker.mark_completed("✅ 分析完成")
@@ -37,8 +37,8 @@ progress_tracker.mark_completed("✅ 分析完成")
 
 #### 方法定义
 
-**文件**：`app/services/progress/tracker.py`  
-**行号**：318  
+**文件**：`app/services/progress/tracker.py`
+**行号**：318
 **代码**：
 ```python
 def mark_completed(self) -> Dict[str, Any]:
@@ -88,7 +88,7 @@ def mark_completed(self) -> Dict[str, Any]:
 
 ### 修复代码
 
-**文件**：`app/services/simple_analysis_service.py`  
+**文件**：`app/services/simple_analysis_service.py`
 **修改**：
 
 ```diff
@@ -222,9 +222,9 @@ def mark_completed(self, message: str = "分析完成", results: Any = None):
 
 ## 📝 提交记录
 
-**Commit**: `7fd2d92`  
-**Message**: `fix: 修复单股票分析卡住的问题 - RedisProgressTracker.mark_completed()方法调用参数错误`  
-**Branch**: `v1.0.0-preview`  
+**Commit**: `7fd2d92`
+**Message**: `fix: 修复单股票分析卡住的问题 - RedisProgressTracker.mark_completed()方法调用参数错误`
+**Branch**: `v1.0.0-preview`
 **Date**: 2025-09-30
 
 ---

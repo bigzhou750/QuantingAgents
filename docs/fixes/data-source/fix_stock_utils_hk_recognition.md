@@ -8,7 +8,7 @@
 ```
 INFO | 🔍 [股票代码追踪] 统一基本面工具接收到的原始股票代码: '00700' (类型: <class 'str'>)
 INFO | 🔍 [股票代码追踪] 股票代码长度: 5
-INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息: 
+INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息:
      {'ticker': '00700', 'market': 'unknown', 'market_name': '未知市场', ...}
 INFO | 📊 [统一基本面工具] 股票类型: 未知市场
 INFO | 🇺🇸 [统一基本面工具] 处理美股数据，数据深度: basic...
@@ -70,9 +70,9 @@ def identify_stock_market(ticker: str) -> StockMarket:
     """识别股票代码所属市场"""
     if not ticker:
         return StockMarket.UNKNOWN
-        
+
     ticker = str(ticker).strip().upper()
-    
+
     # 中国A股：6位数字
     if re.match(r'^\d{6}$', ticker):
         return StockMarket.CHINA_A
@@ -84,7 +84,7 @@ def identify_stock_market(ticker: str) -> StockMarket:
     # 美股：1-5位字母
     if re.match(r'^[A-Z]{1,5}$', ticker):
         return StockMarket.US
-        
+
     return StockMarket.UNKNOWN
 ```
 
@@ -169,7 +169,7 @@ def identify_stock_market(ticker: str) -> StockMarket:
 
 ```
 INFO | 🔍 [股票代码追踪] 统一基本面工具接收到的原始股票代码: '00700'
-INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息: 
+INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息:
      {'ticker': '00700', 'market': 'unknown', 'market_name': '未知市场', ...}
 INFO | 📊 [统一基本面工具] 股票类型: 未知市场  ← ❌ 错误
 INFO | 📊 [统一基本面工具] 货币: 未知 (?)  ← ❌ 错误
@@ -180,7 +180,7 @@ INFO | 🇺🇸 [统一基本面工具] 处理美股数据  ← ❌ 错误！应
 
 ```
 INFO | 🔍 [股票代码追踪] 统一基本面工具接收到的原始股票代码: '00700'
-INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息: 
+INFO | 🔍 [股票代码追踪] StockUtils.get_market_info 返回的市场信息:
      {'ticker': '00700', 'market': 'hong_kong', 'market_name': '港股', ...}
 INFO | 📊 [统一基本面工具] 股票类型: 港股  ← ✅ 正确
 INFO | 📊 [统一基本面工具] 货币: 港币 (HK$)  ← ✅ 正确

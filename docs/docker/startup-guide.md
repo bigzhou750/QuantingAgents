@@ -52,7 +52,7 @@ chmod +x scripts/smart_start.sh && ./scripts/smart_start.sh
 
 1. **检查镜像存在性**
    - 镜像不存在 → 执行 `docker-compose up -d --build`
-   
+
 2. **检查代码变化**
    - 有未提交的代码变化 → 执行 `docker-compose up -d --build`
    - 无代码变化 → 执行 `docker-compose up -d`

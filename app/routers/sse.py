@@ -225,8 +225,8 @@ async def batch_progress_generator(batch_id: str, user_id: str):
 async def stream_task_progress(task_id: str, user: dict = Depends(get_current_user), svc: QueueService = Depends(get_queue_service)):
     """Stream real-time progress updates for a specific task"""
     # Verify task exists and belongs to user
-    task_data = await svc.get_task(task_id)
-    if not task_data or task_data.get("user") != user["id"]:
+    task_data = await svc.get_user_task(task_id, user["id"])
+    if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
 
     return StreamingResponse(

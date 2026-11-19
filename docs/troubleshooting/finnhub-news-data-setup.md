@@ -5,7 +5,7 @@
 如果您遇到以下错误信息：
 
 ```
-[DEBUG] FinnhubNewsTool调用，股票代码: AAPL 
+[DEBUG] FinnhubNewsTool调用，股票代码: AAPL
 获取新闻数据失败: [Errno 2] No such file or directory: '/Users/yluo/Documents/Code/ScAI/FR1-data\\finnhub_data\\news_data\\AAPL_data_formatted.json'
 ```
 
@@ -206,9 +206,9 @@ python scripts/download_finnhub_data.py --force-refresh
 ```python
 # 跨平台路径构建
 data_path = os.path.join(
-    data_dir, 
-    "finnhub_data", 
-    "news_data", 
+    data_dir,
+    "finnhub_data",
+    "news_data",
     f"{ticker}_data_formatted.json"
 )
 
@@ -229,6 +229,6 @@ if not os.path.exists(data_path):
 
 ---
 
-**更新日期**：2025-01-02  
-**版本**：v1.0  
-**适用范围**：TradingAgents-CN v0.1.3+
+**更新日期**：2025-01-02
+**版本**：v1.0
+**适用范围**：zhitouagent v0.1.3+

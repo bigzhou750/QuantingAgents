@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TradingAgents-CN Web应用启动脚本
+zhitouagent Web应用启动脚本
 """
 
 import os
@@ -157,16 +157,16 @@ def clean_cache_files(force_clean=False):
 
 def check_api_keys():
     """检查API密钥配置"""
-    
+
     from dotenv import load_dotenv
-    
+
     # 加载环境变量
     project_root = Path(__file__).parent.parent
     load_dotenv(project_root / ".env")
-    
+
     dashscope_key = os.getenv("DASHSCOPE_API_KEY")
     finnhub_key = os.getenv("FINNHUB_API_KEY")
-    
+
     if not dashscope_key or not finnhub_key:
         logger.warning(f"⚠️ API密钥配置不完整")
         logger.info(f"请确保在.env文件中配置以下密钥:")
@@ -178,7 +178,7 @@ def check_api_keys():
         logger.info(f"1. 复制 .env.example 为 .env")
         logger.info(f"2. 编辑 .env 文件，填入真实API密钥")
         return False
-    
+
     logger.info(f"✅ API密钥配置完成")
     return True
 
@@ -189,18 +189,18 @@ import psutil
 # 修改 main() 函数中的启动部分
 def main():
     """主函数"""
-    
-    logger.info(f"🚀 TradingAgents-CN Web应用启动器")
+
+    logger.info(f"🚀 zhitouagent Web应用启动器")
     logger.info(f"=")
-    
+
     # 清理缓存文件（可选，避免Streamlit文件监控错误）
     clean_cache_files(force_clean=False)
-    
+
     # 检查依赖
     logger.debug(f"🔍 检查依赖包...")
     if not check_dependencies():
         return
-    
+
     # 检查API密钥
     logger.info(f"🔑 检查API密钥...")
     if not check_api_keys():
@@ -208,21 +208,21 @@ def main():
         response = input("是否继续启动? (y/n): ").lower().strip()
         if response != 'y':
             return
-    
+
     # 启动Streamlit应用
     logger.info(f"\n🌐 启动Web应用...")
-    
+
     web_dir = Path(__file__).parent
     app_file = web_dir / "app.py"
-    
+
     if not app_file.exists():
         logger.error(f"❌ 找不到应用文件: {app_file}")
         return
-    
+
     # 构建Streamlit命令
     config_dir = web_dir.parent / ".streamlit"
     cmd = [
-        sys.executable, "-m", "streamlit", "run", 
+        sys.executable, "-m", "streamlit", "run",
         str(app_file),
         "--server.port", "8501",
         "--server.address", "localhost",
@@ -230,21 +230,21 @@ def main():
         "--server.fileWatcherType", "auto",
         "--server.runOnSave", "true"
     ]
-    
+
     # 如果配置目录存在，添加配置路径
     if config_dir.exists():
         logger.info(f"📁 使用配置目录: {config_dir}")
         # Streamlit会自动查找.streamlit/config.toml文件
-    
+
     logger.info(f"执行命令: {' '.join(cmd)}")
     logger.info(f"\n🎉 Web应用启动中...")
     logger.info(f"📱 浏览器将自动打开 http://localhost:8501")
     logger.info(f"⏹️  按 Ctrl+C 停止应用")
     logger.info(f"=")
-    
+
     # 创建进程对象而不是直接运行
     process = None
-    
+
     def signal_handler(signum, frame):
         """信号处理函数"""
         logger.info(f"\n\n⏹️ 接收到停止信号，正在关闭Web应用...")
@@ -255,7 +255,7 @@ def main():
                 for child in parent.children(recursive=True):
                     child.terminate()
                 parent.terminate()
-                
+
                 # 等待进程结束
                 parent.wait(timeout=5)
                 logger.info(f"✅ Web应用已成功停止")
@@ -264,11 +264,11 @@ def main():
                 if process:
                     process.kill()
         sys.exit(0)
-    
+
     # 注册信号处理器
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         # 启动Streamlit进程
         process = subprocess.Popen(cmd, cwd=web_dir)
@@ -293,7 +293,7 @@ if __name__ == "__main__":
             logger.info(f"🚀 启动模式: 强制清理所有缓存")
             clean_cache_files(force_clean=True)
         elif sys.argv[1] == "--help":
-            logger.info(f"🚀 TradingAgents-CN Web应用启动器")
+            logger.info(f"🚀 zhitouagent Web应用启动器")
             logger.info(f"=")
             logger.info(f"用法:")
             logger.info(f"  python run_web.py           # 默认启动（清理项目缓存）")

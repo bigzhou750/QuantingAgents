@@ -1,0 +1,20 @@
+[Unit]
+Description=zhitouagent Gitee Webhook Server
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/zhitouagent/worktree
+ExecStart=/usr/bin/python3 /opt/zhitouagent/worktree/deploy/webhook-server.py \
+  --secret {{WEBHOOK_SECRET}} \
+  --deploy-script /opt/zhitouagent/worktree/deploy/deploy.sh \
+  --branch feat/assistant \
+  --port 9000
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/zhitouagent/logs/webhook.log
+StandardError=append:/opt/zhitouagent/logs/webhook-error.log
+
+[Install]
+WantedBy=multi-user.target
