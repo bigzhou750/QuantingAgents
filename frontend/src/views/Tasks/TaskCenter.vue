@@ -1,29 +1,45 @@
 <template>
   <div class="task-center">
-    <div class="page-header">
-      <h1 class="page-title">
+    <!-- 页头 -->
+    <div class="hero-header">
+      <div class="hero-icon">
         <el-icon><List /></el-icon>
-        任务中心
-      </h1>
-      <p class="page-description">统一查看并管理分析任务：进行中 / 已完成 / 失败</p>
+      </div>
+      <div class="hero-content">
+        <h1 class="hero-title">分析任务</h1>
+        <p class="hero-desc">统一查看并管理分析任务：进行中 / 已完成 / 失败</p>
+      </div>
     </div>
 
-    <el-card class="tabs-card" shadow="never">
-      <el-tabs v-model="activeTab" @tab-click="onTabChange">
-        <el-tab-pane label="进行中" name="running" />
-        <el-tab-pane label="已完成" name="completed" />
-        <el-tab-pane label="失败" name="failed" />
-        <el-tab-pane label="全部" name="all" />
-      </el-tabs>
-    </el-card>
+    <!-- 标签页 -->
+    <div class="tabs-bar">
+      <div
+        v-for="tab in tabs"
+        :key="tab.name"
+        class="tab-item"
+        :class="{ active: activeTab === tab.name }"
+        @click="switchTab(tab.name)"
+      >
+        {{ tab.label }}
+      </div>
+    </div>
 
     <!-- 筛选表单 -->
     <el-card class="filter-card" shadow="never">
-      <el-form :inline="true" @submit.prevent>
-        <el-form-item label="时间范围">
-          <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD" value-format="YYYY-MM-DD" style="width: 260px" />
+      <el-form :inline="true" @submit.prevent class="filter-form">
+        <el-form-item label="时间范围" class="filter-item">
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            style="width: 260px"
+          />
         </el-form-item>
-        <el-form-item label="市场">
+        <el-form-item label="市场" class="filter-item">
           <el-select v-model="filters.market" clearable placeholder="全部" style="width: 120px">
             <el-option label="全部" value="" />
             <el-option label="美股" value="美股" />
@@ -31,7 +47,7 @@
             <el-option label="港股" value="港股" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="状态" class="filter-item">
           <el-select v-model="filters.status" clearable placeholder="全部" style="width: 120px">
             <el-option label="全部" value="" />
             <el-option label="进行中" value="processing" />
@@ -39,80 +55,122 @@
             <el-option label="失败" value="failed" />
           </el-select>
         </el-form-item>
-        <el-form-item label="股票">
+        <el-form-item label="股票" class="filter-item">
           <el-input v-model="filters.stock" placeholder="代码或名称" style="width: 160px" />
         </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="applyFilters" :loading="loading">查询</el-button>
-          <el-button @click="resetFilters">重置</el-button>
+        <el-form-item class="filter-actions">
+          <el-button type="primary" @click="applyFilters" :loading="loading">
+            <el-icon><Search /></el-icon>
+            查询
+          </el-button>
+          <el-button @click="resetFilters">
+            <el-icon><RefreshRight /></el-icon>
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 统计卡片 -->
-    <el-row :gutter="16" style="margin-top: 12px">
-      <el-col :span="6">
-        <el-card shadow="never"><div class="stat"><div class="value">{{ stats.total }}</div><div class="label">总任务</div></div></el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never"><div class="stat"><div class="value">{{ stats.completed }}</div><div class="label">已完成</div></div></el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never"><div class="stat"><div class="value">{{ stats.failed }}</div><div class="label">失败</div></div></el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never"><div class="stat"><div class="value">{{ stats.uniqueStocks }}</div><div class="label">股票数</div></div></el-card>
-      </el-col>
-    </el-row>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">总任务</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value success">{{ stats.completed }}</div>
+        <div class="stat-label">已完成</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value danger">{{ stats.failed }}</div>
+        <div class="stat-label">失败</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.uniqueStocks }}</div>
+        <div class="stat-label">股票数</div>
+      </div>
+    </div>
 
-
+    <!-- 任务列表 -->
     <el-card class="list-card" shadow="never">
-      <div class="list-header">
-        <div class="left">
-          <el-input v-model="keyword" placeholder="搜索股票代码/名称" clearable style="width: 220px" />
-          <el-button @click="refreshList" :loading="loading">
+      <div class="list-toolbar">
+        <div class="list-toolbar-left">
+          <el-input
+            v-model="keyword"
+            placeholder="搜索股票代码 / 名称"
+            clearable
+            style="width: 240px"
+            class="search-input"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button @click="refreshList" :loading="loading" class="refresh-btn">
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
         </div>
-        <div class="right">
-          <el-button @click="exportSelected" :disabled="selectedRows.length===0">
+        <div class="list-toolbar-right">
+          <el-button @click="exportSelected" :disabled="selectedRows.length===0" type="primary" plain>
             <el-icon><Download /></el-icon>
             导出所选
           </el-button>
         </div>
       </div>
 
-      <el-table :data="filteredList" v-loading="loading" style="width: 100%" @selection-change="onSelectionChange">
+      <el-table
+        :data="filteredList"
+        v-loading="loading"
+        style="width: 100%"
+        @selection-change="onSelectionChange"
+        class="task-table"
+        :header-cell-style="{ background: '#F8FAFC', fontWeight: 600 }"
+      >
         <el-table-column type="selection" width="50" />
-        <el-table-column prop="task_id" label="任务ID" width="220" />
-        <el-table-column prop="stock_code" label="股票代码" width="120" />
-        <el-table-column prop="stock_name" label="股票名称" width="150" />
-        <el-table-column label="状态" width="110">
+        <el-table-column prop="task_id" label="任务ID" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="stock_code" label="股票代码" width="110" />
+        <el-table-column prop="stock_name" label="股票名称" width="140" />
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)" effect="light" round size="small">
+              {{ getStatusText(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="progress" label="进度" width="120">
+        <el-table-column prop="progress" label="进度" width="130">
           <template #default="{ row }">
-            <el-progress :percentage="row.progress || 0" :status="row.status==='failed'?'exception':(row.status==='completed'?'success':undefined)"/>
+            <el-progress
+              :percentage="row.progress || 0"
+              :status="row.status==='failed'?'exception':(row.status==='completed'?'success':undefined)"
+              :stroke-width="6"
+              :show-text="true"
+            />
           </template>
         </el-table-column>
-        <el-table-column prop="start_time" label="开始时间" width="180">
+        <el-table-column prop="start_time" label="开始时间" width="170">
           <template #default="{ row }">
             {{ formatTime(row.start_time || row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="350" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status==='completed'" type="text" size="small" @click="openResult(row)">查看结果</el-button>
-            <el-button v-if="row.status==='completed'" type="text" size="small" @click="openReport(row)">报告详情</el-button>
-            <el-button v-if="row.status==='failed'" type="text" size="small" @click="showErrorDetail(row)">查看错误</el-button>
-            <el-button v-if="row.status==='failed'" type="text" size="small" @click="retryTask(row)">重试</el-button>
-            <el-button v-if="row.status==='processing' || row.status==='running' || row.status==='pending' || row.status==='queued'" type="text" size="small" @click="markAsFailed(row)">
-              {{ row.task_type === 'vibe_agent' ? '取消' : '标记失败' }}
-            </el-button>
-            <el-button v-if="row.task_type !== 'vibe_agent'" type="text" size="small" @click="deleteTask(row)" style="color: #f56c6c;">删除</el-button>
+            <div class="action-group">
+              <el-button v-if="row.status==='completed'" link type="primary" size="small" @click="openResult(row)">查看结果</el-button>
+              <el-button v-if="row.status==='completed'" link type="primary" size="small" @click="openReport(row)">报告详情</el-button>
+              <el-button v-if="row.status==='failed'" link type="warning" size="small" @click="showErrorDetail(row)">查看错误</el-button>
+              <el-button v-if="row.status==='failed'" link type="primary" size="small" @click="retryTask(row)">重试</el-button>
+              <el-button
+                v-if="row.status==='processing' || row.status==='running' || row.status==='pending' || row.status==='queued'"
+                link
+                type="warning"
+                size="small"
+                @click="markAsFailed(row)"
+              >
+                {{ row.task_type === 'vibe_agent' ? '取消' : '标记失败' }}
+              </el-button>
+              <el-button v-if="row.task_type !== 'vibe_agent'" link type="danger" size="small" @click="deleteTask(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -130,7 +188,7 @@
       </div>
     </el-card>
 
-    <!-- 结果弹窗组件化 -->
+    <!-- 结果弹窗 -->
     <TaskResultDialog
       v-model="resultVisible"
       :result="currentResult"
@@ -138,10 +196,8 @@
       @view-report="openReport(currentRow)"
     />
 
-
-    <!-- 报告详情弹窗组件化（预留） -->
+    <!-- 报告详情弹窗 -->
     <TaskReportDialog v-model="reportVisible" :sections="reportSections" @close="reportVisible=false" />
-
   </div>
 </template>
 
@@ -149,7 +205,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { List, Refresh, Download } from '@element-plus/icons-vue'
+import { List, Refresh, Download, Search, RefreshRight } from '@element-plus/icons-vue'
 import { analysisApi } from '@/api/analysis'
 import { vibeAgentApi } from '@/api/vibeAgent'
 import TaskResultDialog from '@/components/Global/TaskResultDialog.vue'
@@ -158,7 +214,7 @@ import TaskReportDialog from '@/components/Global/TaskReportDialog.vue'
 const router = useRouter()
 const route = useRoute()
 
-const activeTab = ref<'running'|'completed'|'failed'|'all'>('running')
+const activeTab = ref<TabKey>('running')
 const loading = ref(false)
 const keyword = ref('')
 const currentPage = ref(1)
@@ -166,29 +222,33 @@ const pageSize = ref(20)
 const total = ref(0)
 const list = ref<any[]>([])
 const selectedRows = ref<any[]>([])
-// 筛选与统计
+
+type TabKey = 'running' | 'completed' | 'failed' | 'all'
+const tabs: { name: TabKey; label: string }[] = [
+  { name: 'running', label: '进行中' },
+  { name: 'completed', label: '已完成' },
+  { name: 'failed', label: '失败' },
+  { name: 'all', label: '全部' }
+]
+
 const filters = ref<{ dateRange: string[]; market: string; status: string; stock: string }>({
   dateRange: [], market: '', status: '', stock: ''
 })
 const stats = ref({ total: 0, completed: 0, failed: 0, uniqueStocks: 0 })
 
-
-// WebSocket 连接管理
 let wsConnections: Map<string, WebSocket> = new Map()
 let timer: any = null
 
 const setupPolling = () => {
   clearInterval(timer)
-  // 定期刷新列表（每 5 秒）
   if (activeTab.value === 'running') {
     timer = setInterval(() => loadList(), 5000)
   }
 }
 
-// 连接 WebSocket 获取任务进度
 const connectTaskWebSocket = (taskId: string) => {
   if (wsConnections.has(taskId)) {
-    return // 已连接
+    return
   }
 
   try {
@@ -206,7 +266,6 @@ const connectTaskWebSocket = (taskId: string) => {
       try {
         const message = JSON.parse(event.data)
         if (message.type === 'progress_update') {
-          // 更新列表中的任务进度
           const taskIndex = list.value.findIndex(t => t.task_id === taskId)
           if (taskIndex >= 0) {
             list.value[taskIndex].progress = message.progress
@@ -235,7 +294,6 @@ const connectTaskWebSocket = (taskId: string) => {
   }
 }
 
-// 断开所有 WebSocket 连接
 const disconnectAllWebSockets = () => {
   wsConnections.forEach((ws) => {
     try {
@@ -256,7 +314,6 @@ const statusParam = computed(() => {
 const loadList = async () => {
   loading.value = true
   try {
-    // 根据筛选与标签页构造参数
     const params: any = {
       page: currentPage.value,
       page_size: pageSize.value,
@@ -273,7 +330,6 @@ const loadList = async () => {
     const body = (res as any)?.data?.data || (res as any)?.data || {}
     let tasks = body.tasks || body.analyses || []
 
-    // 当无筛选条件且历史接口为空时，兜底用任务列表接口（保证能看到数据）
     const noExtraFilters = !filters.value.market && !filters.value.stock && (!filters.value.dateRange || filters.value.dateRange.length === 0)
     if (tasks.length === 0 && noExtraFilters) {
       try {
@@ -314,14 +370,12 @@ const loadList = async () => {
 
     list.value = tasks
 
-    // 为运行中的任务连接 WebSocket
     tasks.forEach((task: any) => {
       if (task.task_type !== 'vibe_agent' && (task.status === 'processing' || task.status === 'running' || task.status === 'pending')) {
         connectTaskWebSocket(task.task_id)
       }
     })
 
-    // 统计
     const completed = tasks.filter((x:any) => x.status === 'completed').length
     const failed = tasks.filter((x:any) => x.status === 'failed').length
     const uniqueStocks = new Set(tasks.map((x:any) => x.stock_code || x.stock_symbol).filter(Boolean)).size
@@ -333,11 +387,9 @@ const loadList = async () => {
   }
 }
 
-// 查询/重置
 const applyFilters = () => { currentPage.value = 1; loadList() }
 const resetFilters = () => { filters.value = { dateRange: [], market: '', status: '', stock: '' }; currentPage.value = 1; loadList() }
 
-// 报告弹窗状态
 const reportVisible = ref(false)
 const reportSections = ref<Array<{ key?: string; title: string; content: any }>>([])
 
@@ -352,8 +404,8 @@ const filteredList = computed(() => {
 
 const handleSizeChange = (size:number) => { pageSize.value = size; currentPage.value = 1; loadList() }
 const handleCurrentChange = (page:number) => { currentPage.value = page; loadList() }
-const onTabChange = () => {
-  // 使用 nextTick 确保 activeTab 的值已经更新
+const switchTab = (tab: TabKey) => {
+  activeTab.value = tab
   nextTick(() => {
     currentPage.value = 1
     loadList()
@@ -363,7 +415,6 @@ const onTabChange = () => {
 const refreshList = () => loadList()
 const onSelectionChange = (rows:any[]) => { selectedRows.value = rows }
 
-// 结果与报告
 const resultVisible = ref(false)
 const currentResult = ref<any>(null)
 const currentRow = ref<any>(null)
@@ -399,7 +450,6 @@ const openReport = (row:any): void => {
 
 const retryTask = (_row:any) => { ElMessage.info('重试功能待实现') }
 
-// 显示错误详情
 const showErrorDetail = async (row: any) => {
   try {
     const taskId = row.task_id || row.analysis_id || row.id
@@ -408,25 +458,18 @@ const showErrorDetail = async (row: any) => {
       return
     }
 
-    // 获取任务详情
     const res = await analysisApi.getTaskStatus(taskId)
     const task = (res as any)?.data?.data || row
-
     const errorMessage = task.error_message || task.message || '未知错误'
 
-    // 使用 ElMessageBox 显示错误详情
     await ElMessageBox.alert(
-      errorMessage,
+      errorMessage.replace(/\n/g, '<br>'),
       '错误详情',
       {
         confirmButtonText: '确定',
         type: 'error',
         dangerouslyUseHTMLString: true,
-        customStyle: {
-          width: '600px'
-        },
-        // 使用 HTML 格式化显示，保留换行
-        message: errorMessage.replace(/\n/g, '<br>')
+        customStyle: { width: '600px' }
       }
     )
   } catch (e: any) {
@@ -436,7 +479,6 @@ const showErrorDetail = async (row: any) => {
   }
 }
 
-// 标记任务为失败
 const markAsFailed = async (row: any) => {
   try {
     await ElMessageBox.confirm(
@@ -473,7 +515,6 @@ const markAsFailed = async (row: any) => {
   }
 }
 
-// 删除任务
 const deleteTask = async (row: any) => {
   try {
     await ElMessageBox.confirm(
@@ -509,7 +550,6 @@ const deleteTask = async (row: any) => {
   }
 }
 
-// 导出所选任务
 const exportSelected = () => {
   try {
     const data = JSON.stringify(selectedRows.value, null, 2)
@@ -529,7 +569,6 @@ const exportSelected = () => {
 }
 
 onMounted(() => {
-  // 根据路由 query 初始化标签页
   const tab = String((route.query as any)?.tab || '').toLowerCase()
   const validTabs = ['running', 'completed', 'failed', 'all']
   if (validTabs.includes(tab)) {
@@ -538,7 +577,6 @@ onMounted(() => {
   loadList(); setupPolling()
 })
 
-// 监听路由 query 的 tab 变化，动态切换标签页
 watch(() => (route.query as any)?.tab, (newVal) => {
   const tab = String(newVal || '').toLowerCase()
   const validTabs = ['running', 'completed', 'failed', 'all']
@@ -549,6 +587,7 @@ watch(() => (route.query as any)?.tab, (newVal) => {
     setupPolling()
   }
 })
+
 onUnmounted(() => {
   clearInterval(timer)
   disconnectAllWebSockets()
@@ -568,11 +607,214 @@ const formatTime = (t:string) => t ? formatDateTime(t) : '-'
 
 <style scoped lang="scss">
 .task-center {
-  .page-header { margin-bottom: 24px; }
-  .page-title { display:flex; align-items:center; gap:8px; font-size:24px; font-weight:600; margin:0 0 8px 0; }
-  .page-description { color: var(--el-text-color-regular); margin:0; }
-  .tabs-card { margin-bottom: 16px; }
-  .list-header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap:8px; }
-  .pagination-wrapper { display:flex; justify-content:center; margin-top: 16px; }
+  .hero-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 28px 28px;
+    margin-bottom: 20px;
+    border-radius: 20px;
+    background: var(--zt-gradient-hero);
+    color: #fff;
+    box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.3);
+
+    .hero-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .el-icon {
+        font-size: 28px;
+        color: #fff;
+      }
+    }
+
+    .hero-content {
+      .hero-title {
+        font-size: 26px;
+        font-weight: 700;
+        color: #fff;
+        margin: 0 0 6px 0;
+        letter-spacing: -0.3px;
+      }
+
+      .hero-desc {
+        margin: 0;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+    }
+  }
+
+  .tabs-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 6px;
+    background: var(--el-bg-color);
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 14px;
+    width: fit-content;
+
+    .tab-item {
+      padding: 8px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--el-text-color-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+
+      &:hover {
+        color: var(--el-text-color-primary);
+        background: var(--el-fill-color-light);
+      }
+
+      &.active {
+        color: #fff;
+        background: var(--zt-gradient-hero);
+        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+      }
+    }
+  }
+
+  .filter-card {
+    margin-bottom: 16px;
+    border-radius: 16px;
+
+    :deep(.el-card__body) {
+      padding: 18px 20px;
+    }
+
+    .filter-form {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: -8px;
+
+      .filter-item {
+        margin-bottom: 8px;
+        margin-right: 0;
+
+        :deep(.el-form-item__label) {
+          color: var(--el-text-color-secondary);
+          font-size: 13px;
+          padding-right: 8px;
+        }
+      }
+
+      .filter-actions {
+        margin-bottom: 8px;
+        margin-right: 0;
+      }
+    }
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+
+    @media (max-width: 992px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 576px) {
+      grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+      background: var(--el-bg-color);
+      border: 1px solid var(--el-border-color-light);
+      border-radius: 16px;
+      padding: 22px 18px;
+      text-align: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+      }
+
+      .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--el-color-primary);
+        line-height: 1.2;
+        margin-bottom: 6px;
+
+        &.success { color: var(--el-color-success); }
+        &.danger { color: var(--el-color-danger); }
+      }
+
+      .stat-label {
+        font-size: 13px;
+        color: var(--el-text-color-secondary);
+      }
+    }
+  }
+
+  .list-card {
+    border-radius: 16px;
+
+    :deep(.el-card__body) {
+      padding: 20px;
+    }
+
+    .list-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+
+      .list-toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .search-input {
+        :deep(.el-input__wrapper) {
+          border-radius: 10px;
+        }
+      }
+
+      .refresh-btn {
+        border-radius: 10px;
+      }
+    }
+
+    .task-table {
+      border-radius: 12px;
+      overflow: hidden;
+
+      :deep(.el-table__header th) {
+        font-weight: 600;
+      }
+
+      .action-group {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+    }
+
+    .pagination-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+      padding-top: 4px;
+    }
+  }
 }
 </style>

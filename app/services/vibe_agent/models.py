@@ -34,6 +34,9 @@ class VibeEventType(str, Enum):
     swarm_status = "swarm_status"
     task_status = "task_status"
     error = "error"
+    llm_usage = "llm_usage"
+    balance_update = "balance_update"
+    balance_exhausted = "balance_exhausted"
 
 
 class VibeSessionCreate(BaseModel):

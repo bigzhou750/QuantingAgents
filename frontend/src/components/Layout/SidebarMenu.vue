@@ -8,12 +8,7 @@
   >
     <el-menu-item index="/dashboard">
       <el-icon><Odometer /></el-icon>
-      <template #title>仪表板</template>
-    </el-menu-item>
-
-    <el-menu-item index="/learning">
-      <el-icon><Reading /></el-icon>
-      <template #title>学习中心</template>
+      <template #title>工作台</template>
     </el-menu-item>
 
     <el-sub-menu index="/analysis">
@@ -23,28 +18,17 @@
       </template>
       <el-menu-item index="/analysis/single">单股分析</el-menu-item>
       <el-menu-item index="/analysis/batch">批量分析</el-menu-item>
-      <!-- 新增：将分析报告作为股票分析的子菜单 -->
       <el-menu-item index="/reports">分析报告</el-menu-item>
     </el-sub-menu>
 
-    <el-menu-item index="/tasks">
-      <el-icon><List /></el-icon>
-      <template #title>任务中心</template>
-    </el-menu-item>
-
-    <el-menu-item index="/research-agent">
-      <el-icon><ChatDotRound /></el-icon>
-      <template #title>自然语言研究</template>
-    </el-menu-item>
-
     <el-menu-item index="/screening">
       <el-icon><Search /></el-icon>
-      <template #title>股票筛选</template>
+      <template #title>选股器</template>
     </el-menu-item>
 
     <el-menu-item index="/favorites">
       <el-icon><Star /></el-icon>
-      <template #title>我的自选股</template>
+      <template #title>自选股</template>
     </el-menu-item>
 
     <el-menu-item index="/paper">
@@ -52,14 +36,15 @@
       <template #title>模拟交易</template>
     </el-menu-item>
 
-
-    <!-- 分析报告已移至“股票分析”子菜单，保留注释便于追踪 -->
-    <!--
-    <el-menu-item index="/reports">
-      <el-icon><Document /></el-icon>
-      <template #title>分析报告</template>
+    <el-menu-item index="/tasks">
+      <el-icon><List /></el-icon>
+      <template #title>分析任务</template>
     </el-menu-item>
-    -->
+
+    <el-menu-item index="/research-agent">
+      <el-icon><ChatDotRound /></el-icon>
+      <template #title>AI 研究</template>
+    </el-menu-item>
 
     <el-sub-menu index="/settings">
       <template #title>
@@ -67,39 +52,18 @@
         <span>设置</span>
       </template>
 
-      <!-- 个人设置 -->
-      <el-sub-menu index="/settings-personal">
-        <template #title>个人设置</template>
-        <el-menu-item index="/settings">通用设置</el-menu-item>
-        <el-menu-item index="/settings?tab=appearance">外观设置</el-menu-item>
-        <el-menu-item index="/settings?tab=analysis">分析偏好</el-menu-item>
-        <el-menu-item index="/settings?tab=notifications">通知设置</el-menu-item>
-        <el-menu-item index="/settings?tab=security">安全设置</el-menu-item>
-      </el-sub-menu>
+      <el-menu-item index="/settings">通用设置</el-menu-item>
+      <el-menu-item index="/settings?tab=appearance">外观设置</el-menu-item>
+      <el-menu-item index="/settings?tab=analysis">分析偏好</el-menu-item>
 
-      <!-- 系统配置 -->
-      <el-sub-menu index="/settings-config">
-        <template #title>系统配置</template>
+      <template v-if="authStore.isAdmin">
         <el-menu-item index="/settings/config">配置管理</el-menu-item>
         <el-menu-item index="/settings/cache">缓存管理</el-menu-item>
-      </el-sub-menu>
-
-      <!-- 系统管理 -->
-      <el-sub-menu index="/settings-admin">
-        <template #title>系统管理</template>
         <el-menu-item index="/settings/database">数据库管理</el-menu-item>
         <el-menu-item index="/settings/logs">操作日志</el-menu-item>
-        <el-menu-item index="/settings/system-logs">系统日志</el-menu-item>
-        <el-menu-item index="/settings/sync">多数据源同步</el-menu-item>
         <el-menu-item index="/settings/scheduler">定时任务</el-menu-item>
-        <el-menu-item index="/settings/usage">使用统计</el-menu-item>
-      </el-sub-menu>
+      </template>
     </el-sub-menu>
-
-    <el-menu-item index="/about">
-      <el-icon><InfoFilled /></el-icon>
-      <template #title>关于</template>
-    </el-menu-item>
   </el-menu>
 </template>
 
@@ -107,22 +71,21 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import {
   Odometer,
-  Reading,
   TrendCharts,
   Search,
   Star,
   List,
   ChatDotRound,
-  /* Document 移除：不再使用顶级分析报告菜单图标 */
   Setting,
-  InfoFilled,
   CreditCard
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const activeMenu = computed(() => route.path)
 </script>
@@ -131,16 +94,59 @@ const activeMenu = computed(() => route.path)
 .sidebar-menu {
   border: none;
   height: 100%;
+  padding: 0 10px;
 
   :deep(.el-menu-item),
   :deep(.el-sub-menu__title) {
-    height: 48px;
-    line-height: 48px;
+    height: 44px;
+    line-height: 44px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    &:hover {
+      background-color: var(--el-fill-color-light);
+      color: var(--el-text-color-primary);
+    }
+
+    .el-icon {
+      font-size: 18px;
+      color: var(--el-text-color-secondary);
+    }
   }
 
   :deep(.el-menu-item.is-active) {
-    background-color: var(--el-color-primary-light-9);
+    background: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-color-primary-light-8) 100%);
     color: var(--el-color-primary);
+    font-weight: 600;
+
+    .el-icon {
+      color: var(--el-color-primary);
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 18px;
+      border-radius: 0 3px 3px 0;
+      background: var(--el-color-primary);
+    }
+  }
+
+  :deep(.el-sub-menu .el-menu) {
+    background: transparent;
+    padding-left: 8px;
+  }
+
+  :deep(.el-sub-menu .el-menu-item) {
+    height: 38px;
+    line-height: 38px;
+    font-size: 13px;
   }
 }
 </style>

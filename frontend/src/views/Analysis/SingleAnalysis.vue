@@ -1671,7 +1671,7 @@ const goSimOrder = async () => {
           ]),
           h('p', [
             h('strong', '预计金额：'),
-            h('span', { style: 'color: #409EFF; font-weight: bold;' }, `${estimatedAmount.value}元`)
+            h('span', { style: 'color: #0EA5E9; font-weight: bold;' }, `${estimatedAmount.value}元`)
           ]),
           h('p', [
             h('strong', '置信度：'),
@@ -2301,7 +2301,7 @@ onMounted(async () => {
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 
       :deep(.el-card__header) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--zt-gradient-hero);
         color: white;
         border-radius: 16px 16px 0 0;
         padding: 20px 24px;
@@ -3241,9 +3241,9 @@ onMounted(async () => {
     }
 
     &.is-active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: var(--zt-gradient-hero) !important;
       color: white !important;
-      border-color: #667eea !important;
+      border-color: #0EA5E9 !important;
       box-shadow: 0 6px 20px rgba(102,126,234,0.4) !important;
       transform: translateY(-3px) scale(1.05) !important;
 
@@ -3282,7 +3282,7 @@ onMounted(async () => {
   padding: 20px;
   background: var(--el-fill-color-light);
   border-radius: 15px;
-  border-left: 5px solid #667eea;
+  border-left: 5px solid #0EA5E9;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 
   .report-title {

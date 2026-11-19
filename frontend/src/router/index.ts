@@ -33,7 +33,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Dashboard',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '仪表板',
+      title: '工作台',
       icon: 'Dashboard',
       requiresAuth: true,
       transition: 'fade'
@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
         name: 'DashboardHome',
         component: () => import('@/views/Dashboard/index.vue'),
         meta: {
-          title: '仪表板',
+          title: '工作台',
           requiresAuth: true
         }
       }
@@ -74,7 +74,7 @@ const routes: RouteRecordRaw[] = [
     name: 'StockScreening',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '股票筛选',
+      title: '选股器',
       icon: 'Search',
       requiresAuth: true,
       transition: 'slide-up'
@@ -85,7 +85,7 @@ const routes: RouteRecordRaw[] = [
         name: 'StockScreeningHome',
         component: () => import('@/views/Screening/index.vue'),
         meta: {
-          title: '股票筛选',
+          title: '选股器',
           requiresAuth: true
         }
       }
@@ -97,7 +97,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Favorites',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '我的自选股',
+      title: '自选股',
       icon: 'Star',
       requiresAuth: true,
       transition: 'slide-up'
@@ -108,7 +108,7 @@ const routes: RouteRecordRaw[] = [
         name: 'FavoritesHome',
         component: () => import('@/views/Favorites/index.vue'),
         meta: {
-          title: '我的自选股',
+          title: '自选股',
           requiresAuth: true
         }
       }
@@ -186,7 +186,7 @@ const routes: RouteRecordRaw[] = [
     name: 'TaskCenter',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '任务中心',
+      title: '分析任务',
       icon: 'List',
       requiresAuth: true,
       transition: 'slide-up'
@@ -205,7 +205,7 @@ const routes: RouteRecordRaw[] = [
     name: 'ResearchAgent',
     component: () => import('@/layouts/BasicLayout.vue'),
     meta: {
-      title: '自然语言研究',
+      title: 'AI 研究',
       icon: 'ChatDotRound',
       requiresAuth: true,
       transition: 'fade'
@@ -352,6 +352,51 @@ const routes: RouteRecordRaw[] = [
           title: '定时任务',
           requiresAuth: true
         }
+      },
+      // 计费配置页：requiresAdmin 标记使路由守卫在用户非管理员时重定向到 /dashboard，
+      // 与侧边栏 v-if="authStore.isAdmin" 形成前后端双重权限校验。
+      {
+        path: 'billing',
+        name: 'BillingConfig',
+        component: () => import('@/views/Settings/BillingConfig.vue'),
+        meta: {
+          title: '计费配置',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      }
+    ]
+  },
+
+  // ==================== 算力充值计费 ====================
+  {
+    path: '/token-recharge',
+    name: 'TokenRecharge',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '算力充值',
+      icon: 'Wallet',
+      requiresAuth: true,
+      transition: 'fade'
+    },
+    children: [
+      {
+        path: '',
+        name: 'TokenRechargeHome',
+        component: () => import('@/views/TokenRecharge/index.vue'),
+        meta: {
+          title: '算力充值',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'transactions',
+        name: 'TokenTransactions',
+        component: () => import('@/views/TokenRecharge/Transactions.vue'),
+        meta: {
+          title: '交易明细',
+          requiresAuth: true
+        }
       }
     ]
   },
@@ -437,7 +482,7 @@ router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - TradingAgents-CN`
+    document.title = `${title} - 智投`
   }
 
   console.log('🚦 路由守卫检查:', {
@@ -463,6 +508,14 @@ router.beforeEach(async (to, _from, next) => {
   }
 
 
+
+  // 管理员权限校验：放在认证检查之后，确保 authStore 已完成用户信息加载。
+  // requiresAdmin 路由的 meta 在路由配置中声明，此处统一拦截，避免每个页面自行判断。
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    ElMessage.error('需要管理员权限')
+    next('/dashboard')
+    return
+  }
 
   // 如果已登录且访问登录页，重定向到仪表板
   if (authStore.isAuthenticated && to.name === 'Login') {

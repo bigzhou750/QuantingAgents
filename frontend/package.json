@@ -1,7 +1,7 @@
 {
-  "name": "tradingagents-frontend",
+  "name": "zhitou-frontend",
   "version": "1.0.0-preview",
-  "description": "TradingAgents-CN 现代化前端界面",
+  "description": "智投 AI智能股票分析平台",
   "type": "module",
   "scripts": {
     "dev": "vite",

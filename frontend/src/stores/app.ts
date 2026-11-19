@@ -50,7 +50,7 @@ export const useAppStore = defineStore('app', {
   state: (): AppState => ({
     loading: false,
     loadingProgress: 0,
-    theme: (useStorage('app-theme', 'auto').value || 'auto') as 'light' | 'dark' | 'auto',
+    theme: (useStorage('app-theme', 'dark').value || 'dark') as 'light' | 'dark' | 'auto',
     language: (useStorage('app-language', 'zh-CN').value || 'zh-CN') as 'zh-CN' | 'en-US',
 
     isOnline: navigator.onLine,
@@ -85,7 +85,7 @@ export const useAppStore = defineStore('app', {
     
     // 当前页面标题
     currentPageTitle(): string {
-      return this.currentRoute?.meta?.title as string || 'TradingAgents-CN'
+      return this.currentRoute?.meta?.title as string || '智投'
     },
     
     // 应用信息
@@ -136,7 +136,7 @@ export const useAppStore = defineStore('app', {
       // 更新meta标签
       const themeColorMeta = document.querySelector('meta[name="theme-color"]')
       if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', isDark ? '#1f2937' : '#409EFF')
+        themeColorMeta.setAttribute('content', isDark ? '#1f2937' : '#0EA5E9')
       }
     },
     

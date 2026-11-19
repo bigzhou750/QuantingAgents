@@ -246,6 +246,30 @@ class VibeAgentService:
 
     async def create_message_task(self, user: Dict[str, Any], session_id: str, payload: VibeMessageCreate) -> Dict[str, Any]:
         session = await self.get_session(user["id"], session_id)
+
+        # Token计费：余额预检（发消息前）
+        preoccupy_txn_id = None
+        preoccupy_mq = 0
+        try:
+            from app.services.token_billing_service import token_billing_service, InsufficientBalanceError
+            preoccupy_txn_id, preoccupy_mq = await token_billing_service.preoccupy_balance(user["id"])
+            logger.info("Token预占成功: user=%s, mq=%d", user["id"], preoccupy_mq)
+        except InsufficientBalanceError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "message": str(e),
+                    "code": 40201,
+                    "required": e.required_mq,
+                    "available": e.available_mq,
+                    "recharge_hint": "请前往充值页面补充额度",
+                },
+            )
+        except Exception as e:
+            # 计费模块异常不阻塞对话（fail-open），仅记录日志
+            logger.warning("⚠️ Token预检跳过: %s", e)
+            preoccupy_txn_id = None
+
         now = utc_now()
         idempotency_key = payload.idempotency_key or new_id("idem")
 
@@ -254,6 +278,13 @@ class VibeAgentService:
             {"_id": 0},
         )
         if existing:
+            # 幂等命中：释放预占的frozen（此请求不会创建新任务）
+            if preoccupy_txn_id:
+                try:
+                    from app.services.token_billing_service import token_billing_service
+                    await token_billing_service.release_frozen(user["id"], 0, reason="idempotent_skip")
+                except Exception:
+                    pass
             return existing
 
         async with self._message_submit_lock:
@@ -262,6 +293,12 @@ class VibeAgentService:
                 {"_id": 0},
             )
             if existing:
+                if preoccupy_txn_id:
+                    try:
+                        from app.services.token_billing_service import token_billing_service
+                        await token_billing_service.release_frozen(user["id"], 0, reason="idempotent_skip")
+                    except Exception:
+                        pass
                 return existing
             active = await get_mongo_db()[self.task_collection].find_one(
                 {
@@ -277,6 +314,13 @@ class VibeAgentService:
                 sort=[("updated_at", DESCENDING)],
             )
             if active:
+                # 有活跃任务：释放预占后再抛409
+                if preoccupy_txn_id:
+                    try:
+                        from app.services.token_billing_service import token_billing_service
+                        await token_billing_service.release_frozen(user["id"], 0, reason="active_task_conflict")
+                    except Exception:
+                        pass
                 raise HTTPException(
                     status_code=409,
                     detail={
@@ -330,7 +374,12 @@ class VibeAgentService:
 
             db = get_mongo_db()
             await db[self.message_collection].insert_one(message.model_dump())
-            await db[self.task_collection].insert_one(task.model_dump())
+            task_doc = task.model_dump()
+            # 记录预占金额，用于终态时释放剩余frozen
+            if preoccupy_txn_id and preoccupy_mq:
+                task_doc["preoccupy_mq"] = preoccupy_mq
+                task_doc["preoccupy_txn_id"] = preoccupy_txn_id
+            await db[self.task_collection].insert_one(task_doc)
             await db[self.session_collection].update_one(
                 {"user_id": user["id"], "session_id": session_id},
                 {"$set": {"status": "queued", "updated_at": now}},
@@ -508,6 +557,20 @@ class VibeAgentService:
             {"user_id": user_id, "task_id": task_id},
             {"$set": patch},
         )
+        # 任务终态时释放全部剩余frozen回balance
+        if status in {VibeTaskStatus.completed, VibeTaskStatus.failed, VibeTaskStatus.cancelled}:
+            try:
+                task_doc = await db[self.task_collection].find_one(
+                    {"user_id": user_id, "task_id": task_id},
+                    {"_id": 0, "preoccupy_mq": 1},
+                )
+                if task_doc and task_doc.get("preoccupy_mq"):
+                    from app.services.token_billing_service import token_billing_service
+                    # 传0表示释放全部剩余frozen（而非原始预占额）
+                    await token_billing_service.release_frozen(user_id, 0, reason=f"task_{status.value}")
+                    logger.info("任务终态释放frozen: user=%s, task=%s", user_id, task_id)
+            except Exception as e:
+                logger.warning("⚠️ 释放frozen异常(不影响主流程): %s", e)
         task = await db[self.task_collection].find_one(
             {"user_id": user_id, "task_id": task_id},
             {"_id": 0, "session_id": 1},
@@ -680,8 +743,60 @@ class VibeAgentService:
             "attempt.failed": VibeEventType.task_status,
             "attempt.cancelled": VibeEventType.task_status,
             "mcp.warning": VibeEventType.error,
+            "llm_usage": VibeEventType.llm_usage,  # Token计费：激活llm_usage事件
         }
         event_type = mapping.get(raw_type, VibeEventType.worker_status)
+
+        # Token计费：llm_usage事件触发实时扣减
+        if raw_type == "llm_usage":
+            try:
+                prompt_tokens = int(payload.get("input_tokens") or payload.get("prompt_tokens") or 0)
+                completion_tokens = int(payload.get("output_tokens") or payload.get("completion_tokens") or 0)
+                if prompt_tokens > 0 or completion_tokens > 0:
+                    from app.services.token_billing_service import token_billing_service
+                    settle_result = await token_billing_service.settle_llm_usage(
+                        user_id=user_id,
+                        task_id=str(task_id or ""),
+                        session_id=session_id,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                    )
+                    # 推送余额更新事件
+                    if settle_result.get("new_balance_mq") is not None:
+                        new_balance_yuan = settle_result["new_balance_mq"] / 1000
+                        balance_event_payload = {
+                            "balance": new_balance_yuan,
+                            "consumed_this_turn": settle_result.get("deduction_mq", 0) / 1000,
+                        }
+                        await self.append_event(
+                            user_id, session_id,
+                            VibeEventType.balance_update,
+                            balance_event_payload, task_id,
+                        )
+                        # 检查余额耗尽 → 熔断
+                        if settle_result["new_balance_mq"] <= 0:
+                            # Redis标记防止后续结算重复触发
+                            try:
+                                from app.core.database import get_redis_client
+                                redis = get_redis_client()
+                                await redis.setex(f"token_balance_exhausted:{user_id}", 300, "1")
+                            except Exception as re:
+                                logger.warning("⚠️ Redis余额耗尽标记失败: %s", re)
+
+                            await self.append_event(
+                                user_id, session_id,
+                                VibeEventType.balance_exhausted,
+                                {"message": "额度已用完，请充值后继续"},
+                                task_id,
+                            )
+                            # 取消正在运行的agent
+                            try:
+                                await embedded_agent_runtime.cancel(session_id)
+                                logger.info("💰 余额耗尽熔断: user=%s, session=%s", user_id, session_id)
+                            except Exception as ce:
+                                logger.warning("⚠️ 余额耗尽取消agent失败: %s", ce)
+            except Exception as e:
+                logger.warning("⚠️ llm_usage结算失败: %s", e)
 
         if raw_type == "text_delta":
             payload = {"text": payload.get("delta", ""), **payload}
