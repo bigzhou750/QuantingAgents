@@ -356,6 +356,49 @@ const routes: RouteRecordRaw[] = [
     ]
   },
 
+  // Agent 评测平台
+  {
+    path: '/evaluation',
+    name: 'Evaluation',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: 'Agent 评测',
+      icon: 'DataAnalysis',
+      requiresAuth: true,
+      transition: 'fade'
+    },
+    redirect: '/evaluation/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'EvaluationDashboard',
+        component: () => import('@/views/Evaluation/index.vue'),
+        meta: {
+          title: '评测概览',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'datasets',
+        name: 'EvalDatasets',
+        component: () => import('@/views/Evaluation/Datasets.vue'),
+        meta: {
+          title: '评测集管理',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'runs',
+        name: 'EvalRuns',
+        component: () => import('@/views/Evaluation/Runs.vue'),
+        meta: {
+          title: '评测运行',
+          requiresAuth: true
+        }
+      }
+    ]
+  },
+
   {
     path: '/login',
     name: 'Login',

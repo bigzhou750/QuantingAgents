@@ -192,6 +192,12 @@ class Settings(BaseSettings):
     VIBE_AGENT_WORKER_CONCURRENCY: int = Field(default=2, ge=1, le=8)
     VIBE_AGENT_TASK_TIMEOUT_SECONDS: int = Field(default=900, ge=30, le=7200)
 
+    # ==================== Agent 评测平台配置 ====================
+    EVAL_PLATFORM_ENABLED: bool = Field(default=False, description="是否启用 Agent 评测平台（默认关闭）")
+    EVAL_RUNNER_CONCURRENCY: int = Field(default=2, ge=1, le=8, description="评测运行并发数")
+    EVAL_TRIAL_TIMEOUT_SECONDS: int = Field(default=600, ge=60, le=3600, description="单个 trial 超时时间（秒）")
+    EVAL_MAX_TRIALS_PER_CASE: int = Field(default=10, ge=1, le=50, description="每个 case 最大 trial 次数")
+    EVAL_JUDGE_MODEL: str = Field(default="", description="LLM-as-judge 使用的模型（留空使用默认模型）")
 
     # 监控配置
     METRICS_ENABLED: bool = Field(default=True)
